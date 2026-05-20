@@ -145,7 +145,8 @@
                     0,
                     968,
                     352
-                  ]
+                  ],
+                  "layer": 0
                 }
               },
               {
@@ -197,6 +198,24 @@
                   ],
                   "text": "r ksh_engine_events"
                 }
+              },
+              {
+                "box": {
+                  "id": "editor-pass",
+                  "maxclass": "newobj",
+                  "numinlets": 1,
+                  "numoutlets": 1,
+                  "patching_rect": [
+                    360,
+                    430,
+                    36,
+                    22
+                  ],
+                  "outlettype": [
+                    ""
+                  ],
+                  "text": "t a"
+                }
               }
             ],
             "lines": [
@@ -216,6 +235,18 @@
                 "patchline": {
                   "source": [
                     "editor-ui",
+                    0
+                  ],
+                  "destination": [
+                    "editor-pass",
+                    0
+                  ]
+                }
+              },
+              {
+                "patchline": {
+                  "source": [
+                    "editor-pass",
                     0
                   ],
                   "destination": [

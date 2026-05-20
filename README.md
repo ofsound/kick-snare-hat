@@ -59,7 +59,7 @@ midi_channel 1
 duration_ms 100
 phase_offset_beats 0
 
-channel_label 1 Kick
+channel_label 1 1
 channel_note 1 36
 channel_lock 1 random
 channel_lock 1 2

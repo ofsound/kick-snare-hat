@@ -36,8 +36,8 @@ var ksh_shared = {};
 }());
 
 ksh_shared.rates = ksh_shared.constants.RATES;
-ksh_shared.defaultLabels = ["Kick", "Snare", "Hat", "Open Hat", "Tom 1", "Tom 2", "Clap", "Ride"];
-ksh_shared.defaultNotes = [36, 37, 38, 39, 40, 41, 42, 43];
+ksh_shared.defaultLabels = ksh_shared.constants.DEFAULT_CHANNEL_LABELS;
+ksh_shared.defaultNotes = ksh_shared.constants.DEFAULT_CHANNEL_NOTES;
 
 ksh_shared.colors = {
   bg: [0.16, 0.18, 0.21, 1],

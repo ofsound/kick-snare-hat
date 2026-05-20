@@ -75,7 +75,8 @@ function editorSubpatcher() {
           outlettype: [""],
           patching_rect: [0.0, 0.0, editorSize.width, editorSize.height],
           presentation: 1,
-          presentation_rect: [0.0, 0.0, editorSize.width, editorSize.height]
+          presentation_rect: [0.0, 0.0, editorSize.width, editorSize.height],
+          layer: 0
         }
       },
       box("editor-out", "outlet", "", [420.0, 470.0, 30.0, 22.0], {
@@ -91,11 +92,17 @@ function editorSubpatcher() {
         numinlets: 0,
         numoutlets: 1,
         outlettype: [""]
+      }),
+      box("editor-pass", "newobj", "t a", [360.0, 430.0, 36.0, 22.0], {
+        numinlets: 1,
+        numoutlets: 1,
+        outlettype: [""]
       })
     ],
     lines: [
       line("editor-in", 0, "editor-ui", 0),
-      line("editor-ui", 0, "editor-out", 0),
+      line("editor-ui", 0, "editor-pass", 0),
+      line("editor-pass", 0, "editor-out", 0),
       line("editor-cmds", 0, "editor-ui", 0),
       line("editor-events", 0, "editor-ui", 0)
     ]

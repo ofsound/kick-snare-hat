@@ -158,7 +158,6 @@ var selectedSource = 0;
 var selectedLane = 0;
 var selectedStep = 0;
 var hitZones = [];
-var editingLabel = false;
 var velocityDrag = null;
 var VELOCITY_DRAG_THRESHOLD = 4;
 var SOURCE_PAINT_DRAG_THRESHOLD = 4;
@@ -279,15 +278,24 @@ function drawLaneControls() {
     var noteX = lockX - noteW;
     var selectX = layout.lanePanelX + 12;
     var selectW = noteX - selectX;
+    var labelX = layout.lanePanelX + 18;
+    var labelW = Math.max(24, noteX - labelX - 4);
 
     y = listTop + lane * rowPitch;
     ksh_shared.rect(layout.lanePanelX + 12, y, layout.lanePanelW - 24, 23, lane === selectedLane ? [0.27, 0.29, 0.33, 1] : colors.panel2);
     ksh_shared.strokeRect(layout.lanePanelX + 12, y, layout.lanePanelW - 24, 23, colors.strokeSoft, 1);
-    ksh_shared.text(state.lanes[lane].label, layout.lanePanelX + 18, y + 15, 10, colors.text);
+    ksh_shared.text(
+      state.lanes[lane].label,
+      layout.lanePanelX + 18,
+      y + 15,
+      10,
+      colors.text
+    );
     ksh_shared.text(String(state.lanes[lane].note), noteX + noteW / 2, y + 15, 10, colors.blue, "center");
     lockLabel = state.lanes[lane].lock < 0 ? "R" : "S" + (state.lanes[lane].lock + 1);
     ksh_shared.text(lockLabel, lockX + lockW / 2, y + 15, 10, colors.amber, "center");
     ksh_shared.zone(hitZones, "lane_select", selectX, y, selectW, 23, { lane: lane });
+    ksh_shared.zone(hitZones, "lane_label", labelX, y + 2, labelW, 19, { lane: lane });
     ksh_shared.zone(hitZones, "lane_note", noteX, y, noteW, 23, { lane: lane });
     ksh_shared.zone(hitZones, "lane_lock", lockX, y, lockW, 23, { lane: lane });
   }
@@ -398,7 +406,7 @@ function drawFooter() {
   var layout = uiLayout();
 
   ksh_shared.rect(0, layout.footerY, WIDTH, 28, colors.panel2);
-  ksh_shared.text("Click source cells to toggle. Shift-click to select only. Drag horizontally to paint, vertically for velocity.", 18, layout.footerY + 16, 10, colors.muted);
+  ksh_shared.text("Select lanes, notes, locks, and source cells to edit the pattern.", 18, layout.footerY + 16, 10, colors.muted);
 }
 
 function send() {
@@ -634,17 +642,12 @@ function onclick(x, y, button, cmd, shift, capslock, option, ctrl) {
     if (button === 0) {
       endSourceCellInteraction();
     }
-    editingLabel = false;
     mgraphics.redraw();
     return;
   }
 
   if (button === 0 && velocityDrag && z.id !== "source_cell") {
     endSourceCellInteraction();
-  }
-
-  if (z.id !== "lane_select") {
-    editingLabel = false;
   }
 
   if (z.id === "source_pick") {
@@ -662,8 +665,11 @@ function onclick(x, y, button, cmd, shift, capslock, option, ctrl) {
       beginSourceCellInteraction(z, x, y, shift);
     }
   } else if (z.id === "lane_select") {
-    selectedLane = z.data.lane;
-    editingLabel = true;
+    var lane = z.data.lane;
+    selectedLane = lane;
+  } else if (z.id === "lane_label") {
+    lane = z.data.lane;
+    selectedLane = lane;
   } else if (z.id === "lane_note") {
     selectedLane = z.data.lane;
     state.lanes[selectedLane].note = ksh_shared.clamp(state.lanes[selectedLane].note + (shift ? -1 : 1), 0, 127);
@@ -741,27 +747,6 @@ function handleStepper(id) {
     cell.cycle = ksh_shared.clamp(cell.cycle + (id === "cycle_inc" ? 1 : -1), 1, 64);
     sendCell(selectedSource, selectedLane, selectedStep);
   }
-}
-
-function onkeydown(key, modifiers, keycode) {
-  var label;
-
-  if (!editingLabel) {
-    return;
-  }
-
-  label = state.lanes[selectedLane].label;
-  if (keycode === 13 || keycode === 3) {
-    editingLabel = false;
-  } else if (keycode === 51 || keycode === 8) {
-    label = label.substring(0, Math.max(0, label.length - 1));
-  } else if (key && key.length === 1 && label.length < 12) {
-    label += key;
-  }
-
-  state.lanes[selectedLane].label = label;
-  sendLane(selectedLane);
-  mgraphics.redraw();
 }
 
 function preview(json) {

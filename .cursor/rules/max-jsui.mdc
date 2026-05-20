@@ -21,7 +21,7 @@ alwaysApply: false
 
 - Use `ksh_shared.colors` and existing layout constants; resize via `computeCompactWidth()` / `computeEditorDimensions()` when step or lane counts change.
 - `hitZones` drive `onclick`; keep hit testing aligned with `paint()` geometry.
-- Editor only: `open`, `ondrag`, `onresize`, `onkeydown` for interaction—follow existing patterns.
+- Editor only: `open`, `ondrag`, `onresize`; lane rename uses patch `textedit` (`label_edit_show` / `label_edit_hide` / `label_edit_done`).
 
 ## Compact vs editor
 

@@ -160,8 +160,8 @@ var KSH_EngineClass = null;
 
   KickSnareHatEngine.prototype.initChannels = function () {
     var i;
-    var defaultNotes = [36, 37, 38, 39, 40, 41, 42, 43];
-    var defaultLabels = ["Kick", "Snare", "Hat", "Open Hat", "Tom 1", "Tom 2", "Clap", "Ride"];
+    var defaultNotes = KSH_CONSTANTS.DEFAULT_CHANNEL_NOTES;
+    var defaultLabels = KSH_CONSTANTS.DEFAULT_CHANNEL_LABELS;
 
     this.channels = [];
     for (i = 0; i < MAX_LANES; i += 1) {

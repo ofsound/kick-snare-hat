@@ -19,6 +19,8 @@ var ksh_constants = {
   MAX_STEPS: 32,
   MAX_LANES: 8,
   SOURCE_COUNT: 4,
+  DEFAULT_CHANNEL_LABELS: ["1", "2", "3", "4", "5", "6", "7", "8"],
+  DEFAULT_CHANNEL_NOTES: [36, 37, 38, 39, 40, 41, 42, 43],
   RATES: ["4n", "4nt", "8n", "8nt", "16n", "16nt", "32n", "32nt"],
   DEFAULT_RATE: "16n",
   DEFAULT_CELL: {
