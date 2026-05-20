@@ -111,6 +111,22 @@ function testRandomSourceIgnoresEmptySources() {
   assert.strictEqual(engine._notes[0].velocity, 55);
 }
 
+function testInactiveChannelContentDoesNotMakeSourceActive() {
+  var engine = makeEngine([0]);
+  clearAll(engine);
+  engine.setChannelCount(1);
+  engine.setGenerationMode("stack");
+  engine.setCell(0, 0, 0, 1, 55, "always", 100);
+  engine.setCell(1, 1, 0, 1, 99, "always", 100);
+  engine._notes.length = 0;
+  engine._setRandomValues([0.99]);
+  engine.transportPosition(0, 1);
+
+  assert.strictEqual(engine._notes.length, 1);
+  assert.strictEqual(engine._notes[0].source, 1);
+  assert.strictEqual(engine._notes[0].velocity, 55);
+}
+
 function testRandomSourceUsesOnlyPopulatedSourceWhenOthersEmpty() {
   var engine = makeEngine([0]);
   clearAll(engine);
@@ -530,6 +546,7 @@ testStackModeMatchesOneSourceAcrossWindow();
 testStackModeUsesOneSourceForAllLanesOnStep();
 testPerChannelModeCanChooseDifferentSources();
 testRandomSourceIgnoresEmptySources();
+testInactiveChannelContentDoesNotMakeSourceActive();
 testRandomSourceUsesOnlyPopulatedSourceWhenOthersEmpty();
 testChannelLockOverridesRandomSource();
 testCycleGateFiresEveryNthEncounter();

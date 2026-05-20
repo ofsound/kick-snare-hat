@@ -1,4 +1,4 @@
-autowatch = 1;
+autowatch = 0;
 inlets = 1;
 outlets = 1;
 
@@ -428,8 +428,7 @@ function sendCell(source, lane, step) {
 function sync_all() {
   rememberUiContext.call(this);
   applyEditorSize();
-  send("request_state");
-  send("snapshot");
+  send("sync_all");
   mgraphics.redraw();
 }
 

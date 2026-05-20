@@ -1,4 +1,4 @@
-autowatch = 1;
+autowatch = 0;
 inlets = 1;
 outlets = 1;
 
@@ -157,7 +157,6 @@ var KSH_EngineClass = null;
     this.midiChannel = 1;
     this.noteDurationMs = 100;
     this.currentStep = 0;
-    this.lastStepTime = 0;
     this.lastFiredGlobalStep = null;
     this.phaseOffsetBeats = 0;
     this.transportPlaying = 0;
@@ -281,6 +280,16 @@ var KSH_EngineClass = null;
   KickSnareHatEngine.prototype.setNoteDurationMs = function (duration) {
     this.noteDurationMs = clamp(duration, 10, 5000);
     this.status("duration_ms " + this.noteDurationMs);
+  };
+
+  KickSnareHatEngine.prototype.setPhaseOffsetBeats = function (offset) {
+    offset = parseFloat(offset);
+    if (isNaN(offset)) {
+      offset = 0;
+    }
+    this.phaseOffsetBeats = offset;
+    this.lastFiredGlobalStep = null;
+    this.status("phase_offset_beats " + this.phaseOffsetBeats);
   };
 
   KickSnareHatEngine.prototype.setChannelLabel = function (channel, label) {
@@ -447,7 +456,6 @@ var KSH_EngineClass = null;
     this.currentStep = 0;
     this.playingStepOneBased = 0;
     this.cycleCounters = {};
-    this.lastStepTime = 0;
     this.lastFiredGlobalStep = null;
     this.transportPlaying = 0;
     this.generateWindow(0, this.stepCount, true);
@@ -467,7 +475,7 @@ var KSH_EngineClass = null;
     var cell;
 
     sourceIndex = clampSource(sourceIndex);
-    for (channel = 0; channel < MAX_LANES; channel += 1) {
+    for (channel = 0; channel < this.channelCount; channel += 1) {
       for (step = 0; step < this.stepCount; step += 1) {
         cell = this.sources[sourceIndex][channel][step];
         if (cell.enabled) {
@@ -501,10 +509,6 @@ var KSH_EngineClass = null;
     }
     pick = clamp(Math.floor(this.rng() * active.length), 0, active.length - 1);
     return active[pick];
-  };
-
-  KickSnareHatEngine.prototype.randomSource = function () {
-    return this.pickRandomSource(this.activeSourceIndices());
   };
 
   // Re-roll source choices across the window. Used at transport refresh
@@ -714,7 +718,6 @@ var KSH_EngineClass = null;
 
     if (!isPlaying) {
       this.lastFiredGlobalStep = null;
-      this.lastStepTime = 0;
       return [];
     }
 
@@ -1033,6 +1036,10 @@ function duration_ms(value) {
   ensureEngine().setNoteDurationMs(value);
 }
 
+function phase_offset_beats(value) {
+  ensureEngine().setPhaseOffsetBeats(value);
+}
+
 function channel_label() {
   var args = arrayfromargs(arguments);
   var channel = zeroBased(args.shift());
@@ -1082,6 +1089,11 @@ function snapshot() {
     return;
   }
   safeMessnamed("ksh_engine_events", "preview", JSON.stringify(ensureEngine().snapshot()));
+}
+
+function sync_all() {
+  emitFullState();
+  snapshot();
 }
 
 function request_state() {

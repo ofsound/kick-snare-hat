@@ -56,6 +56,7 @@ tempo 120
 swing 0
 midi_channel 1
 duration_ms 100
+phase_offset_beats 0
 
 channel_label 1 Kick
 channel_note 1 36
@@ -71,9 +72,19 @@ cell_gate 1 1 1 random 75
 
 transport_position 0.0 1
 reset
+sync_all
 request_state
 snapshot
 ```
+
+## Adding a parameter
+
+1. Add engine state, setter logic, serialization, deserialization, and focused coverage in `ksh_engine.test.js`.
+2. Add the Max `js` message handler in `ksh_engine.js`, keeping Max-facing indexes 1-based when the parameter addresses channels, sources, or steps.
+3. Make the setter emit a status selector if the UIs need an incremental update.
+4. Add UI controls or state handling in `ksh_compact_ui.js`, `ksh_ui.js`, or `ksh_ui_shared.js` only when the parameter is user-facing.
+5. Update this README message list and any wrapper coverage in `ksh_engine.max.test.js`.
+6. Run the post-edit gate, including `node scripts/sync-user-library.js`; rebuild first when patch wiring or `scripts/build-device-patch.js` changes.
 
 ## Development verification
 
@@ -82,6 +93,7 @@ node ksh_engine.test.js
 node ksh_engine.max.test.js
 node scripts/build-device-patch.js
 node scripts/validate-device-patch.js
+node scripts/sync-user-library.js
 ```
 
 `build-device-patch.js` also copies the device into your Ableton User Library. To sync

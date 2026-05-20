@@ -113,8 +113,10 @@ function testMaxWrapperBootsEngineAndExposesHandlers() {
   assert.strictEqual(typeof sb.cell, "function");
   assert.strictEqual(typeof sb.transport_position, "function");
   assert.strictEqual(typeof sb.reset, "function");
+  assert.strictEqual(typeof sb.sync_all, "function");
   assert.strictEqual(typeof sb.getvalueof, "function");
   assert.strictEqual(typeof sb.setvalueof, "function");
+  assert.strictEqual(typeof sb.phase_offset_beats, "function");
   assert.strictEqual(typeof sb.editor_active, "function");
 }
 
@@ -122,21 +124,38 @@ function testStatusMessagesEmitUiSelectors() {
   var sb = makeMaxSandbox();
   var stepsEvent;
   var lockEvent;
+  var phaseEvent;
 
   sb._clear();
   sb.steps(8);
   sb.channel_lock(1, 2);
+  sb.phase_offset_beats(0.125);
 
   stepsEvent = lastEventOn(sb, "steps");
   lockEvent = lastEventOn(sb, "channel_lock");
+  phaseEvent = lastEventOn(sb, "phase_offset_beats");
 
   assert.ok(stepsEvent, "steps should emit a direct UI selector");
   assert.deepStrictEqual(stepsEvent.args, ["steps", "8"]);
   assert.ok(lockEvent, "channel_lock should emit a direct UI selector");
   assert.deepStrictEqual(lockEvent.args, ["channel_lock", "1", "2"],
     "channel_lock status should use Max/UI-facing 1-based source indices");
+  assert.ok(phaseEvent, "phase_offset_beats should emit a direct UI selector");
+  assert.deepStrictEqual(phaseEvent.args, ["phase_offset_beats", "0.125"]);
   assert.strictEqual(eventsOn(sb, "status").length, 0,
     "status updates should not be hidden behind a generic status selector");
+}
+
+function testSyncAllEmitsStateAndPreview() {
+  var sb = makeMaxSandbox();
+  sb._clear();
+
+  sb.sync_all();
+
+  assert.strictEqual(eventsOn(sb, "engine_state").length, 1,
+    "sync_all should emit one full engine_state event");
+  assert.strictEqual(eventsOn(sb, "preview").length, 1,
+    "sync_all should emit one preview event");
 }
 
 function testRecomposeCommandsFlushPreviewForCompactUi() {
@@ -244,6 +263,7 @@ function testGetValueOfSetValueOfRoundtripsEngineState() {
   sb.swing(40);
   sb.midi_channel(7);
   sb.duration_ms(250);
+  sb.phase_offset_beats(0.5);
   sb.cell(1, 1, 1, 1, 64, "random", 30);
   sb.channel_label(1, "Sub");
   sb.channel_note(2, 50);
@@ -257,6 +277,7 @@ function testGetValueOfSetValueOfRoundtripsEngineState() {
   assert.strictEqual(parsed.swing, 40);
   assert.strictEqual(parsed.midiChannel, 7);
   assert.strictEqual(parsed.noteDurationMs, 250);
+  assert.strictEqual(parsed.phaseOffsetBeats, 0.5);
   assert.strictEqual(parsed.channels[0].label, "Sub");
   assert.strictEqual(parsed.channels[1].note, 50);
 
@@ -270,6 +291,7 @@ function testGetValueOfSetValueOfRoundtripsEngineState() {
   assert.strictEqual(sb2.kshEngine.swing, 40);
   assert.strictEqual(sb2.kshEngine.midiChannel, 7);
   assert.strictEqual(sb2.kshEngine.noteDurationMs, 250);
+  assert.strictEqual(sb2.kshEngine.phaseOffsetBeats, 0.5);
   assert.strictEqual(sb2.kshEngine.channels[0].label, "Sub");
   assert.strictEqual(sb2.kshEngine.channels[1].note, 50);
   assert.strictEqual(sb2.kshEngine.sources[0][0][0].enabled, 1);
@@ -329,6 +351,7 @@ function testMessnamedFailuresAreSwallowed() {
 
 testMaxWrapperBootsEngineAndExposesHandlers();
 testStatusMessagesEmitUiSelectors();
+testSyncAllEmitsStateAndPreview();
 testRecomposeCommandsFlushPreviewForCompactUi();
 testCellMessageWritesToEngineSourceAndCoalescesPreview();
 testTransportPositionEmitsNativeSchedulerEvent();
