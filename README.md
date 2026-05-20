@@ -12,10 +12,10 @@ of using unconstrained randomness.
 - Per-lane label, MIDI note, and source lock.
 - Device-wide MIDI channel.
 - Two generation modes:
-  - `stack`: each generated step chooses one source pattern for all lanes.
+  - `stack`: each refresh window chooses one source pattern for all lanes and steps in that window.
   - `per_channel`: each generated step/lane chooses its own source pattern.
 - Refresh interval is measured in sequencer steps.
-- Live-synced `metro` timing with reset on Live transport stop.
+- Live transport-position timing: host beat position drives the current step, with reset on Live transport stop.
 - Internal swing delay measured against the incoming tempo-synced step interval.
 - Live tempo from `live_set` drives swing timing via `live.observer tempo`.
 - Compact Presentation UI for the Live device strip with mode, steps, lanes, refresh, rate, swing, generated preview, and editor launch controls.
@@ -67,7 +67,7 @@ cell_enabled 1 1 1 0
 cell_velocity 1 1 1 96
 cell_gate 1 1 1 random 75
 
-step
+transport_position 0.0 1
 reset
 request_state
 snapshot

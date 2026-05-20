@@ -39,7 +39,30 @@ function clearAll(engine) {
   engine.reset();
 }
 
-function testStackModeUsesOneSourcePerStep() {
+function testStackModeMatchesOneSourceAcrossWindow() {
+  var engine = makeEngine([0.5]);
+  var step;
+  clearAll(engine);
+  engine.setStepCount(4);
+  engine.setChannelCount(1);
+  engine.setGenerationMode("stack");
+  engine.setCell(0, 0, 0, 1, 10, "always", 100);
+  engine.setCell(0, 0, 1, 0, 10, "always", 100);
+  engine.setCell(1, 0, 0, 0, 10, "always", 100);
+  engine.setCell(1, 0, 1, 1, 20, "always", 100);
+  engine._setRandomValues([0.5]);
+  engine.generateWindow(0, 4, true);
+
+  for (step = 0; step < 4; step += 1) {
+    assert.strictEqual(engine.generated[0][step].source, 1);
+  }
+  assert.strictEqual(engine.generated[0][0].enabled, 0);
+  assert.strictEqual(engine.generated[0][0].velocity, 10);
+  assert.strictEqual(engine.generated[0][1].enabled, 1);
+  assert.strictEqual(engine.generated[0][1].velocity, 20);
+}
+
+function testStackModeUsesOneSourceForAllLanesOnStep() {
   var engine = makeEngine([0.76]);
   clearAll(engine);
   engine.setChannelCount(2);
@@ -48,7 +71,7 @@ function testStackModeUsesOneSourcePerStep() {
   engine.setCell(3, 1, 0, 1, 88, "always", 100);
   engine._notes.length = 0;
   engine._setRandomValues([0.76]);
-  engine.step();
+  engine.transportPosition(0, 1);
 
   assert.strictEqual(engine._notes.length, 2);
   assert.strictEqual(engine._notes[0].source, 4);
@@ -65,8 +88,8 @@ function testPerChannelModeCanChooseDifferentSources() {
   engine.setCell(0, 0, 0, 1, 70, "always", 100);
   engine.setCell(3, 1, 0, 1, 90, "always", 100);
   engine._notes.length = 0;
-  engine._setRandomValues([0, 0.01, 0.76]);
-  engine.step();
+  engine._setRandomValues([0, 0.76]);
+  engine.transportPosition(0, 1);
 
   assert.strictEqual(engine._notes.length, 2);
   assert.strictEqual(engine._notes[0].source, 1);
@@ -81,7 +104,7 @@ function testRandomSourceIgnoresEmptySources() {
   engine.setCell(0, 0, 0, 1, 55, "always", 100);
   engine._notes.length = 0;
   engine._setRandomValues([0.99]);
-  engine.step();
+  engine.transportPosition(0, 1);
 
   assert.strictEqual(engine._notes.length, 1);
   assert.strictEqual(engine._notes[0].source, 1);
@@ -96,7 +119,7 @@ function testRandomSourceUsesOnlyPopulatedSourceWhenOthersEmpty() {
   engine.setCell(2, 0, 0, 1, 66, "always", 100);
   engine._notes.length = 0;
   engine._setRandomValues([0, 0.99]);
-  engine.step();
+  engine.transportPosition(0, 1);
 
   assert.strictEqual(engine._notes.length, 1);
   assert.strictEqual(engine._notes[0].source, 3);
@@ -111,7 +134,7 @@ function testChannelLockOverridesRandomSource() {
   engine.setCell(2, 0, 0, 1, 101, "always", 100);
   engine._notes.length = 0;
   engine._setRandomValues([0]);
-  engine.step();
+  engine.transportPosition(0, 1);
 
   assert.strictEqual(engine._notes.length, 1);
   assert.strictEqual(engine._notes[0].source, 3);
@@ -127,9 +150,9 @@ function testCycleGateFiresEveryNthEncounter() {
   engine._notes.length = 0;
   engine._setRandomValues([0]);
 
-  engine.step();
-  engine.step();
-  engine.step();
+  engine.transportPosition(0, 1);
+  engine.transportPosition(0.25, 1);
+  engine.transportPosition(0.5, 1);
 
   assert.strictEqual(engine._notes.length, 2);
 }
@@ -143,8 +166,8 @@ function testRandomGateUsesPercentage() {
   engine._notes.length = 0;
   engine._setRandomValues([0, 0.10, 0, 0.90]);
 
-  engine.step();
-  engine.step();
+  engine.transportPosition(0, 1);
+  engine.transportPosition(0.25, 1);
 
   assert.strictEqual(engine._notes.length, 1);
 }
@@ -162,11 +185,73 @@ function testSwingAddsDelayToEverySecondStep() {
   engine._notes.length = 0;
   engine._setRandomValues([0]);
 
-  engine.step();
-  engine.step();
+  engine.transportPosition(0, 1);
+  engine.transportPosition(0.25, 1);
 
   assert.strictEqual(engine._notes[0].delayMs, 0);
   assert.strictEqual(engine._notes[1].delayMs, 62.5);
+}
+
+function testTransportPositionFiresOnlyWhenLiveStepChanges() {
+  var engine = makeEngine([0]);
+  clearAll(engine);
+  engine.setStepCount(4);
+  engine.setChannelCount(1);
+  engine.setRate("16n");
+  engine.setCell(0, 0, 0, 1, 10, "always", 100);
+  engine.setCell(0, 0, 1, 1, 20, "always", 100);
+  engine._notes.length = 0;
+  engine._setRandomValues([0]);
+
+  engine.transportPosition(0, 1);
+  engine.transportPosition(0.1, 1);
+  engine.transportPosition(0.249, 1);
+  engine.transportPosition(0.25, 1);
+
+  assert.strictEqual(engine._notes.length, 2);
+  assert.strictEqual(engine._notes[0].step, 1);
+  assert.strictEqual(engine._notes[0].globalStep, 0);
+  assert.strictEqual(engine._notes[0].velocity, 10);
+  assert.strictEqual(engine._notes[1].step, 2);
+  assert.strictEqual(engine._notes[1].globalStep, 1);
+  assert.strictEqual(engine._notes[1].velocity, 20);
+}
+
+function testTransportPositionAnchorsJumpsToLiveBeat() {
+  var engine = makeEngine([0]);
+  clearAll(engine);
+  engine.setStepCount(4);
+  engine.setChannelCount(1);
+  engine.setRate("16n");
+  engine.setCell(0, 0, 0, 1, 100, "always", 100);
+  engine.setCell(0, 0, 1, 1, 80, "always", 100);
+  engine._notes.length = 0;
+  engine._setRandomValues([0]);
+
+  engine.transportPosition(0, 1);
+  engine.transportPosition(1, 1);
+
+  assert.strictEqual(engine._notes.length, 2);
+  assert.strictEqual(engine._notes[0].step, 1);
+  assert.strictEqual(engine._notes[0].globalStep, 0);
+  assert.strictEqual(engine._notes[1].step, 1);
+  assert.strictEqual(engine._notes[1].globalStep, 4);
+}
+
+function testTransportPositionDoesNotFireWhileStopped() {
+  var engine = makeEngine([0]);
+  clearAll(engine);
+  engine.setStepCount(4);
+  engine.setChannelCount(1);
+  engine.setRate("16n");
+  engine.setCell(0, 0, 0, 1, 100, "always", 100);
+  engine._notes.length = 0;
+  engine._setRandomValues([0]);
+
+  engine.transportPosition(0, 0);
+  engine.transportPosition(0.25, 0);
+
+  assert.strictEqual(engine._notes.length, 0);
 }
 
 function testDeserializeAcceptsUILaneSchema() {
@@ -228,7 +313,8 @@ function testSerializeDeserializeRestoresSourceData() {
   assert.strictEqual(restored.sources[1][0][2].random, 25);
 }
 
-testStackModeUsesOneSourcePerStep();
+testStackModeMatchesOneSourceAcrossWindow();
+testStackModeUsesOneSourceForAllLanesOnStep();
 testPerChannelModeCanChooseDifferentSources();
 testRandomSourceIgnoresEmptySources();
 testRandomSourceUsesOnlyPopulatedSourceWhenOthersEmpty();
@@ -236,6 +322,9 @@ testChannelLockOverridesRandomSource();
 testCycleGateFiresEveryNthEncounter();
 testRandomGateUsesPercentage();
 testSwingAddsDelayToEverySecondStep();
+testTransportPositionFiresOnlyWhenLiveStepChanges();
+testTransportPositionAnchorsJumpsToLiveBeat();
+testTransportPositionDoesNotFireWhileStopped();
 testDeserializeAcceptsUILaneSchema();
 testSerializeDeserializeRestoresSourceData();
 

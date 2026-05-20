@@ -163,30 +163,25 @@ const patch = {
         numinlets: 1,
         numoutlets: 0
       }),
-      box("metro", "newobj", "metro 16n @active 1", [180.0, 800.0, 128.0, 22.0], {
-        numinlets: 2,
-        numoutlets: 1,
-        outlettype: ["bang"]
+      box("plugsync", "newobj", "plugsync~", [180.0, 800.0, 78.0, 22.0], {
+        numinlets: 1,
+        numoutlets: 9,
+        outlettype: ["int", "int", "int", "float", "list", "float", "float", "int", "int"]
       }),
-      box("stepmsg", "message", "step", [180.0, 840.0, 42.0, 22.0], {
-        numinlets: 2,
+      box("transportbeat", "newobj", "t b f", [180.0, 840.0, 42.0, 22.0], {
+        numinlets: 1,
+        numoutlets: 2,
+        outlettype: ["bang", "float"]
+      }),
+      box("transportpos", "newobj", "pack transport_position 0. 0", [180.0, 880.0, 170.0, 22.0], {
+        numinlets: 3,
         numoutlets: 1,
         outlettype: [""]
       }),
-      box("uilist", "newobj", "t a a a", [360.0, 760.0, 66.0, 22.0], {
-        numinlets: 1,
-        numoutlets: 3,
-        outlettype: ["", "", ""]
-      }),
-      box("route-rate", "newobj", "route rate", [300.0, 800.0, 70.0, 22.0], {
+      box("uilist", "newobj", "t a a", [360.0, 760.0, 48.0, 22.0], {
         numinlets: 1,
         numoutlets: 2,
         outlettype: ["", ""]
-      }),
-      box("interval", "newobj", "prepend interval", [300.0, 840.0, 108.0, 22.0], {
-        numinlets: 1,
-        numoutlets: 1,
-        outlettype: [""]
       }),
       box("route-open", "newobj", "route open_editor", [430.0, 800.0, 112.0, 22.0], {
         numinlets: 1,
@@ -277,10 +272,7 @@ const patch = {
     lines: [
       line("ui", 0, "route-open", 0),
       line("editor_patch", 0, "route-open", 0),
-      line("uilist", 1, "route-rate", 0),
-      line("uilist", 2, "sendcmd", 0),
-      line("route-rate", 0, "interval", 0),
-      line("interval", 0, "metro", 0),
+      line("uilist", 1, "sendcmd", 0),
       line("route-open", 0, "openmsg", 0),
       line("route-open", 1, "uilist", 0),
       line("openmsg", 0, "pcontrol", 0),
@@ -289,8 +281,11 @@ const patch = {
       line("recvevents", 0, "ui", 0),
       line("enginecmds", 0, "engine", 0),
       line("engine", 0, "noteout", 0),
-      line("metro", 0, "stepmsg", 0),
-      line("stepmsg", 0, "engine", 0),
+      line("plugsync", 0, "transportpos", 2),
+      line("plugsync", 6, "transportbeat", 0),
+      line("transportbeat", 1, "transportpos", 1),
+      line("transportbeat", 0, "transportpos", 0),
+      line("transportpos", 0, "engine", 0),
       line("loadbang", 0, "initmsg", 0),
       line("initmsg", 0, "ui", 0),
       line("loadbang", 0, "livepath", 0),

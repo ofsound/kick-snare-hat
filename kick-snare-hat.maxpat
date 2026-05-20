@@ -290,28 +290,36 @@
       },
       {
         "box": {
-          "id": "metro",
+          "id": "plugsync",
           "maxclass": "newobj",
-          "numinlets": 2,
-          "numoutlets": 1,
+          "numinlets": 1,
+          "numoutlets": 9,
           "patching_rect": [
             180,
             800,
-            128,
+            78,
             22
           ],
           "outlettype": [
-            "bang"
+            "int",
+            "int",
+            "int",
+            "float",
+            "list",
+            "float",
+            "float",
+            "int",
+            "int"
           ],
-          "text": "metro 16n @active 1"
+          "text": "plugsync~"
         }
       },
       {
         "box": {
-          "id": "stepmsg",
-          "maxclass": "message",
-          "numinlets": 2,
-          "numoutlets": 1,
+          "id": "transportbeat",
+          "maxclass": "newobj",
+          "numinlets": 1,
+          "numoutlets": 2,
           "patching_rect": [
             180,
             840,
@@ -319,9 +327,28 @@
             22
           ],
           "outlettype": [
+            "bang",
+            "float"
+          ],
+          "text": "t b f"
+        }
+      },
+      {
+        "box": {
+          "id": "transportpos",
+          "maxclass": "newobj",
+          "numinlets": 3,
+          "numoutlets": 1,
+          "patching_rect": [
+            180,
+            880,
+            170,
+            22
+          ],
+          "outlettype": [
             ""
           ],
-          "text": "step"
+          "text": "pack transport_position 0. 0"
         }
       },
       {
@@ -329,56 +356,18 @@
           "id": "uilist",
           "maxclass": "newobj",
           "numinlets": 1,
-          "numoutlets": 3,
+          "numoutlets": 2,
           "patching_rect": [
             360,
             760,
-            66,
-            22
-          ],
-          "outlettype": [
-            "",
-            "",
-            ""
-          ],
-          "text": "t a a a"
-        }
-      },
-      {
-        "box": {
-          "id": "route-rate",
-          "maxclass": "newobj",
-          "numinlets": 1,
-          "numoutlets": 2,
-          "patching_rect": [
-            300,
-            800,
-            70,
+            48,
             22
           ],
           "outlettype": [
             "",
             ""
           ],
-          "text": "route rate"
-        }
-      },
-      {
-        "box": {
-          "id": "interval",
-          "maxclass": "newobj",
-          "numinlets": 1,
-          "numoutlets": 1,
-          "patching_rect": [
-            300,
-            840,
-            108,
-            22
-          ],
-          "outlettype": [
-            ""
-          ],
-          "text": "prepend interval"
+          "text": "t a a"
         }
       },
       {
@@ -727,43 +716,7 @@
             1
           ],
           "destination": [
-            "route-rate",
-            0
-          ]
-        }
-      },
-      {
-        "patchline": {
-          "source": [
-            "uilist",
-            2
-          ],
-          "destination": [
             "sendcmd",
-            0
-          ]
-        }
-      },
-      {
-        "patchline": {
-          "source": [
-            "route-rate",
-            0
-          ],
-          "destination": [
-            "interval",
-            0
-          ]
-        }
-      },
-      {
-        "patchline": {
-          "source": [
-            "interval",
-            0
-          ],
-          "destination": [
-            "metro",
             0
           ]
         }
@@ -867,11 +820,23 @@
       {
         "patchline": {
           "source": [
-            "metro",
+            "plugsync",
             0
           ],
           "destination": [
-            "stepmsg",
+            "transportpos",
+            2
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "plugsync",
+            6
+          ],
+          "destination": [
+            "transportbeat",
             0
           ]
         }
@@ -879,7 +844,31 @@
       {
         "patchline": {
           "source": [
-            "stepmsg",
+            "transportbeat",
+            1
+          ],
+          "destination": [
+            "transportpos",
+            1
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "transportbeat",
+            0
+          ],
+          "destination": [
+            "transportpos",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "transportpos",
             0
           ],
           "destination": [

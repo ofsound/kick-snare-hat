@@ -15,6 +15,10 @@ var KSH_EngineClass = null;
     return Math.max(min, Math.min(max, value));
   }
 
+  function mod(value, divisor) {
+    return ((value % divisor) + divisor) % divisor;
+  }
+
   function normalizeIncomingState(state) {
     var normalized;
 
@@ -94,6 +98,9 @@ var KSH_EngineClass = null;
     this.noteDurationMs = 100;
     this.currentStep = 0;
     this.lastStepTime = 0;
+    this.lastFiredGlobalStep = null;
+    this.phaseOffsetBeats = 0;
+    this.transportPlaying = 0;
     this.editorActive = false;
 
     this.channels = [];
@@ -200,6 +207,10 @@ var KSH_EngineClass = null;
 
   KickSnareHatEngine.prototype.updateStepIntervalMs = function () {
     var quarterMs = 60000 / this.tempo;
+    this.stepIntervalMs = quarterMs * this.beatsPerStep();
+  };
+
+  KickSnareHatEngine.prototype.beatsPerStep = function () {
     var ratios = {
       "4n": 1,
       "4nt": 2 / 3,
@@ -211,7 +222,7 @@ var KSH_EngineClass = null;
       "32nt": 1 / 12
     };
 
-    this.stepIntervalMs = quarterMs * (ratios[this.rate] || ratios["16n"]);
+    return ratios[this.rate] || ratios["16n"];
   };
 
   KickSnareHatEngine.prototype.setSwing = function (amount) {
@@ -322,6 +333,8 @@ var KSH_EngineClass = null;
     this.playingStepOneBased = 0;
     this.cycleCounters = {};
     this.lastStepTime = 0;
+    this.lastFiredGlobalStep = null;
+    this.transportPlaying = 0;
     this.generateWindow(0, this.stepCount, true);
     this.reportPlayingStep();
     this.status("reset");
@@ -382,9 +395,13 @@ var KSH_EngineClass = null;
     startStep = clamp(startStep, 0, this.stepCount - 1);
     length = clamp(length, 1, this.stepCount);
 
+    stackSource = -1;
+    if (this.generationMode !== "per_channel") {
+      stackSource = this.randomSource();
+    }
+
     for (offset = 0; offset < length; offset += 1) {
       step = (startStep + offset) % this.stepCount;
-      stackSource = this.randomSource();
 
       for (channel = 0; channel < this.channelCount; channel += 1) {
         if (this.channels[channel].lock >= 0) {
@@ -432,37 +449,33 @@ var KSH_EngineClass = null;
     return true;
   };
 
-  KickSnareHatEngine.prototype.step = function () {
+  KickSnareHatEngine.prototype.fireStep = function (step, globalStep) {
     var channel;
     var cell;
     var notes = [];
     var note;
-    var now;
 
-    this.playingStepOneBased = this.currentStep + 1;
+    step = mod(step, this.stepCount);
+    this.currentStep = step;
+    this.playingStepOneBased = step + 1;
     this.reportPlayingStep();
 
-    now = Date.now();
-    if (this.lastStepTime > 0 && now > this.lastStepTime) {
-      this.stepIntervalMs = now - this.lastStepTime;
-    }
-    this.lastStepTime = now;
-
-    if (this.currentStep % this.refreshSteps === 0) {
-      this.generateWindow(this.currentStep, this.refreshSteps, true);
+    if (step % this.refreshSteps === 0) {
+      this.generateWindow(step, this.refreshSteps, true);
     }
 
     for (channel = 0; channel < this.channelCount; channel += 1) {
-      cell = this.generated[channel][this.currentStep];
-      if (this.shouldFire(cell, channel, this.currentStep)) {
+      cell = this.generated[channel][step];
+      if (this.shouldFire(cell, channel, step)) {
         note = {
           lane: channel + 1,
-          step: this.currentStep + 1,
+          step: step + 1,
+          globalStep: typeof globalStep === "number" ? globalStep : null,
           pitch: this.channels[channel].note,
           velocity: cell.velocity,
           channel: this.midiChannel,
           durationMs: this.noteDurationMs,
-          delayMs: this.currentStep % 2 === 1 ? this.stepIntervalMs * 0.5 * (this.swing / 100) : 0,
+          delayMs: step % 2 === 1 ? this.stepIntervalMs * 0.5 * (this.swing / 100) : 0,
           label: this.channels[channel].label,
           source: cell.source + 1
         };
@@ -471,8 +484,53 @@ var KSH_EngineClass = null;
       }
     }
 
-    this.currentStep = (this.currentStep + 1) % this.stepCount;
     return notes;
+  };
+
+  KickSnareHatEngine.prototype.globalStepForBeats = function (songBeats) {
+    var beatsPerStep = this.beatsPerStep();
+
+    songBeats = parseFloat(songBeats);
+    if (isNaN(songBeats)) {
+      songBeats = 0;
+    }
+
+    return Math.floor((songBeats - this.phaseOffsetBeats + 0.000000001) / beatsPerStep);
+  };
+
+  KickSnareHatEngine.prototype.transportPosition = function (songBeats, isPlaying) {
+    var globalStep;
+    var step;
+    var discontinuity;
+
+    songBeats = parseFloat(songBeats);
+    if (isNaN(songBeats)) {
+      return [];
+    }
+
+    isPlaying = parseInt(isPlaying, 10) ? 1 : 0;
+    this.transportPlaying = isPlaying;
+
+    if (!isPlaying) {
+      this.lastFiredGlobalStep = null;
+      this.lastStepTime = 0;
+      return [];
+    }
+
+    globalStep = this.globalStepForBeats(songBeats);
+    step = mod(globalStep, this.stepCount);
+
+    if (this.lastFiredGlobalStep === globalStep) {
+      return [];
+    }
+
+    discontinuity = this.lastFiredGlobalStep !== null && globalStep !== this.lastFiredGlobalStep + 1;
+    this.lastFiredGlobalStep = globalStep;
+    if (discontinuity) {
+      this.status("transport_jump " + songBeats + " step " + (step + 1));
+    }
+
+    return this.fireStep(step, globalStep);
   };
 
   KickSnareHatEngine.prototype.snapshot = function () {
@@ -511,6 +569,7 @@ var KSH_EngineClass = null;
       tempo: this.tempo,
       swing: this.swing,
       midiChannel: this.midiChannel,
+      phaseOffsetBeats: this.phaseOffsetBeats,
       currentStep: this.currentStep + 1,
       channels: channels,
       generated: generated
@@ -528,6 +587,7 @@ var KSH_EngineClass = null;
       swing: this.swing,
       midiChannel: this.midiChannel,
       noteDurationMs: this.noteDurationMs,
+      phaseOffsetBeats: this.phaseOffsetBeats,
       channels: this.channels,
       sources: this.sources
     };
@@ -552,6 +612,7 @@ var KSH_EngineClass = null;
     this.setSwing(state.swing || this.swing);
     this.setMidiChannel(state.midiChannel || this.midiChannel);
     this.setNoteDurationMs(state.noteDurationMs || this.noteDurationMs);
+    this.phaseOffsetBeats = parseFloat(state.phaseOffsetBeats) || 0;
 
     if (state.channels) {
       for (channel = 0; channel < Math.min(8, state.channels.length); channel += 1) {
@@ -692,8 +753,8 @@ function ensureEngine() {
   return kshEngine;
 }
 
-function step() {
-  ensureEngine().step();
+function transport_position(songBeats, isPlaying) {
+  ensureEngine().transportPosition(songBeats, isPlaying);
 }
 
 function reset() {
