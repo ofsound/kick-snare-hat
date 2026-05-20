@@ -1,167 +1,94 @@
 # Future development priorities
 
-Prioritized improvements aimed at **ease of future development** on Kick Snare Hat—not end-user features or performance tuning. Derived from a codebase review (engine, UIs, patch tooling, and tests).
+This document captures architecture priorities and non-blocking risks for future Kick Snare Hat feature work.
 
-**Suggested execution order:** 1 → 2 (use while doing 1) → 3 → 4 (can land in parallel) → 5 (cleanup when touching the editor).
-
----
-
-## 1. Single shared schema for cells, channels, and rates
-
-**Priority:** Highest
-
-**Status:** Mostly done. `ksh_constants.js` owns cell defaults,
-`cloneCell`, `normalizeGateMode`, and the rate allowlist. Engine and UI code
-load it directly; keep new schema work there first.
-
-**Problem addressed:** Adding a parameter or cell field previously touched several places with near-duplicate logic:
-
-- `ksh_engine.js` — setters, `cloneCell`, `defaultCell`, `normalizeGateMode`, `normalizeRate`
-- `ksh_ui_shared.js` — `defaultCell`, `cloneCell`, `applyEngineState`, `applyStatusMessage`
-- `ksh_compact_ui.js` / `ksh_ui.js` — local state and send helpers
-- Literal fallbacks in engine and UI if `ksh_constants.js` fails to load (removed to avoid drift)
-
-**Proposal:**
-
-- Extend `ksh_constants.js`, or add `ksh_schema.js` loaded via `require` (Node) and `include()` (Max) from engine and both UIs.
-- Centralize:
-  - Cell defaults and `cloneCell` / `normalizeGateMode`
-  - Rate allowlist (one array for engine validation and UI `cycleRate`)
-  - Optional: small helpers for Max-facing status strings (e.g. `"steps " + n`)
-
-**Acceptance criteria:**
-
-- One implementation of cell clone/normalize used by engine and UIs.
-- Rate list defined once; engine and UI stay aligned.
-- README “Adding a parameter” updated to point at the shared module first.
-
-**Payoff:** New fields become “update schema once, wire handlers” instead of hunting four copies.
+For per-feature workflow, use [feature-prep-checklist.md](./feature-prep-checklist.md). For the engine/UI message contract, use [ui-sync.md](./ui-sync.md).
 
 ---
 
-## 2. Dev-visible errors instead of silent `catch {}`
+## Architecture priorities
 
-**Priority:** High
+### Shared schema
 
-**Status:** Done for the known high-friction paths. Flip `DEBUG: true` in
-`ksh_constants.js` locally to surface UI JSON parse failures, `messnamed` /
-`outlet` failures, and patcher resize failures. Keep the default `false`.
+`ksh_constants.js` is the single source of truth for device limits, cell defaults, `cloneCell`, `normalizeGateMode`, and the rate allowlist. Engine and UI code load it directly through Node `require()` or Max `include()`.
 
-**Problem:** Many paths swallow errors with empty `catch` blocks (`engine_state`, `preview`, `safeMessnamed`, patcher resize, etc.). That helps the device survive Live reload/recompile but **hides real bugs** during feature work.
+When adding a persisted field, rate, limit, or cell property:
 
-**Proposal:**
+1. Update `ksh_constants.js` first if normalization/defaults are shared.
+2. Add engine state, setter logic, serialization, deserialization, and focused `ksh_engine.test.js` coverage.
+3. Add the Max-facing handler in `ksh_engine.js`, keeping source/channel/step indexes 1-based at the message boundary.
+4. Add UI state/controls only when the feature is user-facing.
+5. Update README message docs and `ksh_engine.max.test.js` when handlers or Max wrapper behavior change.
 
-- Add a simple debug switch (e.g. `KSH_DEBUG` at the top of a shared file, or a commented `var` developers flip locally).
-- When enabled, `post()`:
-  - JSON parse failures in UI handlers
-  - Unexpected `messnamed` errors (distinguish from known reload transients if possible)
-  - Patcher/box resize failures
-- Default remains silent in normal use.
+### UI and engine sync
 
-**Acceptance criteria:**
+The engine is the source of truth. UIs mirror `engine_state` and `preview`, then send commands back through the named-message bus.
 
-- Flipping debug on surfaces at least parse and deserialize failures without changing production behavior when off.
-- Document the flag in README or `AGENTS.md`.
+- `engine_state` is serialized pattern/global state. It does not include the generated grid.
+- `preview` is generated-grid state from `snapshot()`.
+- Editor source-cell edits are optimistic: the editor updates local `state.sources`, sends `cell`, and does not wait for an engine `cell` echo.
+- Hot-path cell edits should rely on `generatedCellForSourceEdit()` plus `markPreviewDirty()`, not full `emitFullState()`.
 
-**Payoff:** Faster iteration in Max; fewer “UI didn’t update and I don’t know why” sessions.
+See [ui-sync.md](./ui-sync.md) before changing message flow.
 
----
+### Persistence recovery
 
-## 3. Harden `setvalueof` / `deserialize` against bad JSON
+`setvalueof` guards malformed JSON and restores the last good engine state. `normalizeIncomingState()` accepts legacy `laneCount` / `lanes` shapes and maps them to `channelCount` / `channels`.
 
-**Priority:** High
+New persisted fields should be added to `serialize()` and `deserialize()`. Only extend `normalizeIncomingState()` when a legacy shape or migration actually exists.
 
-**Status:** Done. Malformed JSON is caught, current engine state is restored,
-and `ksh_engine.max.test.js` covers the failure path.
+### Debug visibility
 
-**Problem:** `setvalueof` calls `JSON.parse` without a guard. Corrupt or partial `pattrstorage` data can throw on device load and break the session.
+`KSH_CONSTANTS.DEBUG` defaults to `false`. Flip it locally while debugging Max-side JSON parse failures, `messnamed` / `outlet` failures, or patcher resize problems. Do not commit release builds with debug noise enabled.
 
-**Proposal:**
+### Naming
 
-- Wrap `JSON.parse` and `deserialize` in try/catch.
-- On failure: `post()` a short, actionable message; keep or restore last good engine state (or minimal safe defaults).
-- Optionally emit `engine_state` once after successful recovery so UIs resync.
-
-**Acceptance criteria:**
-
-- Invalid JSON string does not crash the `js` object.
-- Valid partial state still applies via existing `deserialize` guards where possible.
-- Add or extend coverage in `ksh_engine.max.test.js` for malformed `setvalueof` input.
-
-**Payoff:** Safe to extend serialization (new fields, migrations) without bricking devices in Live.
+Engine messages, API fields, and persisted state should use `channel`. UI display text may still say "Lane", and existing UI-local names such as `laneCount` may remain until touched for real feature work.
 
 ---
 
-## 4. Written contract for UI ↔ engine sync
+## Remaining development risks
 
-**Priority:** Medium
+### Manual Live/jsui smoke test
 
-**Status:** Done in `docs/ui-sync.md`; README and AGENTS link to the relevant
-contract and verification flow.
+The automated gate covers engine logic, Max wrapper plumbing, patch wiring, `.amxd` payload integrity, and User Library sync. It does not automate actual `jsui` behavior inside Ableton Live.
 
-**Problem:** The sync model is correct but **implicit**: optimistic editor `state.sources`, no `cell` echo from engine, different compact vs editor roles. New work often risks full `emitFullState` on every edit or expecting round-trip `cell` messages.
+Before large UI-facing features, manually confirm in Ableton Live 12.4+:
 
-**Proposal:**
+- Compact UI loads, resizes, and sends global controls.
+- Editor opens and resizes.
+- Source cells toggle, horizontal paint works, and vertical velocity drag works.
+- Lane note/lock changes update generated preview.
+- Transport playback highlights the current step.
+- Save/reload restores source cells, channel metadata, and global settings.
 
-- Add a short doc (`docs/ui-sync.md` or a README section) covering:
-  - **`engine_state`** — payload is `serialize()`: sources + globals; **not** generated grid.
-  - **`preview`** — generated grid only (`snapshot()` subset).
-  - **Status selectors** — which engine setters emit `steps`, `channels`, `mode`, etc. vs full state.
-  - **When to call `sync_all`** — load, editor open, after `setvalueof`, etc.
-  - **Compact vs editor** — compact holds layout + `previewData`; editor holds full `sources` and sends `cell` / channel commands.
-  - **Optimistic UI** — editor updates local cells then sends to engine; engine does not echo `cell` to UI today.
+### Deferred cleanup
 
-**Acceptance criteria:**
+These are not blockers for feature work:
 
-- A new contributor can answer “what message fires when I change velocity?” without reading all handlers.
-- Link from `README.md` and/or `AGENTS.md`.
-
-**Payoff:** Less re-learning on every feature; fewer accidental bus floods or UI/engine desync.
-
----
-
-## 5. Remove or implement dead UI paths; standardize `channel` in new code
-
-**Priority:** Medium (low effort, high clarity)
-
-**Status:** Done for dead `cell` echo handlers and contributor guardrails.
-Keep `channel` for new engine/API/persistence fields; UI labels may still say
-"Lane".
-
-**Problem:**
-
-- `applyIncomingCell` and the `anything()` `cell` branch in `ksh_ui.js` have **no producer** in engine or patch—dead code that looks intentional.
-- **Lane vs channel** naming splits engine/API (`channel`) from UI state (`laneCount`, `lanes`); workable via `normalizeIncomingState` but easy to extend inconsistently.
-
-**Proposal:**
-
-- **Either** remove `applyIncomingCell` and the UI `cell` handler, **or** have the engine emit `cell` after programmatic edits if echo-back is desired.
-- Add to `AGENTS.md`: new engine/API/persistence fields use **channel**; UI labels may still say “Lane”.
-- Optionally rename internal UI `laneCount` → `channelCount` only when already editing those files (no big-bang rename required).
-
-**Acceptance criteria:**
-
-- No orphaned handlers without a documented producer.
-- Naming rule visible in agent/contributor docs.
-
-**Payoff:** Less noise when navigating the editor; naming does not split further on the next feature.
-
----
-
-## Deliberately lower priority (for this list)
-
-| Topic | Why deferred |
+| Topic | Defer because |
 |-------|----------------|
-| Transport jump fires one step only | Product behavior; document in UI-sync or README when testing scrub/loop |
-| Preview JSON on every refresh step during playback | Optimize when profiling shows a problem |
-| Automated `jsui` tests | High setup cost; engine + Max VM tests already cover core logic |
-| 500 ms editor visibility polling | Max limitation; note in UI-sync doc rather than refactor first |
+| Split `ksh_ui.js` into layout / paint / input modules | Do this when editor features make the file hard to change safely. |
+| Throttle `preview` JSON during playback | Current limits are small; profile in Live before optimizing. |
+| Automated `jsui` tests | Setup cost is high; engine + Max VM tests cover the core logic. |
+| Rename all UI `lane*` internals to `channel*` | Cosmetic unless already editing those paths. |
 
 ---
 
-## References
+## Non-negotiable verification
 
-- Architecture: `AGENTS.md`, `README.md` (“Adding a parameter”)
-- Engine rules: `.cursor/rules/max-js-engine.mdc`
-- UI rules: `.cursor/rules/max-jsui.mdc`
-- Tests: `ksh_engine.test.js`, `ksh_engine.max.test.js`
+After substantive device edits, run the post-edit gate from `.cursor/rules/post-edit-verification.mdc`:
+
+```sh
+node ksh_engine.test.js
+node ksh_engine.max.test.js
+node scripts/validate-device-patch.js
+node scripts/sync-user-library.js
+```
+
+When patch wiring or `scripts/build-device-patch.js` changes, rebuild first:
+
+```sh
+node scripts/build-device-patch.js
+node scripts/validate-device-patch.js
+```

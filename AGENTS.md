@@ -6,6 +6,7 @@
 - **Stack:** Max for Live MIDI device for **Ableton Live 12.4+**. Logic lives in Max **`js`** / **`jsui`** files (ES5-style JavaScript). **Node.js** is only for tests and repo scripts—not a web app, no React, no npm app toolchain.
 - **Ignore:** Svelte/React/Tailwind/Vite/TanStack rules and MCP skills unless this repo gains those files.
 - **Workflow source of truth:** `.cursor/rules/post-edit-verification.mdc` for the mandatory post-edit gate (including Ableton sync).
+- **Feature prep:** Before feature work, read `docs/feature-prep-checklist.md`; for architecture priorities and unresolved risks, read `docs/future-dev-priorities.md`.
 
 ---
 
@@ -49,6 +50,9 @@
 | `scripts/build-device-patch.js` | Regenerates `.maxpat` + `.amxd`, then syncs to User Library |
 | `scripts/validate-device-patch.js` | Patch line wiring + `.amxd` payload checks |
 | `scripts/sync-user-library.js` | Copies device artifacts into Ableton User Library |
+| `docs/feature-prep-checklist.md` | Future-facing checklist for feature branches |
+| `docs/future-dev-priorities.md` | Architecture priorities and non-blocking risks |
+| `docs/ui-sync.md` | UI ↔ engine event contract |
 
 **Max message indexes are 1-based** in Live; engine internals use 0-based indices. See `README.md` for message reference.
 

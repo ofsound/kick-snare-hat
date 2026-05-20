@@ -20,6 +20,12 @@ alwaysApply: true
 
 Patch shell: `kick-snare-hat.maxpat` (generated/edited via `scripts/build-device-patch.js`).
 
+## Feature workflow docs
+
+- Before feature work, read `docs/feature-prep-checklist.md`.
+- Use `docs/future-dev-priorities.md` for architecture priorities and non-blocking risks.
+- Use `docs/ui-sync.md` before changing UI ↔ engine message flow.
+
 ## Indexing convention
 
 - **Max messages** use **1-based** channel/source/step indices (`channel_note 1 36`, etc.).
