@@ -92,15 +92,15 @@
             "rect": [
               120,
               120,
-              1060,
-              560
+              968,
+              352
             ],
             "bglocked": 0,
             "openinpresentation": 1,
             "default_fontsize": 12,
             "default_fontface": 0,
             "default_fontname": "Ableton Sans Medium",
-            "toolbarvisible": 1,
+            "toolbarvisible": 0,
             "title": "Kick Snare Hat",
             "boxes": [
               {
@@ -138,15 +138,15 @@
                   "patching_rect": [
                     0,
                     0,
-                    1040,
-                    520
+                    968,
+                    352
                   ],
                   "presentation": 1,
                   "presentation_rect": [
                     0,
                     0,
-                    1040,
-                    520
+                    968,
+                    352
                   ]
                 }
               },

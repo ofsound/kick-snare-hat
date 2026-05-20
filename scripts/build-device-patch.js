@@ -17,7 +17,28 @@ function line(src, outlet, dst, inlet) {
   return { patchline: { source: [src, outlet], destination: [dst, inlet] } };
 }
 
+function editorDimensions(stepCount, laneCount) {
+  const gridCellW = 25;
+  const gridCellH = 22;
+  const gridX0 = 12 + 158 + 84;
+  const gridW = stepCount * gridCellW;
+  const editorX = gridX0 + gridW + 24;
+  const sourceGridY0 = 68 + 56;
+  const sourceBlockH = laneCount * gridCellH;
+  const generatedGridY0 = sourceGridY0 + sourceBlockH + 60;
+  const generatedBottom = generatedGridY0 + laneCount * gridCellH;
+  const footerY = Math.max(generatedBottom, 68 + 248) + 8;
+  const width = Math.max(868, editorX + 278 + 12);
+
+  return {
+    width,
+    height: footerY + 28
+  };
+}
+
 function editorSubpatcher() {
+  const editorSize = editorDimensions(16, 3);
+
   return {
     fileversion: 1,
     appversion: {
@@ -28,13 +49,13 @@ function editorSubpatcher() {
       modernui: 1
     },
     classnamespace: "box",
-    rect: [120.0, 120.0, 1060.0, 560.0],
+    rect: [120.0, 120.0, editorSize.width, editorSize.height],
     bglocked: 0,
     openinpresentation: 1,
     default_fontsize: 12.0,
     default_fontface: 0,
     default_fontname: "Ableton Sans Medium",
-    toolbarvisible: 1,
+    toolbarvisible: 0,
     title: "Kick Snare Hat",
     boxes: [
       box("editor-in", "inlet", "", [360.0, 470.0, 30.0, 22.0], {
@@ -52,9 +73,9 @@ function editorSubpatcher() {
           numinlets: 1,
           numoutlets: 2,
           outlettype: ["", ""],
-          patching_rect: [0.0, 0.0, 1040.0, 520.0],
+          patching_rect: [0.0, 0.0, editorSize.width, editorSize.height],
           presentation: 1,
-          presentation_rect: [0.0, 0.0, 1040.0, 520.0]
+          presentation_rect: [0.0, 0.0, editorSize.width, editorSize.height]
         }
       },
       box("editor-out", "outlet", "", [420.0, 470.0, 30.0, 22.0], {

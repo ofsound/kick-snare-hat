@@ -8,51 +8,112 @@ mgraphics.init();
 mgraphics.relative_coords = 0;
 mgraphics.autofill = 0;
 
-var WIDTH = 1040;
-var HEIGHT = 520;
 var MAX_STEPS = ksh_shared.MAX_STEPS;
 var MAX_LANES = ksh_shared.MAX_LANES;
 var SOURCE_COUNT = ksh_shared.SOURCE_COUNT;
 var GRID_CELL_W = 25;
 var GRID_CELL_H = 22;
+var EDITOR_LAYOUT = {
+  MAIN_TOP: 68,
+  FOOTER_H: 28,
+  FOOTER_GAP: 8,
+  CELL_EDITOR_W: 278,
+  CELL_EDITOR_H: 248,
+  RIGHT_MARGIN: 12,
+  EDITOR_GAP: 24,
+  LANE_PANEL_X: 12,
+  LANE_PANEL_W: 158,
+  LABEL_COL_W: 84,
+  HEADER_MIN_WIDTH: 868
+};
+var WIDTH = 968;
+var HEIGHT = 352;
+
+function computeEditorDimensions() {
+  var gridX0 = EDITOR_LAYOUT.LANE_PANEL_X + EDITOR_LAYOUT.LANE_PANEL_W + EDITOR_LAYOUT.LABEL_COL_W;
+  var gridW = state.stepCount * GRID_CELL_W;
+  var editorX = gridX0 + gridW + EDITOR_LAYOUT.EDITOR_GAP;
+  var sourceGridY0 = EDITOR_LAYOUT.MAIN_TOP + 56;
+  var sourceBlockH = state.laneCount * GRID_CELL_H;
+  var generatedGridY0 = sourceGridY0 + sourceBlockH + 60;
+  var generatedBottom = generatedGridY0 + state.laneCount * GRID_CELL_H;
+  var mainContentBottom = Math.max(generatedBottom, EDITOR_LAYOUT.MAIN_TOP + EDITOR_LAYOUT.CELL_EDITOR_H);
+  var footerY = mainContentBottom + EDITOR_LAYOUT.FOOTER_GAP;
+  var width = Math.max(
+    EDITOR_LAYOUT.HEADER_MIN_WIDTH,
+    editorX + EDITOR_LAYOUT.CELL_EDITOR_W + EDITOR_LAYOUT.RIGHT_MARGIN
+  );
+
+  return {
+    width: width,
+    height: footerY + EDITOR_LAYOUT.FOOTER_H,
+    footerY: footerY,
+    gridX0: gridX0,
+    gridW: gridW,
+    editorX: editorX,
+    editorW: EDITOR_LAYOUT.CELL_EDITOR_W
+  };
+}
+
+function applyEditorSize() {
+  var dims = computeEditorDimensions();
+  var changed = dims.width !== WIDTH || dims.height !== HEIGHT;
+
+  WIDTH = dims.width;
+  HEIGHT = dims.height;
+
+  if (typeof box !== "undefined" && box) {
+    try {
+      if (box.presentation_rect !== undefined) {
+        box.presentation_rect = [0, 0, WIDTH, HEIGHT];
+      } else {
+        box.message("presentation_rect", 0, 0, WIDTH, HEIGHT);
+      }
+    } catch (error) {}
+  }
+
+  if (typeof this !== "undefined" && this.patcher) {
+    try {
+      if (this.patcher.wind && typeof this.patcher.wind.size === "function") {
+        this.patcher.wind.size(WIDTH, HEIGHT);
+      }
+      this.patcher.message("window", "size", WIDTH, HEIGHT);
+    } catch (error) {}
+  }
+
+  return changed;
+}
 
 function uiLayout() {
-  var lanePanelX = 12;
-  var lanePanelW = 158;
-  var labelColW = 84;
-  var gridX0 = lanePanelX + lanePanelW + labelColW;
-  var gridW = state.stepCount * GRID_CELL_W;
-  var visibleRows = state.laneCount;
-  var mainTop = 68;
+  var dims = computeEditorDimensions();
+  var mainTop = EDITOR_LAYOUT.MAIN_TOP;
   var sectionTitleY = mainTop + 22;
   var sourceTitleY = sectionTitleY;
   var sourceStepY = sourceTitleY + 18;
   var sourceGridY0 = sourceStepY + 16;
-  var sourceBlockH = visibleRows * GRID_CELL_H;
+  var sourceBlockH = state.laneCount * GRID_CELL_H;
   var generatedTitleY = sourceGridY0 + sourceBlockH + 28;
   var generatedStepY = generatedTitleY + 18;
   var generatedGridY0 = generatedStepY + 14;
-  var editorX = gridX0 + gridW + 24;
-  var footerY = HEIGHT - 28;
 
   return {
-    lanePanelX: lanePanelX,
-    lanePanelW: lanePanelW,
+    lanePanelX: EDITOR_LAYOUT.LANE_PANEL_X,
+    lanePanelW: EDITOR_LAYOUT.LANE_PANEL_W,
     lanePanelTop: mainTop,
-    lanePanelH: footerY - 68 - 8,
-    labelRight: gridX0 - 10,
-    gridX0: gridX0,
-    gridW: gridW,
+    lanePanelH: dims.footerY - mainTop - EDITOR_LAYOUT.FOOTER_GAP,
+    labelRight: dims.gridX0 - 10,
+    gridX0: dims.gridX0,
+    gridW: dims.gridW,
     sourceTitleY: sourceTitleY,
     sourceStepY: sourceStepY,
     sourceGridY0: sourceGridY0,
     generatedTitleY: generatedTitleY,
     generatedStepY: generatedStepY,
     generatedGridY0: generatedGridY0,
-    editorX: editorX,
+    editorX: dims.editorX,
     editorY: mainTop,
-    editorW: Math.max(260, WIDTH - editorX - 12),
-    footerY: footerY
+    editorW: dims.editorW,
+    footerY: dims.footerY
   };
 }
 
@@ -338,6 +399,7 @@ function sendCell(source, lane, step) {
 }
 
 function sync_all() {
+  applyEditorSize();
   send("request_state");
   send("snapshot");
   mgraphics.redraw();
@@ -519,6 +581,7 @@ function engine_state(json) {
     ksh_shared.applyEngineState(state, engineState);
     selectedLane = ksh_shared.clamp(selectedLane, 0, state.laneCount - 1);
     selectedStep = ksh_shared.clamp(selectedStep, 0, state.stepCount - 1);
+    applyEditorSize();
     mgraphics.redraw();
   } catch (error) {}
 }
@@ -622,10 +685,12 @@ function handleStepper(id, direction) {
     state.refreshSteps = ksh_shared.clamp(state.refreshSteps, 1, state.stepCount);
     send("steps", state.stepCount);
     send("refresh_steps", state.refreshSteps);
+    applyEditorSize();
   } else if (id === "lanes_inc" || id === "lanes_dec") {
     state.laneCount = ksh_shared.clamp(state.laneCount + (id === "lanes_inc" ? 1 : -1), 1, MAX_LANES);
     selectedLane = ksh_shared.clamp(selectedLane, 0, state.laneCount - 1);
     send("channels", state.laneCount);
+    applyEditorSize();
   } else if (id === "refresh_inc" || id === "refresh_dec") {
     state.refreshSteps = ksh_shared.clamp(state.refreshSteps + (id === "refresh_inc" ? 1 : -1), 1, state.stepCount);
     send("refresh_steps", state.refreshSteps);
@@ -719,6 +784,9 @@ function anything() {
     ksh_shared.applyStatusMessage(state, messagename, arrayfromargs(arguments));
     if (messagename === "channels") {
       selectedLane = ksh_shared.clamp(selectedLane, 0, state.laneCount - 1);
+      applyEditorSize();
+    } else if (messagename === "steps") {
+      applyEditorSize();
     }
     mgraphics.redraw();
   }
