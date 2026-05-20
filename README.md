@@ -18,7 +18,7 @@ of using unconstrained randomness.
 - Live-synced `metro` timing with reset on Live transport stop.
 - Internal swing delay measured against the incoming tempo-synced step interval.
 - Live tempo from `live_set` drives swing timing via `live.observer tempo`.
-- Compact Presentation UI for the Live device strip with source, mode, step, lane, refresh, rate, swing, generated preview, and editor launch controls.
+- Compact Presentation UI for the Live device strip with mode, steps, lanes, refresh, rate, swing, generated preview, and editor launch controls.
 - Floating editor subpatcher opened from the compact UI, with source dropdown, all-lane source grid editor, generated grid preview, lane labels, lane note/lock controls, and per-cell velocity/probability/cycle controls.
 - `autopattr` plus `pattrstorage` persist engine pattern state only; UIs mirror via `engine_state` / `preview` events.
 - Per-source cell values:
@@ -37,6 +37,7 @@ of using unconstrained randomness.
 - `Kick-Snare-Hat.amxd`: generated Max for Live device file.
 - `ksh_engine.test.js`: Node-based tests for the core generation logic.
 - `scripts/build-device-patch.js`: regenerates the `.maxpat` and `.amxd` shell.
+- `scripts/validate-device-patch.js`: checks patch wiring and `.amxd` embedding.
 
 ## Max `js` messages
 
@@ -74,19 +75,24 @@ snapshot
 
 ## Development verification
 
-Run the engine tests with:
-
 ```sh
 node ksh_engine.test.js
+node scripts/build-device-patch.js
+node scripts/validate-device-patch.js
 ```
 
-The generated `Kick-Snare-Hat.amxd` expects `ksh_engine.js`, `ksh_compact_ui.js`,
-`ksh_ui.js`, and `ksh_ui_shared.js` to be available next to it unless the device
-is frozen from Max for Live.
+## Using in Live
 
-Installed local copies are placed in:
+Place `Kick-Snare-Hat.amxd` in the same folder as `ksh_engine.js`, `ksh_compact_ui.js`,
+`ksh_ui.js`, and `ksh_ui_shared.js`, then load the device from Ableton’s browser
+(or drag the `.amxd` onto a MIDI track). Those JavaScript files must stay alongside
+the device unless you freeze it from Max for Live.
+
+A typical place to keep user Max MIDI devices on macOS:
 
 ```text
 ~/Music/Ableton/User Library/Presets/MIDI Effects/Max MIDI Effect/
-~/Music/Ableton/User Library/Presets/MIDI Effects/
 ```
+
+You can also keep the folder anywhere under **User Library** and add it with
+**Manage Files** if it does not appear in the browser immediately.
