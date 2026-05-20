@@ -139,6 +139,37 @@ function testSwingAddsDelayToEverySecondStep() {
   assert.strictEqual(engine._notes[1].delayMs, 62.5);
 }
 
+function testDeserializeAcceptsUILaneSchema() {
+  var engine = makeEngine([0]);
+  var restored = makeEngine([0]);
+  var uiState;
+
+  clearAll(engine);
+  clearAll(restored);
+  engine.setChannelCount(4);
+  engine.setChannelLabel(0, "Sub");
+  engine.setChannelNote(0, 35);
+  engine.setChannelLock(0, 1);
+  engine.setCell(1, 0, 2, 1, 77, "random", 25);
+
+  uiState = JSON.parse(JSON.stringify(engine.serialize()));
+  uiState.laneCount = uiState.channelCount;
+  uiState.lanes = uiState.channels;
+  delete uiState.channelCount;
+  delete uiState.channels;
+
+  restored.deserialize(uiState);
+
+  assert.strictEqual(restored.channelCount, 4);
+  assert.strictEqual(restored.channels[0].label, "Sub");
+  assert.strictEqual(restored.channels[0].note, 35);
+  assert.strictEqual(restored.channels[0].lock, 1);
+  assert.strictEqual(restored.sources[1][0][2].enabled, 1);
+  assert.strictEqual(restored.sources[1][0][2].velocity, 77);
+  assert.strictEqual(restored.sources[1][0][2].gateMode, "random");
+  assert.strictEqual(restored.sources[1][0][2].random, 25);
+}
+
 function testSerializeDeserializeRestoresSourceData() {
   var engine = makeEngine([0]);
   var restored = makeEngine([0]);
@@ -173,6 +204,7 @@ testChannelLockOverridesRandomSource();
 testCycleGateFiresEveryNthEncounter();
 testRandomGateUsesPercentage();
 testSwingAddsDelayToEverySecondStep();
+testDeserializeAcceptsUILaneSchema();
 testSerializeDeserializeRestoresSourceData();
 
 console.log("ksh_engine tests passed");

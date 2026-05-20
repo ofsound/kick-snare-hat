@@ -141,11 +141,6 @@ const patch = {
         numinlets: 1,
         numoutlets: 0
       }),
-      box("midiin", "newobj", "midiin", [440.0, 860.0, 50.0, 22.0], {
-        numinlets: 0,
-        numoutlets: 1,
-        outlettype: [""]
-      }),
       box("metro", "newobj", "metro 16n @active 1", [180.0, 800.0, 128.0, 22.0], {
         numinlets: 2,
         numoutlets: 1,
@@ -225,6 +220,16 @@ const patch = {
         numoutlets: 1,
         outlettype: [""]
       }),
+      box("tempo_observer", "newobj", "live.observer tempo", [720.0, 720.0, 130.0, 22.0], {
+        numinlets: 1,
+        numoutlets: 1,
+        outlettype: [""]
+      }),
+      box("tempoprep", "newobj", "prepend tempo", [720.0, 760.0, 100.0, 22.0], {
+        numinlets: 1,
+        numoutlets: 1,
+        outlettype: [""]
+      }),
       box("selstop", "newobj", "sel 0", [720.0, 840.0, 42.0, 22.0], {
         numinlets: 2,
         numoutlets: 2,
@@ -268,6 +273,9 @@ const patch = {
       line("initmsg", 0, "ui", 0),
       line("loadbang", 0, "livepath", 0),
       line("livepath", 0, "observer", 0),
+      line("livepath", 0, "tempo_observer", 0),
+      line("tempo_observer", 0, "tempoprep", 0),
+      line("tempoprep", 0, "engine", 0),
       line("observer", 0, "selstop", 0),
       line("selstop", 0, "resetmsg", 0),
       line("resetmsg", 0, "engine", 0)
@@ -275,7 +283,8 @@ const patch = {
     dependency_cache: [
       { name: "ksh_engine.js", bootpath: ".", type: "TEXT", implicit: 1 },
       { name: "ksh_ui.js", bootpath: ".", type: "TEXT", implicit: 1 },
-      { name: "ksh_compact_ui.js", bootpath: ".", type: "TEXT", implicit: 1 }
+      { name: "ksh_compact_ui.js", bootpath: ".", type: "TEXT", implicit: 1 },
+      { name: "ksh_ui_shared.js", bootpath: ".", type: "TEXT", implicit: 1 }
     ]
   }
 };

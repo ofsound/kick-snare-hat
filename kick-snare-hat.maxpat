@@ -289,24 +289,6 @@
       },
       {
         "box": {
-          "id": "midiin",
-          "maxclass": "newobj",
-          "numinlets": 0,
-          "numoutlets": 1,
-          "patching_rect": [
-            440,
-            860,
-            50,
-            22
-          ],
-          "outlettype": [
-            ""
-          ],
-          "text": "midiin"
-        }
-      },
-      {
-        "box": {
           "id": "metro",
           "maxclass": "newobj",
           "numinlets": 2,
@@ -593,6 +575,42 @@
             ""
           ],
           "text": "live.observer is_playing"
+        }
+      },
+      {
+        "box": {
+          "id": "tempo_observer",
+          "maxclass": "newobj",
+          "numinlets": 1,
+          "numoutlets": 1,
+          "patching_rect": [
+            720,
+            720,
+            130,
+            22
+          ],
+          "outlettype": [
+            ""
+          ],
+          "text": "live.observer tempo"
+        }
+      },
+      {
+        "box": {
+          "id": "tempoprep",
+          "maxclass": "newobj",
+          "numinlets": 1,
+          "numoutlets": 1,
+          "patching_rect": [
+            720,
+            760,
+            100,
+            22
+          ],
+          "outlettype": [
+            ""
+          ],
+          "text": "prepend tempo"
         }
       },
       {
@@ -920,6 +938,42 @@
       {
         "patchline": {
           "source": [
+            "livepath",
+            0
+          ],
+          "destination": [
+            "tempo_observer",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "tempo_observer",
+            0
+          ],
+          "destination": [
+            "tempoprep",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "tempoprep",
+            0
+          ],
+          "destination": [
+            "engine",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
             "observer",
             0
           ],
@@ -969,6 +1023,12 @@
       },
       {
         "name": "ksh_compact_ui.js",
+        "bootpath": ".",
+        "type": "TEXT",
+        "implicit": 1
+      },
+      {
+        "name": "ksh_ui_shared.js",
         "bootpath": ".",
         "type": "TEXT",
         "implicit": 1

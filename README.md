@@ -17,9 +17,10 @@ of using unconstrained randomness.
 - Refresh interval is measured in sequencer steps.
 - Live-synced `metro` timing with reset on Live transport stop.
 - Internal swing delay measured against the incoming tempo-synced step interval.
+- Live tempo from `live_set` drives swing timing via `live.observer tempo`.
 - Compact Presentation UI for the Live device strip with source, mode, step, lane, refresh, rate, swing, generated preview, and editor launch controls.
 - Floating editor subpatcher opened from the compact UI, with source dropdown, all-lane source grid editor, generated grid preview, lane labels, lane note/lock controls, and per-cell velocity/probability/cycle controls.
-- `autopattr` plus `pattrstorage` for set/preset state persistence.
+- `autopattr` plus `pattrstorage` persist engine pattern state only; UIs mirror via `engine_state` / `preview` events.
 - Per-source cell values:
   - enabled
   - velocity
@@ -31,6 +32,7 @@ of using unconstrained randomness.
 - `ksh_engine.js`: the sequencing engine and Max `js` object entrypoints.
 - `ksh_compact_ui.js`: the compact Live device-strip UI.
 - `ksh_ui.js`: the floating editor UI for source editing and generated preview.
+- `ksh_ui_shared.js`: shared drawing and state-sync helpers for both UIs.
 - `kick-snare-hat.maxpat`: editable Max patch shell with transport/MIDI wiring.
 - `Kick-Snare-Hat.amxd`: generated Max for Live device file.
 - `ksh_engine.test.js`: Node-based tests for the core generation logic.
@@ -66,6 +68,7 @@ cell_gate 1 1 1 random 75
 
 step
 reset
+request_state
 snapshot
 ```
 
@@ -77,8 +80,9 @@ Run the engine tests with:
 node ksh_engine.test.js
 ```
 
-The generated `Kick-Snare-Hat.amxd` expects `ksh_engine.js` and `ksh_ui.js` to
-be available next to it unless the device is frozen from Max for Live.
+The generated `Kick-Snare-Hat.amxd` expects `ksh_engine.js`, `ksh_compact_ui.js`,
+`ksh_ui.js`, and `ksh_ui_shared.js` to be available next to it unless the device
+is frozen from Max for Live.
 
 Installed local copies are placed in:
 

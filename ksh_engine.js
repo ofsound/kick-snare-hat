@@ -13,6 +13,26 @@ var KSH_EngineClass = null;
     return Math.max(min, Math.min(max, value));
   }
 
+  function normalizeIncomingState(state) {
+    var normalized;
+
+    if (!state) {
+      return null;
+    }
+
+    normalized = state.state && state.state.sources ? state.state : state;
+
+    if (normalized.laneCount !== undefined && normalized.channelCount === undefined) {
+      normalized.channelCount = normalized.laneCount;
+    }
+
+    if (normalized.lanes && !normalized.channels) {
+      normalized.channels = normalized.lanes;
+    }
+
+    return normalized;
+  }
+
   function cloneCell(cell) {
     return {
       enabled: cell.enabled ? 1 : 0,
@@ -68,9 +88,9 @@ var KSH_EngineClass = null;
     this.swing = 0;
     this.midiChannel = 1;
     this.noteDurationMs = 100;
-    this.playing = false;
     this.currentStep = 0;
     this.lastStepTime = 0;
+    this.editorActive = false;
 
     this.channels = [];
     this.sources = [];
@@ -199,14 +219,6 @@ var KSH_EngineClass = null;
     this.status("duration_ms " + this.noteDurationMs);
   };
 
-  KickSnareHatEngine.prototype.setChannel = function (channel, label, note, lock) {
-    channel = clamp(channel, 0, 7);
-    this.channels[channel].label = String(label || this.channels[channel].label);
-    this.channels[channel].note = clamp(note, 0, 127);
-    this.channels[channel].lock = clamp(lock, -1, 3);
-    this.generateWindow(0, this.stepCount);
-  };
-
   KickSnareHatEngine.prototype.setChannelLabel = function (channel, label) {
     channel = clamp(channel, 0, 7);
     this.channels[channel].label = String(label || "");
@@ -293,35 +305,31 @@ var KSH_EngineClass = null;
   };
 
   KickSnareHatEngine.prototype.reset = function () {
+    if (typeof cancelPendingNoteTasks === "function") {
+      cancelPendingNoteTasks();
+    }
     this.currentStep = 0;
     this.cycleCounters = {};
     this.lastStepTime = 0;
-    this.generateWindow(0, this.stepCount);
+    this.generateWindow(0, this.stepCount, true);
     this.status("reset");
-  };
-
-  KickSnareHatEngine.prototype.play = function () {
-    this.playing = true;
-    this.status("play");
-  };
-
-  KickSnareHatEngine.prototype.stop = function () {
-    this.playing = false;
-    this.reset();
-    this.status("stop");
   };
 
   KickSnareHatEngine.prototype.randomSource = function () {
     return clamp(Math.floor(this.rng() * 4), 0, 3);
   };
 
-  KickSnareHatEngine.prototype.generateWindow = function (startStep, length) {
+  KickSnareHatEngine.prototype.generateWindow = function (startStep, length, forceEmit) {
     var offset;
     var step;
     var channel;
     var source;
     var stackSource;
     var cell;
+
+    if (forceEmit === undefined) {
+      forceEmit = false;
+    }
 
     startStep = clamp(startStep, 0, this.stepCount - 1);
     length = clamp(length, 1, this.stepCount);
@@ -345,7 +353,9 @@ var KSH_EngineClass = null;
       }
     }
 
-    this.emitPreview(this.snapshot());
+    if (this.editorActive || forceEmit) {
+      this.emitPreview(this.snapshot());
+    }
   };
 
   KickSnareHatEngine.prototype.cycleKey = function (source, channel, step) {
@@ -381,14 +391,14 @@ var KSH_EngineClass = null;
     var note;
     var now;
 
-    now = new Date().getTime();
+    now = Date.now();
     if (this.lastStepTime > 0 && now > this.lastStepTime) {
       this.stepIntervalMs = now - this.lastStepTime;
     }
     this.lastStepTime = now;
 
     if (this.currentStep % this.refreshSteps === 0) {
-      this.generateWindow(this.currentStep, this.refreshSteps);
+      this.generateWindow(this.currentStep, this.refreshSteps, true);
     }
 
     for (channel = 0; channel < this.channelCount; channel += 1) {
@@ -477,6 +487,7 @@ var KSH_EngineClass = null;
     var channel;
     var step;
 
+    state = normalizeIncomingState(state);
     if (!state) {
       return;
     }
@@ -512,6 +523,7 @@ var KSH_EngineClass = null;
     this.reset();
   };
 
+  KickSnareHatEngine.normalizeIncomingState = normalizeIncomingState;
   KSH_EngineClass = KickSnareHatEngine;
   root.KickSnareHatEngine = KickSnareHatEngine;
 
@@ -522,6 +534,25 @@ var KSH_EngineClass = null;
 
 var kshPendingNoteOffs = [];
 var kshEngine = null;
+
+function cancelPendingNoteTasks() {
+  var i;
+  var task;
+
+  for (i = kshPendingNoteOffs.length - 1; i >= 0; i -= 1) {
+    task = kshPendingNoteOffs[i];
+    if (task && typeof task.cancel === "function") {
+      task.cancel();
+    }
+  }
+  kshPendingNoteOffs.length = 0;
+}
+
+function emitFullState() {
+  if (typeof JSON !== "undefined" && typeof messnamed === "function") {
+    messnamed("ksh_engine_events", "engine_state", JSON.stringify(ensureEngine().serialize()));
+  }
+}
 
 if (typeof module === "undefined" || !module.exports) {
   function safeOutlet(index) {
@@ -542,26 +573,36 @@ if (typeof module === "undefined" || !module.exports) {
     }
   }
 
+  function removePendingTask(t) {
+    var idx = kshPendingNoteOffs.indexOf(t);
+    if (idx !== -1) {
+      kshPendingNoteOffs.splice(idx, 1);
+    }
+  }
+
   kshEngine = new KSH_EngineClass({
     emitNote: function (note) {
-      var task;
+      var onTask;
+      var offTask;
 
       if (typeof outlet !== "function") {
         return;
       }
 
       if (typeof Task === "function") {
-        task = new Task(function () {
+        onTask = new Task(function () {
           safeOutlet(0, note.pitch, note.velocity, note.channel);
+          removePendingTask(onTask);
         });
-        kshPendingNoteOffs.push(task);
-        task.schedule(note.delayMs || 0);
+        kshPendingNoteOffs.push(onTask);
+        onTask.schedule(note.delayMs || 0);
 
-        task = new Task(function () {
+        offTask = new Task(function () {
           safeOutlet(0, note.pitch, 0, note.channel);
+          removePendingTask(offTask);
         });
-        kshPendingNoteOffs.push(task);
-        task.schedule((note.delayMs || 0) + note.durationMs);
+        kshPendingNoteOffs.push(offTask);
+        offTask.schedule((note.delayMs || 0) + note.durationMs);
       } else {
         safeOutlet(0, note.pitch, note.velocity, note.channel);
         safeOutlet(0, note.pitch, 0, note.channel);
@@ -595,28 +636,13 @@ function ensureEngine() {
   return kshEngine;
 }
 
-function bang() {
-  step();
-}
-
 function step() {
   ensureEngine().step();
 }
 
-function play(value) {
-  if (parseInt(value, 10) === 0) {
-    ensureEngine().stop();
-  } else {
-    ensureEngine().play();
-  }
-}
-
-function stop() {
-  ensureEngine().stop();
-}
-
 function reset() {
   ensureEngine().reset();
+  emitFullState();
 }
 
 function steps(value) {
@@ -700,11 +726,13 @@ function cell_gate(source, channel, stepIndex, gateMode, value) {
 }
 
 function snapshot() {
-  if (typeof JSON !== "undefined") {
-    if (typeof messnamed === "function") {
-      messnamed("ksh_engine_events", "preview", JSON.stringify(ensureEngine().snapshot()));
-    }
+  if (typeof JSON !== "undefined" && typeof messnamed === "function") {
+    messnamed("ksh_engine_events", "preview", JSON.stringify(ensureEngine().snapshot()));
   }
+}
+
+function request_state() {
+  emitFullState();
 }
 
 function getvalueof() {
@@ -724,49 +752,20 @@ function setvalueof(value) {
   }
 
   ensureEngine().deserialize(JSON.parse(value));
+  emitFullState();
 }
 
-function anything() {
-  var args = arrayfromargs(arguments);
-  var name = messagename;
-
-  if (name === "step") {
-    step();
-  } else if (name === "reset") {
-    reset();
-  } else if (name === "stop") {
-    stop();
-  } else if (name === "play") {
-    play(args[0]);
-  } else if (name === "steps") {
-    steps(args[0]);
-  } else if (name === "channels") {
-    channels(args[0]);
-  } else if (name === "refresh_steps") {
-    refresh_steps(args[0]);
-  } else if (name === "mode") {
-    mode(args[0]);
-  } else if (name === "rate") {
-    rate(args[0]);
-  } else if (name === "tempo") {
-    tempo(args[0]);
-  } else if (name === "swing") {
-    swing(args[0]);
-  } else if (name === "midi_channel") {
-    midi_channel(args[0]);
-  } else if (name === "duration_ms") {
-    duration_ms(args[0]);
-  } else if (name === "channel_note") {
-    channel_note(args[0], args[1]);
-  } else if (name === "channel_lock") {
-    channel_lock(args[0], args[1]);
-  } else if (name === "cell") {
-    cell(args[0], args[1], args[2], args[3], args[4], args[5], args[6]);
-  } else if (name === "cell_enabled") {
-    cell_enabled(args[0], args[1], args[2], args[3]);
-  } else if (name === "cell_velocity") {
-    cell_velocity(args[0], args[1], args[2], args[3]);
-  } else if (name === "cell_gate") {
-    cell_gate(args[0], args[1], args[2], args[3], args[4]);
+function state(json) {
+  if (typeof JSON !== "undefined" && json) {
+    try {
+      ensureEngine().deserialize(JSON.parse(json));
+      emitFullState();
+    } catch (e) {
+      // safe catch
+    }
   }
+}
+
+function editor_active(val) {
+  ensureEngine().editorActive = parseInt(val, 10) !== 0;
 }
