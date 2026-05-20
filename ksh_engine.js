@@ -769,6 +769,7 @@ var KSH_EngineClass = null;
     var source;
     var channel;
     var step;
+    var incomingChannel;
 
     state = normalizeIncomingState(state);
     if (!state) {
@@ -781,16 +782,23 @@ var KSH_EngineClass = null;
     this.setGenerationMode(state.generationMode || this.generationMode);
     this.setRate(state.rate || this.rate);
     this.setTempo(state.tempo || this.tempo);
-    this.setSwing(state.swing || this.swing);
+    this.setSwing(state.swing !== undefined ? state.swing : this.swing);
     this.setMidiChannel(state.midiChannel || this.midiChannel);
     this.setNoteDurationMs(state.noteDurationMs || this.noteDurationMs);
     this.phaseOffsetBeats = parseFloat(state.phaseOffsetBeats) || 0;
 
     if (state.channels) {
       for (channel = 0; channel < Math.min(MAX_LANES, state.channels.length); channel += 1) {
-        this.channels[channel].label = String(state.channels[channel].label || this.channels[channel].label);
-        this.channels[channel].note = clamp(state.channels[channel].note, 0, 127);
-        this.channels[channel].lock = clamp(state.channels[channel].lock, -1, SOURCE_COUNT - 1);
+        incomingChannel = state.channels[channel] || {};
+        if (incomingChannel.label !== undefined) {
+          this.channels[channel].label = String(incomingChannel.label);
+        }
+        if (incomingChannel.note !== undefined) {
+          this.channels[channel].note = clamp(incomingChannel.note, 0, 127);
+        }
+        if (incomingChannel.lock !== undefined) {
+          this.channels[channel].lock = clamp(incomingChannel.lock, -1, SOURCE_COUNT - 1);
+        }
       }
     }
 

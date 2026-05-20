@@ -285,6 +285,32 @@ function testDeserializeAcceptsUILaneSchema() {
   assert.strictEqual(restored.sources[1][0][2].random, 25);
 }
 
+function testDeserializeRestoresZeroSwing() {
+  var restored = makeEngine([0]);
+
+  restored.setSwing(50);
+  restored.deserialize({ swing: 0 });
+
+  assert.strictEqual(restored.swing, 0);
+}
+
+function testDeserializePreservesMissingChannelKeys() {
+  var restored = makeEngine([0]);
+
+  restored.setChannelLabel(0, "");
+  restored.setChannelNote(0, 35);
+  restored.setChannelLock(0, 2);
+  restored.deserialize({
+    channels: [
+      {}
+    ]
+  });
+
+  assert.strictEqual(restored.channels[0].label, "");
+  assert.strictEqual(restored.channels[0].note, 35);
+  assert.strictEqual(restored.channels[0].lock, 2);
+}
+
 function testCellEditsReachStepsBeyondSixteen() {
   var engine = makeEngine([0]);
   clearAll(engine);
@@ -441,6 +467,8 @@ testTransportPositionFiresOnlyWhenLiveStepChanges();
 testTransportPositionAnchorsJumpsToLiveBeat();
 testTransportPositionDoesNotFireWhileStopped();
 testDeserializeAcceptsUILaneSchema();
+testDeserializeRestoresZeroSwing();
+testDeserializePreservesMissingChannelKeys();
 testCellEditsReachStepsBeyondSixteen();
 testCellEditDoesNotReRollGeneratedSources();
 testCellEditOnlyMutatesGeneratedWhenSourceMatches();

@@ -1,5 +1,5 @@
 // Drives the Max-only wrapper block at the bottom of ksh_engine.js inside a
-// vm sandbox so we can verify outlet plumbing, Task scheduling for note-off,
+// vm sandbox so we can verify outlet plumbing, native scheduler handoff,
 // messnamed event emission, and the getvalueof/setvalueof JSON contract end
 // to end. The regular ksh_engine.test.js loads the file via require(), which
 // skips the Max wrapper entirely.
@@ -72,8 +72,8 @@ function makeMaxSandbox() {
   sandbox.global = sandbox;
 
   sandbox._flush = function () {
-    // Run all pending tasks in scheduled order, including any tasks scheduled
-    // while flushing (e.g. note-off tasks).
+    // Run all pending UI coalescing tasks in scheduled order, including any
+    // tasks scheduled while flushing.
     while (scheduled.length) {
       var entry = scheduled.shift();
       if (!entry.task.cancelled) {
@@ -146,38 +146,32 @@ function testCellMessageWritesToEngineSourceAndCoalescesPreview() {
   assert.strictEqual(sb.kshEngine.sources[1][0][4].velocity, 110);
 }
 
-function testTransportPositionFiresNoteOnAndScheduledNoteOff() {
+function testTransportPositionEmitsNativeSchedulerEvent() {
   var sb = makeMaxSandbox();
   sb._clear();
   sb.steps(4);
   sb.channels(1);
   sb.rate("16n");
   sb.tempo(120);
+  sb.duration_ms(150);
+  sb.midi_channel(3);
   sb.cell(1, 1, 1, 1, 90, "always", 100);
   sb._flush();
   sb._clear();
 
   sb.transport_position(0, 1);
 
-  // Note-on and note-off are both scheduled via Task; nothing should have
-  // hit outlet() yet.
-  assert.strictEqual(sb._notes().length, 0, "outlet should be deferred via Task");
-  assert.ok(sb._scheduledCount() >= 2, "note-on + note-off should both be scheduled");
-
-  sb._flush();
-
   var emitted = sb._notes();
-  assert.strictEqual(emitted.length, 2, "should emit one note-on and one note-off");
-  // safeOutlet(0, pitch, velocity, channel)
+  assert.strictEqual(emitted.length, 1, "should emit one raw note event");
+  // safeOutlet(0, pitch, velocity, durationMs, channel, delayMs)
   assert.strictEqual(emitted[0].outlet, 0);
-  assert.strictEqual(emitted[0].args[1], 90, "note-on velocity should match cell");
-  assert.strictEqual(emitted[1].outlet, 0);
-  assert.strictEqual(emitted[1].args[1], 0, "note-off velocity should be 0");
-  assert.strictEqual(emitted[0].args[0], emitted[1].args[0],
-    "note-on and note-off should share the same pitch");
+  assert.deepStrictEqual(emitted[0].args, [36, 90, 150, 3, 0],
+    "raw note event should be pitch velocity duration channel delay");
+  assert.strictEqual(sb._scheduledCount(), 0,
+    "note output should not allocate per-note Task objects");
 }
 
-function testResetCancelsPendingNoteTasks() {
+function testResetClearsNativeScheduler() {
   var sb = makeMaxSandbox();
   sb._clear();
   sb.steps(4);
@@ -186,20 +180,17 @@ function testResetCancelsPendingNoteTasks() {
   sb._flush();
   sb._clear();
 
-  // Schedule a note but don't flush — the note-on and note-off Tasks should
-  // both be pending. reset() must cancel them so we don't get stuck notes
-  // when transport restarts.
   sb.transport_position(0, 1);
-  var beforeReset = sb._scheduledCount();
-  assert.ok(beforeReset >= 2, "expected pending note-on/off Tasks before reset");
+  assert.strictEqual(sb._notes().length, 1, "note event should emit immediately to the native scheduler");
+  sb._clear();
 
   sb.reset();
-  sb._flush();
 
-  // Cancelled Tasks should not have emitted note output.
-  var emittedAfterReset = sb._notes();
-  assert.strictEqual(emittedAfterReset.length, 0,
-    "reset should cancel pending note Tasks so they emit nothing on flush");
+  var schedulerMessages = sb._named().filter(function (m) {
+    return m.bus === "ksh_scheduler_commands" && m.args[0] === "clear";
+  });
+  assert.strictEqual(schedulerMessages.length, 1,
+    "reset should clear pending native scheduler events and held notes");
 }
 
 function testGetValueOfSetValueOfRoundtripsEngineState() {
@@ -295,8 +286,8 @@ function testMessnamedFailuresAreSwallowed() {
 
 testMaxWrapperBootsEngineAndExposesHandlers();
 testCellMessageWritesToEngineSourceAndCoalescesPreview();
-testTransportPositionFiresNoteOnAndScheduledNoteOff();
-testResetCancelsPendingNoteTasks();
+testTransportPositionEmitsNativeSchedulerEvent();
+testResetClearsNativeScheduler();
 testGetValueOfSetValueOfRoundtripsEngineState();
 testEditorActiveEnablesCurrentStepEmission();
 testMessnamedFailuresAreSwallowed();
