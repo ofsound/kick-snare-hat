@@ -1,0 +1,38 @@
+---
+description: Kick Snare Hat Max for Live device — stack, files, and conventions
+alwaysApply: true
+---
+
+# Project Context
+
+- **Product:** Kick Snare Hat — Max for Live **MIDI Generator** for Ableton Live **12.4+**
+- **Runtime:** Max `js` (engine) and `jsui` (compact + editor UIs) with **ES5-style** JavaScript (`var`, `function`, no bundler)
+- **Tooling:** **Node.js** for `ksh_engine.test.js` and `scripts/*` only
+- **Not in this repo:** React, TypeScript app, npm dependencies, Tailwind, Vite, TanStack, IndexedDB
+
+## Device files (keep in sync together)
+
+- `ksh_engine.js` — generation, transport, MIDI, serialization
+- `ksh_compact_ui.js` — Live device strip UI
+- `ksh_ui.js` — editor subpatcher UI
+- `ksh_ui_shared.js` — shared drawing/state helpers (`include("ksh_ui_shared.js")`)
+- `Kick-Snare-Hat.amxd` — loadable device (JS must sit beside it in User Library)
+
+Patch shell: `kick-snare-hat.maxpat` (generated/edited via `scripts/build-device-patch.js`).
+
+## Indexing convention
+
+- **Max messages** use **1-based** channel/source/step indices (`channel_note 1 36`, etc.).
+- **Engine internals** use **0-based** arrays; handlers call `zeroBased()` where needed.
+
+## Naming
+
+- Prefer **channel** in engine/API; UI code may still say **lane** in labels—keep schema compatibility (`normalizeIncomingState` handles legacy `lane` keys).
+- Generation modes: `stack` | `per_channel`
+- Gate modes: `always` | `random` | `cycle`
+
+## Editing discipline
+
+- Match existing **mgraphics** drawing style and `ksh_shared.colors` in UI files.
+- Engine changes that affect behavior should get coverage in `ksh_engine.test.js` with deterministic `rng`.
+- Do not hand-edit `.amxd` binary structure; regenerate via `build-device-patch.js`.

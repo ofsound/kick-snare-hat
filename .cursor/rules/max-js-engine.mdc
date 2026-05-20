@@ -1,0 +1,36 @@
+---
+description: ksh_engine.js patterns — dual Node/Max runtime, messages, state
+globs: ksh_engine.js,ksh_engine.test.js
+alwaysApply: false
+---
+
+# Engine (`ksh_engine.js`)
+
+## Dual runtime
+
+- Core class lives in an IIFE on `this` / `root` with `module.exports = KickSnareHatEngine` for Node.
+- Max-only block (`if (typeof module === "undefined" || !module.exports)`) owns `outlet`, `Task`, `messnamed`, and `kshEngine` singleton.
+- **Do not** call Max APIs from code paths used by tests.
+
+## State and persistence
+
+- `serialize()` / `deserialize()` / `snapshot()` are the contract for `pattrstorage` and UI mirrors.
+- `normalizeIncomingState()` accepts legacy UI shapes (`lanes` → `channels`, nested `state`).
+- UI sync: `emitFullState()` → `messnamed("ksh_engine_events", "engine_state", ...)`. Preview grid: `"preview"`.
+
+## Max inlet handlers
+
+- Top-level functions named after messages (`steps`, `cell`, `transport_position`, …).
+- Use `arrayfromargs(arguments)` for variadic messages (`channel_label`).
+- After mutating state from the patch, call `emitFullState()` when UIs need a full resync (see existing handlers).
+
+## Testing
+
+- Tests `require("./ksh_engine")` and construct `new KickSnareHatEngine({ rng, emitNote, ... })`.
+- Inject deterministic `rng` sequences; avoid `Math.random` in assertions.
+- Use `clearAll()` / `makeEngine()` patterns from `ksh_engine.test.js` for new cases.
+- Run `node ksh_engine.test.js` after engine edits.
+
+## Audio thread safety
+
+- `safeOutlet` and cancelled `Task` note-offs exist to survive reload/recompile—preserve that behavior when touching note output.

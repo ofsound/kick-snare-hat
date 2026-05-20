@@ -1,0 +1,38 @@
+---
+description: Mandatory tests, patch validation, and Ableton User Library sync after device edits
+alwaysApply: true
+---
+
+# Post-Edit Verification
+
+`AGENTS.md` is the workflow source of truth.
+
+## Ableton sync (non-negotiable)
+
+After **any** substantive change to the device—`.js` sources, `.maxpat`, `.amxd`, or `scripts/build-device-patch.js`—you **must** run:
+
+```sh
+node scripts/sync-user-library.js
+```
+
+Do **not** finish the task without a successful sync. This copies `ksh_engine.js`, `ksh_compact_ui.js`, `ksh_ui.js`, `ksh_ui_shared.js`, and `Kick-Snare-Hat.amxd` into the Ableton User Library folder (default: `~/Music/Ableton/User Library/Presets/MIDI Effects/Max MIDI Effect/`). Override with `KSH_ABLETON_DEST` when needed.
+
+`node scripts/build-device-patch.js` also syncs at the end; if you only changed `.js` files, run sync explicitly—do not skip it.
+
+## Tests and patch checks
+
+| What changed | Run before finishing |
+|--------------|----------------------|
+| `ksh_engine.js` or `ksh_engine.test.js` | `node ksh_engine.test.js` |
+| Any device file (above) | `node scripts/validate-device-patch.js` |
+| `kick-snare-hat.maxpat` or `scripts/build-device-patch.js` | `node scripts/build-device-patch.js` then `node scripts/validate-device-patch.js` |
+| **Always** (device edits) | `node scripts/sync-user-library.js` |
+
+Fix failures before finishing. There is no `npm run verify` in this repo.
+
+## Substantive vs trivial
+
+- **Substantive:** logic, UI, patch wiring, generated `.amxd`, scripts under `scripts/`, or anything that would affect Live behavior.
+- **Trivial (sync still required if device files touched):** comment-only edits in device files still require sync if the user will reload in Live.
+
+Docs-only edits (`README.md`, rules) do not require sync unless they accompany device changes.

@@ -1,0 +1,42 @@
+---
+description: Max patch shell, .amxd generation, and wiring validation
+globs: kick-snare-hat.maxpat,scripts/build-device-patch.js,scripts/validate-device-patch.js
+alwaysApply: false
+---
+
+# Device patch and `.amxd`
+
+## Source of truth
+
+- Prefer editing **`scripts/build-device-patch.js`** to change wiring, box layout, or subpatchers—then regenerate.
+- `kick-snare-hat.maxpat` is JSON written by the build script; avoid one-off hand edits that drift from the generator.
+
+## Build pipeline
+
+```sh
+node scripts/build-device-patch.js
+```
+
+Writes `kick-snare-hat.maxpat` and `Kick-Snare-Hat.amxd` (ampf/ptch embed), then syncs via `sync-user-library.js`.
+
+## Validation
+
+```sh
+node scripts/validate-device-patch.js
+```
+
+Checks patchline inlet/outlet bounds, nested editor subpatcher, `.amxd` payload length and equality with `.maxpat`, and forbidden stale wiring strings.
+
+## Wiring contracts (do not break)
+
+- `r ksh_ui_commands` → UIs; `s ksh_ui_commands` from UI outlet path
+- `r ksh_engine_commands` → `js ksh_engine.js`
+- `r ksh_engine_events` → UIs for `engine_state` / `preview`
+- `plugsync~` → `transport_position` → engine
+- `live.path` + `live.observer` → tempo and transport stop → `reset`
+- `autopattr` + `pattrstorage ksh_state` → engine `getvalueof` / `setvalueof`
+- Editor subpatcher: `jsui` `ksh_ui.js`, opened via `pcontrol` / `route open_editor`
+
+## dependency_cache
+
+Build script lists all four `ksh_*.js` files so Max resolves them beside the device.

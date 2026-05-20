@@ -1,0 +1,33 @@
+---
+description: jsui drawing and command routing for compact and editor UIs
+globs: ksh_compact_ui.js,ksh_ui.js,ksh_ui_shared.js
+alwaysApply: false
+---
+
+# jsui UIs
+
+## Shared module
+
+- `ksh_ui_shared.js` defines `ksh_shared` (colors, clamps, layout helpers, `syncStateFromEngine`, etc.).
+- Both UIs: `include("ksh_ui_shared.js")`, `mgraphics.init()`, `mgraphics.relative_coords = 0`.
+
+## State flow
+
+- Listen: `engine_state(json)` and `preview(json)` parse JSON into local `state` / `previewData`, then `paint()`.
+- Outbound: `send()` / `sendLane()` / `sendCell()` → `messnamed("ksh_ui_commands", ...)` with **1-based** indices where the engine expects them.
+- `sync_all()` on `init` / `loadbang` requests engine state; do not invent parallel persistence.
+
+## Drawing
+
+- Use `ksh_shared.colors` and existing layout constants; resize via `computeCompactWidth()` / `computeEditorDimensions()` when step or lane counts change.
+- `hitZones` drive `onclick`; keep hit testing aligned with `paint()` geometry.
+- Editor only: `open`, `ondrag`, `onresize`, `onkeydown` for interaction—follow existing patterns.
+
+## Compact vs editor
+
+- **Compact** (`ksh_compact_ui.js`): device strip—mode, steps, lanes, refresh, rate, swing, preview, open editor.
+- **Editor** (`ksh_ui.js`): source grid, generated grid, lane note/lock, cell gate/velocity editor.
+
+## After UI edits
+
+- Run post-edit gate including **`node scripts/sync-user-library.js`** so Live loads updated `.js` files from User Library.
