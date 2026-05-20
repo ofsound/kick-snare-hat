@@ -103,12 +103,84 @@ function validateNoKnownBadWiring(text) {
   }
 }
 
+function hasLine(patcher, src, outlet, dst, inlet) {
+  const lines = patcher.lines || [];
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const patchline = lines[i].patchline;
+    const source = patchline.source;
+    const destination = patchline.destination;
+
+    if (source[0] === src && source[1] === outlet && destination[0] === dst && destination[1] === inlet) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function validateNativeScheduler(patcher, errors) {
+  const boxes = boxMap(patcher);
+  const expectedText = {
+    "note-unpack": "unpack i i i i f",
+    "note-delay": "pipe 0 0 0 0 0.",
+    "makenote": "makenote 0 100 1 @repeatmode 1",
+    "schedcmds": "r ksh_scheduler_commands",
+    "route-scheduler-clear": "route clear",
+    "clear-delay-msg": "clear",
+    "stop-notes-msg": "stop"
+  };
+  const expectedLines = [
+    ["engine", 0, "note-unpack", 0],
+    ["note-unpack", 4, "note-delay", 4],
+    ["note-unpack", 3, "note-delay", 3],
+    ["note-unpack", 2, "note-delay", 2],
+    ["note-unpack", 1, "note-delay", 1],
+    ["note-unpack", 0, "note-delay", 0],
+    ["note-delay", 3, "makenote", 3],
+    ["note-delay", 2, "makenote", 2],
+    ["note-delay", 1, "makenote", 1],
+    ["note-delay", 0, "makenote", 0],
+    ["makenote", 2, "noteout", 2],
+    ["makenote", 1, "noteout", 1],
+    ["makenote", 0, "noteout", 0],
+    ["schedcmds", 0, "route-scheduler-clear", 0],
+    ["route-scheduler-clear", 0, "clear-delay-msg", 0],
+    ["route-scheduler-clear", 0, "stop-notes-msg", 0],
+    ["clear-delay-msg", 0, "note-delay", 0],
+    ["stop-notes-msg", 0, "makenote", 0]
+  ];
+  const lines = patcher.lines || [];
+
+  for (const id of Object.keys(expectedText)) {
+    if (!boxes.has(id)) {
+      errors.push(`root: missing native scheduler box ${id}`);
+    } else if (boxes.get(id).text !== expectedText[id]) {
+      errors.push(`root: ${id} text ${JSON.stringify(boxes.get(id).text)} !== ${JSON.stringify(expectedText[id])}`);
+    }
+  }
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const patchline = lines[i].patchline;
+    if (patchline.source[0] === "engine" && patchline.destination[0] === "noteout") {
+      errors.push("root: engine must not be wired directly to noteout");
+    }
+  }
+
+  for (const expected of expectedLines) {
+    if (!hasLine(patcher, expected[0], expected[1], expected[2], expected[3])) {
+      errors.push(`root: missing scheduler line ${expected[0]}:${expected[1]} -> ${expected[2]}:${expected[3]}`);
+    }
+  }
+}
+
 const patch = loadPatch();
 const errors = [];
 
 validateLines(patch.json.patcher, "root", errors);
 validateAmxd(patch.text);
 validateNoKnownBadWiring(patch.text);
+validateNativeScheduler(patch.json.patcher, errors);
 
 if (errors.length) {
   for (let i = 0; i < errors.length; i += 1) {

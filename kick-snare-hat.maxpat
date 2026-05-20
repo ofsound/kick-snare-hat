@@ -273,17 +273,153 @@
       },
       {
         "box": {
-          "id": "noteout",
+          "id": "note-unpack",
           "maxclass": "newobj",
           "numinlets": 1,
+          "numoutlets": 5,
+          "patching_rect": [
+            540,
+            840,
+            112,
+            22
+          ],
+          "outlettype": [
+            "int",
+            "int",
+            "int",
+            "int",
+            "float"
+          ],
+          "text": "unpack i i i i f"
+        }
+      },
+      {
+        "box": {
+          "id": "note-delay",
+          "maxclass": "newobj",
+          "numinlets": 5,
+          "numoutlets": 4,
+          "patching_rect": [
+            540,
+            880,
+            126,
+            22
+          ],
+          "outlettype": [
+            "int",
+            "int",
+            "int",
+            "int"
+          ],
+          "text": "pipe 0 0 0 0 0."
+        }
+      },
+      {
+        "box": {
+          "id": "makenote",
+          "maxclass": "newobj",
+          "numinlets": 4,
+          "numoutlets": 3,
+          "patching_rect": [
+            540,
+            920,
+            200,
+            22
+          ],
+          "outlettype": [
+            "int",
+            "int",
+            "int"
+          ],
+          "text": "makenote 0 100 1 @repeatmode 1"
+        }
+      },
+      {
+        "box": {
+          "id": "noteout",
+          "maxclass": "newobj",
+          "numinlets": 3,
           "numoutlets": 0,
           "patching_rect": [
             540,
-            860,
+            960,
             58,
             22
           ],
           "text": "noteout"
+        }
+      },
+      {
+        "box": {
+          "id": "schedcmds",
+          "maxclass": "newobj",
+          "numinlets": 0,
+          "numoutlets": 1,
+          "patching_rect": [
+            760,
+            840,
+            160,
+            22
+          ],
+          "outlettype": [
+            ""
+          ],
+          "text": "r ksh_scheduler_commands"
+        }
+      },
+      {
+        "box": {
+          "id": "route-scheduler-clear",
+          "maxclass": "newobj",
+          "numinlets": 1,
+          "numoutlets": 2,
+          "patching_rect": [
+            760,
+            880,
+            82,
+            22
+          ],
+          "outlettype": [
+            "",
+            ""
+          ],
+          "text": "route clear"
+        }
+      },
+      {
+        "box": {
+          "id": "clear-delay-msg",
+          "maxclass": "message",
+          "numinlets": 2,
+          "numoutlets": 1,
+          "patching_rect": [
+            760,
+            920,
+            46,
+            22
+          ],
+          "outlettype": [
+            ""
+          ],
+          "text": "clear"
+        }
+      },
+      {
+        "box": {
+          "id": "stop-notes-msg",
+          "maxclass": "message",
+          "numinlets": 2,
+          "numoutlets": 1,
+          "patching_rect": [
+            820,
+            920,
+            42,
+            22
+          ],
+          "outlettype": [
+            ""
+          ],
+          "text": "stop"
         }
       },
       {
@@ -810,7 +946,211 @@
             0
           ],
           "destination": [
+            "note-unpack",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "note-unpack",
+            4
+          ],
+          "destination": [
+            "note-delay",
+            4
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "note-unpack",
+            3
+          ],
+          "destination": [
+            "note-delay",
+            3
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "note-unpack",
+            2
+          ],
+          "destination": [
+            "note-delay",
+            2
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "note-unpack",
+            1
+          ],
+          "destination": [
+            "note-delay",
+            1
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "note-unpack",
+            0
+          ],
+          "destination": [
+            "note-delay",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "note-delay",
+            3
+          ],
+          "destination": [
+            "makenote",
+            3
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "note-delay",
+            2
+          ],
+          "destination": [
+            "makenote",
+            2
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "note-delay",
+            1
+          ],
+          "destination": [
+            "makenote",
+            1
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "note-delay",
+            0
+          ],
+          "destination": [
+            "makenote",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "makenote",
+            2
+          ],
+          "destination": [
             "noteout",
+            2
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "makenote",
+            1
+          ],
+          "destination": [
+            "noteout",
+            1
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "makenote",
+            0
+          ],
+          "destination": [
+            "noteout",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "schedcmds",
+            0
+          ],
+          "destination": [
+            "route-scheduler-clear",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "route-scheduler-clear",
+            0
+          ],
+          "destination": [
+            "clear-delay-msg",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "route-scheduler-clear",
+            0
+          ],
+          "destination": [
+            "stop-notes-msg",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "clear-delay-msg",
+            0
+          ],
+          "destination": [
+            "note-delay",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "stop-notes-msg",
+            0
+          ],
+          "destination": [
+            "makenote",
             0
           ]
         }

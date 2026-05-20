@@ -159,9 +159,44 @@ const patch = {
         numoutlets: 1,
         outlettype: [""]
       }),
-      box("noteout", "newobj", "noteout", [540.0, 860.0, 58.0, 22.0], {
+      box("note-unpack", "newobj", "unpack i i i i f", [540.0, 840.0, 112.0, 22.0], {
         numinlets: 1,
+        numoutlets: 5,
+        outlettype: ["int", "int", "int", "int", "float"]
+      }),
+      box("note-delay", "newobj", "pipe 0 0 0 0 0.", [540.0, 880.0, 126.0, 22.0], {
+        numinlets: 5,
+        numoutlets: 4,
+        outlettype: ["int", "int", "int", "int"]
+      }),
+      box("makenote", "newobj", "makenote 0 100 1 @repeatmode 1", [540.0, 920.0, 200.0, 22.0], {
+        numinlets: 4,
+        numoutlets: 3,
+        outlettype: ["int", "int", "int"]
+      }),
+      box("noteout", "newobj", "noteout", [540.0, 960.0, 58.0, 22.0], {
+        numinlets: 3,
         numoutlets: 0
+      }),
+      box("schedcmds", "newobj", "r ksh_scheduler_commands", [760.0, 840.0, 160.0, 22.0], {
+        numinlets: 0,
+        numoutlets: 1,
+        outlettype: [""]
+      }),
+      box("route-scheduler-clear", "newobj", "route clear", [760.0, 880.0, 82.0, 22.0], {
+        numinlets: 1,
+        numoutlets: 2,
+        outlettype: ["", ""]
+      }),
+      box("clear-delay-msg", "message", "clear", [760.0, 920.0, 46.0, 22.0], {
+        numinlets: 2,
+        numoutlets: 1,
+        outlettype: [""]
+      }),
+      box("stop-notes-msg", "message", "stop", [820.0, 920.0, 42.0, 22.0], {
+        numinlets: 2,
+        numoutlets: 1,
+        outlettype: [""]
       }),
       box("plugsync", "newobj", "plugsync~", [180.0, 800.0, 78.0, 22.0], {
         numinlets: 1,
@@ -286,7 +321,24 @@ const patch = {
       line("recvcmd", 0, "ui", 0),
       line("recvevents", 0, "ui", 0),
       line("enginecmds", 0, "engine", 0),
-      line("engine", 0, "noteout", 0),
+      line("engine", 0, "note-unpack", 0),
+      line("note-unpack", 4, "note-delay", 4),
+      line("note-unpack", 3, "note-delay", 3),
+      line("note-unpack", 2, "note-delay", 2),
+      line("note-unpack", 1, "note-delay", 1),
+      line("note-unpack", 0, "note-delay", 0),
+      line("note-delay", 3, "makenote", 3),
+      line("note-delay", 2, "makenote", 2),
+      line("note-delay", 1, "makenote", 1),
+      line("note-delay", 0, "makenote", 0),
+      line("makenote", 2, "noteout", 2),
+      line("makenote", 1, "noteout", 1),
+      line("makenote", 0, "noteout", 0),
+      line("schedcmds", 0, "route-scheduler-clear", 0),
+      line("route-scheduler-clear", 0, "clear-delay-msg", 0),
+      line("route-scheduler-clear", 0, "stop-notes-msg", 0),
+      line("clear-delay-msg", 0, "note-delay", 0),
+      line("stop-notes-msg", 0, "makenote", 0),
       line("plugsync", 0, "transportpos", 2),
       line("plugsync", 6, "transportbeat", 0),
       line("transportbeat", 1, "transportpos", 1),

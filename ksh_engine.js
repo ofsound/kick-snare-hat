@@ -816,21 +816,11 @@ var KSH_EngineClass = null;
   }
 }(this));
 
-var kshPendingNoteOffs = [];
 var kshEngine = null;
 var kshPendingPreviewTask = null;
 
 function cancelPendingNoteTasks() {
-  var i;
-  var task;
-
-  for (i = kshPendingNoteOffs.length - 1; i >= 0; i -= 1) {
-    task = kshPendingNoteOffs[i];
-    if (task && typeof task.cancel === "function") {
-      task.cancel();
-    }
-  }
-  kshPendingNoteOffs.length = 0;
+  safeMessnamed("ksh_scheduler_commands", "clear");
 }
 
 function safeMessnamed() {
@@ -873,40 +863,9 @@ if (typeof module === "undefined" || !module.exports) {
     }
   }
 
-  function removePendingTask(t) {
-    var idx = kshPendingNoteOffs.indexOf(t);
-    if (idx !== -1) {
-      kshPendingNoteOffs.splice(idx, 1);
-    }
-  }
-
   kshEngine = new KSH_EngineClass({
     emitNote: function (note) {
-      var onTask;
-      var offTask;
-
-      if (typeof outlet !== "function") {
-        return;
-      }
-
-      if (typeof Task === "function") {
-        onTask = new Task(function () {
-          safeOutlet(0, note.pitch, note.velocity, note.channel);
-          removePendingTask(onTask);
-        });
-        kshPendingNoteOffs.push(onTask);
-        onTask.schedule(note.delayMs || 0);
-
-        offTask = new Task(function () {
-          safeOutlet(0, note.pitch, 0, note.channel);
-          removePendingTask(offTask);
-        });
-        kshPendingNoteOffs.push(offTask);
-        offTask.schedule((note.delayMs || 0) + note.durationMs);
-      } else {
-        safeOutlet(0, note.pitch, note.velocity, note.channel);
-        safeOutlet(0, note.pitch, 0, note.channel);
-      }
+      safeOutlet(0, note.pitch, note.velocity, note.durationMs, note.channel, note.delayMs || 0);
     },
     emitPreview: function (snapshot) {
       if (typeof JSON !== "undefined") {
