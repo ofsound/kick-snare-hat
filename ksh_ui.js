@@ -386,7 +386,11 @@ function drawFooter() {
 }
 
 function send() {
-  outlet.apply(this, [0].concat(arrayfromargs(arguments)));
+  var args = arrayfromargs(arguments);
+  outlet.apply(this, [0].concat(args));
+  if (args[0] !== "open_editor" && typeof messnamed === "function") {
+    messnamed.apply(this, ["ksh_engine_commands"].concat(args));
+  }
 }
 
 function sendStateHeader() {
@@ -441,6 +445,10 @@ function loadbang() {
 }
 
 function init() {
+  sync_all();
+}
+
+function open() {
   sync_all();
 }
 
@@ -755,6 +763,8 @@ function anything() {
     preview.apply(this, arrayfromargs(arguments));
   } else if (messagename === "status") {
     status.apply(this, arrayfromargs(arguments));
+  } else if (messagename === "open" || messagename === "front" || messagename === "init") {
+    sync_all();
   } else {
     applyIncoming(messagename, arrayfromargs(arguments));
     mgraphics.redraw();

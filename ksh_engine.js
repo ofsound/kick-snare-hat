@@ -537,42 +537,36 @@ if (typeof module === "undefined" || !module.exports) {
     try {
       outlet.apply(this, [index].concat(args));
     } catch (error) {
-      // Max can briefly report only one outlet while a js object is being
-      // recompiled or pasted. Ignore preview/status outlet failures so MIDI
-      // output on outlet 0 keeps working.
+      // Keep the Live audio thread clear of transient JS outlet errors while
+      // Max recompiles or reloads the device.
     }
   }
 
   kshEngine = new KSH_EngineClass({
     emitNote: function (note) {
-      var noteOnStatus;
-      var noteOffStatus;
       var task;
 
       if (typeof outlet !== "function") {
         return;
       }
 
-    noteOnStatus = 143 + note.channel;
-    noteOffStatus = 127 + note.channel;
-
       if (typeof Task === "function") {
         task = new Task(function () {
-        safeOutlet(0, noteOnStatus, note.pitch, note.velocity);
-      });
-      kshPendingNoteOffs.push(task);
-      task.schedule(note.delayMs || 0);
+          safeOutlet(0, note.pitch, note.velocity, note.channel);
+        });
+        kshPendingNoteOffs.push(task);
+        task.schedule(note.delayMs || 0);
 
-      task = new Task(function () {
-        safeOutlet(0, noteOffStatus, note.pitch, 0);
-      });
-      kshPendingNoteOffs.push(task);
-      task.schedule((note.delayMs || 0) + note.durationMs);
-    } else {
-      safeOutlet(0, noteOnStatus, note.pitch, note.velocity);
-      safeOutlet(0, noteOffStatus, note.pitch, 0);
-    }
-  },
+        task = new Task(function () {
+          safeOutlet(0, note.pitch, 0, note.channel);
+        });
+        kshPendingNoteOffs.push(task);
+        task.schedule((note.delayMs || 0) + note.durationMs);
+      } else {
+        safeOutlet(0, note.pitch, note.velocity, note.channel);
+        safeOutlet(0, note.pitch, 0, note.channel);
+      }
+    },
     emitPreview: function (snapshot) {
       if (typeof JSON !== "undefined" && typeof messnamed === "function") {
         messnamed("ksh_engine_events", "preview", JSON.stringify(snapshot));

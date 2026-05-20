@@ -274,7 +274,7 @@
       },
       {
         "box": {
-          "id": "midiout",
+          "id": "noteout",
           "maxclass": "newobj",
           "numinlets": 1,
           "numoutlets": 0,
@@ -284,7 +284,7 @@
             58,
             22
           ],
-          "text": "midiout"
+          "text": "noteout"
         }
       },
       {
@@ -506,6 +506,24 @@
       },
       {
         "box": {
+          "id": "enginecmds",
+          "maxclass": "newobj",
+          "numinlets": 0,
+          "numoutlets": 1,
+          "patching_rect": [
+            540,
+            760,
+            152,
+            22
+          ],
+          "outlettype": [
+            ""
+          ],
+          "text": "r ksh_engine_commands"
+        }
+      },
+      {
+        "box": {
           "id": "loadbang",
           "maxclass": "newobj",
           "numinlets": 1,
@@ -687,18 +705,6 @@
         "patchline": {
           "source": [
             "uilist",
-            0
-          ],
-          "destination": [
-            "engine",
-            0
-          ]
-        }
-      },
-      {
-        "patchline": {
-          "source": [
-            "uilist",
             1
           ],
           "destination": [
@@ -818,11 +824,23 @@
       {
         "patchline": {
           "source": [
+            "enginecmds",
+            0
+          ],
+          "destination": [
+            "engine",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
             "engine",
             0
           ],
           "destination": [
-            "midiout",
+            "noteout",
             0
           ]
         }

@@ -137,7 +137,7 @@ const patch = {
         numoutlets: 1,
         outlettype: [""]
       }),
-      box("midiout", "newobj", "midiout", [540.0, 860.0, 58.0, 22.0], {
+      box("noteout", "newobj", "noteout", [540.0, 860.0, 58.0, 22.0], {
         numinlets: 1,
         numoutlets: 0
       }),
@@ -200,6 +200,11 @@ const patch = {
         numoutlets: 1,
         outlettype: [""]
       }),
+      box("enginecmds", "newobj", "r ksh_engine_commands", [540.0, 760.0, 152.0, 22.0], {
+        numinlets: 0,
+        numoutlets: 1,
+        outlettype: [""]
+      }),
       box("loadbang", "newobj", "loadbang", [40.0, 760.0, 60.0, 22.0], {
         numinlets: 1,
         numoutlets: 1,
@@ -245,7 +250,6 @@ const patch = {
     lines: [
       line("ui", 0, "route-open", 0),
       line("editor_patch", 0, "route-open", 0),
-      line("uilist", 0, "engine", 0),
       line("uilist", 1, "route-rate", 0),
       line("uilist", 2, "sendcmd", 0),
       line("route-rate", 0, "interval", 0),
@@ -256,7 +260,8 @@ const patch = {
       line("pcontrol", 0, "editor_patch", 0),
       line("recvcmd", 0, "ui", 0),
       line("recvevents", 0, "ui", 0),
-      line("engine", 0, "midiout", 0),
+      line("enginecmds", 0, "engine", 0),
+      line("engine", 0, "noteout", 0),
       line("metro", 0, "stepmsg", 0),
       line("stepmsg", 0, "engine", 0),
       line("loadbang", 0, "initmsg", 0),

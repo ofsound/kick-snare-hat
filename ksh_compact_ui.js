@@ -154,7 +154,11 @@ function drawPreview() {
 }
 
 function send() {
-  outlet.apply(this, [0].concat(arrayfromargs(arguments)));
+  var args = arrayfromargs(arguments);
+  outlet.apply(this, [0].concat(args));
+  if (args[0] !== "open_editor" && typeof messnamed === "function") {
+    messnamed.apply(this, ["ksh_engine_commands"].concat(args));
+  }
 }
 
 function sendStateHeader() {
