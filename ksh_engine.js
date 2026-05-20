@@ -4,80 +4,27 @@ outlets = 1;
 
 // Load shared limits. In Node, require resolves ksh_constants.js relative to
 // this file. In Max js, include() reads the sibling file and exposes
-// `ksh_constants` as a global. If neither mechanism is available (or fails),
-// we fall back to literal defaults that must stay in sync with
-// ksh_constants.js.
+// `ksh_constants` as a global.
 var KSH_CONSTANTS = (function () {
-  function fallbackConstants() {
-    function fallbackClamp(value, min, max) {
-      value = parseInt(value, 10);
-      if (isNaN(value)) {
-        return min;
+  function fail(error) {
+    var message = error && error.message ? error.message : String(error || "unknown error");
+
+    if (typeof post === "function") {
+      try {
+        post("[ksh] Could not load ksh_constants.js; device cannot initialize safely. " + message + "\n");
+      } catch (postError) {
+        // Keep the original loader failure as the visible failure path.
       }
-      return Math.max(min, Math.min(max, value));
     }
-    var constants = {
-      DEBUG: false,
-      MAX_STEPS: 32,
-      MAX_LANES: 8,
-      SOURCE_COUNT: 4,
-      RATES: ["4n", "4nt", "8n", "8nt", "16n", "16nt", "32n", "32nt"],
-      DEFAULT_RATE: "16n",
-      DEFAULT_CELL: {
-        enabled: 0,
-        velocity: 100,
-        gateMode: "always",
-        random: 100,
-        cycle: 1,
-        source: -1
-      },
-      debugPost: function () {}
-    };
 
-    constants.normalizeGateMode = function (gateMode) {
-      gateMode = String(gateMode || "always").toLowerCase();
-      if (gateMode === "random" || gateMode === "probability") {
-        return "random";
-      }
-      if (gateMode === "cycle" || gateMode === "every") {
-        return "cycle";
-      }
-      return "always";
-    };
-    constants.cloneCell = function (cell) {
-      cell = cell || constants.DEFAULT_CELL;
-      return {
-        enabled: cell.enabled ? 1 : 0,
-        velocity: fallbackClamp(cell.velocity, 1, 127),
-        gateMode: constants.normalizeGateMode(cell.gateMode),
-        random: fallbackClamp(cell.random, 0, 100),
-        cycle: fallbackClamp(cell.cycle, 1, 64),
-        source: typeof cell.source === "number" ? cell.source : -1
-      };
-    };
-    constants.defaultCell = function () {
-      return constants.cloneCell(constants.DEFAULT_CELL);
-    };
-    constants.normalizeRate = function (rate) {
-      var i;
-
-      rate = String(rate || constants.DEFAULT_RATE);
-      for (i = 0; i < constants.RATES.length; i += 1) {
-        if (constants.RATES[i] === rate) {
-          return rate;
-        }
-      }
-
-      return constants.DEFAULT_RATE;
-    };
-    return constants;
+    throw new Error("ksh_constants.js is required");
   }
 
   if (typeof require === "function" && typeof module !== "undefined" && module.exports !== undefined) {
     try {
       return require("./ksh_constants");
     } catch (error) {
-      // fall through to include / defaults
+      // fall through to Max include
     }
   }
   if (typeof include === "function") {
@@ -87,10 +34,10 @@ var KSH_CONSTANTS = (function () {
         return ksh_constants;
       }
     } catch (error) {
-      // fall through to defaults
+      fail(error);
     }
   }
-  return fallbackConstants();
+  fail("no require() or include() loader available");
 }());
 
 var KSH_EngineClass = null;

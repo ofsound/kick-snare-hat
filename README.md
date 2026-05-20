@@ -90,6 +90,10 @@ snapshot
 
 ## Development verification
 
+Set `DEBUG: true` in `ksh_constants.js` while debugging Max-side parse,
+message-bus, or patcher resize failures. Keep the committed/default value
+`false` for normal use and release builds.
+
 ```sh
 node ksh_engine.test.js
 node ksh_engine.max.test.js

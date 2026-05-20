@@ -10,12 +10,16 @@ Prioritized improvements aimed at **ease of future development** on Kick Snare H
 
 **Priority:** Highest
 
-**Problem:** Adding a parameter or cell field today touches several places with near-duplicate logic:
+**Status:** Mostly done. `ksh_constants.js` owns cell defaults,
+`cloneCell`, `normalizeGateMode`, and the rate allowlist. Engine and UI code
+load it directly; keep new schema work there first.
+
+**Problem addressed:** Adding a parameter or cell field previously touched several places with near-duplicate logic:
 
 - `ksh_engine.js` — setters, `cloneCell`, `defaultCell`, `normalizeGateMode`, `normalizeRate`
 - `ksh_ui_shared.js` — `defaultCell`, `cloneCell`, `applyEngineState`, `applyStatusMessage`
 - `ksh_compact_ui.js` / `ksh_ui.js` — local state and send helpers
-- Literal fallbacks in engine and UI if `ksh_constants.js` fails to load (must stay manually in sync)
+- Literal fallbacks in engine and UI if `ksh_constants.js` fails to load (removed to avoid drift)
 
 **Proposal:**
 
@@ -38,6 +42,10 @@ Prioritized improvements aimed at **ease of future development** on Kick Snare H
 ## 2. Dev-visible errors instead of silent `catch {}`
 
 **Priority:** High
+
+**Status:** Done for the known high-friction paths. Flip `DEBUG: true` in
+`ksh_constants.js` locally to surface UI JSON parse failures, `messnamed` /
+`outlet` failures, and patcher resize failures. Keep the default `false`.
 
 **Problem:** Many paths swallow errors with empty `catch` blocks (`engine_state`, `preview`, `safeMessnamed`, patcher resize, etc.). That helps the device survive Live reload/recompile but **hides real bugs** during feature work.
 
@@ -63,6 +71,9 @@ Prioritized improvements aimed at **ease of future development** on Kick Snare H
 
 **Priority:** High
 
+**Status:** Done. Malformed JSON is caught, current engine state is restored,
+and `ksh_engine.max.test.js` covers the failure path.
+
 **Problem:** `setvalueof` calls `JSON.parse` without a guard. Corrupt or partial `pattrstorage` data can throw on device load and break the session.
 
 **Proposal:**
@@ -84,6 +95,9 @@ Prioritized improvements aimed at **ease of future development** on Kick Snare H
 ## 4. Written contract for UI ↔ engine sync
 
 **Priority:** Medium
+
+**Status:** Done in `docs/ui-sync.md`; README and AGENTS link to the relevant
+contract and verification flow.
 
 **Problem:** The sync model is correct but **implicit**: optimistic editor `state.sources`, no `cell` echo from engine, different compact vs editor roles. New work often risks full `emitFullState` on every edit or expecting round-trip `cell` messages.
 
@@ -109,6 +123,10 @@ Prioritized improvements aimed at **ease of future development** on Kick Snare H
 ## 5. Remove or implement dead UI paths; standardize `channel` in new code
 
 **Priority:** Medium (low effort, high clarity)
+
+**Status:** Done for dead `cell` echo handlers and contributor guardrails.
+Keep `channel` for new engine/API/persistence fields; UI labels may still say
+"Lane".
 
 **Problem:**
 

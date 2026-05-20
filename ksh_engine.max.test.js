@@ -97,6 +97,10 @@ function makeMaxSandbox() {
   sandbox._posts = function () { return posts.slice(); };
 
   vm.createContext(sandbox);
+  sandbox.include = function (filename) {
+    var includeSrc = fs.readFileSync(path.join(__dirname, filename), "utf8");
+    vm.runInContext(includeSrc, sandbox, { filename: filename });
+  };
   var src = fs.readFileSync(path.join(__dirname, "ksh_engine.js"), "utf8");
   vm.runInContext(src, sandbox, { filename: "ksh_engine.js" });
   return sandbox;

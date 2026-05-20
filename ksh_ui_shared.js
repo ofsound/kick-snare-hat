@@ -2,84 +2,33 @@
 var ksh_shared = {};
 
 // Load limits from the single source of truth. include() defines a global
-// `ksh_constants` object; if anything goes wrong, fall back to literals that
-// must stay in sync with ksh_constants.js.
+// `ksh_constants` object.
 (function () {
-  function fallbackConstants() {
-    function fallbackClamp(value, min, max) {
-      value = parseInt(value, 10);
-      if (isNaN(value)) {
-        return min;
+  function fail(error) {
+    var message = error && error.message ? error.message : String(error || "unknown error");
+
+    if (typeof post === "function") {
+      try {
+        post("[ksh] Could not load ksh_constants.js; UI cannot initialize safely. " + message + "\n");
+      } catch (postError) {
+        // Keep the original loader failure as the visible failure path.
       }
-      return Math.max(min, Math.min(max, value));
     }
-    var constants = {
-      DEBUG: false,
-      MAX_STEPS: 32,
-      MAX_LANES: 8,
-      SOURCE_COUNT: 4,
-      RATES: ["4n", "4nt", "8n", "8nt", "16n", "16nt", "32n", "32nt"],
-      DEFAULT_RATE: "16n",
-      DEFAULT_CELL: {
-        enabled: 0,
-        velocity: 100,
-        gateMode: "always",
-        random: 100,
-        cycle: 1,
-        source: -1
-      },
-      debugPost: function () {}
-    };
 
-    constants.normalizeGateMode = function (gateMode) {
-      gateMode = String(gateMode || "always").toLowerCase();
-      if (gateMode === "random" || gateMode === "probability") {
-        return "random";
-      }
-      if (gateMode === "cycle" || gateMode === "every") {
-        return "cycle";
-      }
-      return "always";
-    };
-    constants.cloneCell = function (cell) {
-      cell = cell || constants.DEFAULT_CELL;
-      return {
-        enabled: cell.enabled ? 1 : 0,
-        velocity: fallbackClamp(cell.velocity, 1, 127),
-        gateMode: constants.normalizeGateMode(cell.gateMode),
-        random: fallbackClamp(cell.random, 0, 100),
-        cycle: fallbackClamp(cell.cycle, 1, 64),
-        source: typeof cell.source === "number" ? cell.source : -1
-      };
-    };
-    constants.defaultCell = function () {
-      return constants.cloneCell(constants.DEFAULT_CELL);
-    };
-    constants.normalizeRate = function (rate) {
-      var i;
-
-      rate = String(rate || constants.DEFAULT_RATE);
-      for (i = 0; i < constants.RATES.length; i += 1) {
-        if (constants.RATES[i] === rate) {
-          return rate;
-        }
-      }
-
-      return constants.DEFAULT_RATE;
-    };
-    return constants;
+    throw new Error("ksh_constants.js is required");
   }
 
   if (typeof include === "function") {
     try {
       include("ksh_constants.js");
     } catch (error) {
-      // fall through
+      fail(error);
     }
   }
-  var constants = (typeof ksh_constants !== "undefined" && ksh_constants)
-    ? ksh_constants
-    : fallbackConstants();
+  if (typeof ksh_constants === "undefined" || !ksh_constants) {
+    fail("include did not define ksh_constants");
+  }
+  var constants = ksh_constants;
   ksh_shared.constants = constants;
   ksh_shared.MAX_STEPS = constants.MAX_STEPS;
   ksh_shared.MAX_LANES = constants.MAX_LANES;
