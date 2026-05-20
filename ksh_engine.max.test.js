@@ -102,6 +102,11 @@ function eventsOn(sb, eventName) {
   });
 }
 
+function lastEventOn(sb, eventName) {
+  var events = eventsOn(sb, eventName);
+  return events[events.length - 1];
+}
+
 function testMaxWrapperBootsEngineAndExposesHandlers() {
   var sb = makeMaxSandbox();
   assert.ok(sb.kshEngine, "kshEngine should be constructed by the Max wrapper");
@@ -111,6 +116,44 @@ function testMaxWrapperBootsEngineAndExposesHandlers() {
   assert.strictEqual(typeof sb.getvalueof, "function");
   assert.strictEqual(typeof sb.setvalueof, "function");
   assert.strictEqual(typeof sb.editor_active, "function");
+}
+
+function testStatusMessagesEmitUiSelectors() {
+  var sb = makeMaxSandbox();
+  var stepsEvent;
+  var lockEvent;
+
+  sb._clear();
+  sb.steps(8);
+  sb.channel_lock(1, 2);
+
+  stepsEvent = lastEventOn(sb, "steps");
+  lockEvent = lastEventOn(sb, "channel_lock");
+
+  assert.ok(stepsEvent, "steps should emit a direct UI selector");
+  assert.deepStrictEqual(stepsEvent.args, ["steps", "8"]);
+  assert.ok(lockEvent, "channel_lock should emit a direct UI selector");
+  assert.deepStrictEqual(lockEvent.args, ["channel_lock", "1", "2"],
+    "channel_lock status should use Max/UI-facing 1-based source indices");
+  assert.strictEqual(eventsOn(sb, "status").length, 0,
+    "status updates should not be hidden behind a generic status selector");
+}
+
+function testRecomposeCommandsFlushPreviewForCompactUi() {
+  var sb = makeMaxSandbox();
+  var previews;
+  var snapshot;
+
+  sb._clear();
+  sb.steps(8);
+
+  previews = eventsOn(sb, "preview");
+  assert.strictEqual(previews.length, 1,
+    "step-count recomposition should immediately refresh compact preview data");
+
+  snapshot = JSON.parse(previews[0].args[1]);
+  assert.strictEqual(snapshot.stepCount, 8);
+  assert.strictEqual(snapshot.generated[0].length, 8);
 }
 
 function testCellMessageWritesToEngineSourceAndCoalescesPreview() {
@@ -285,6 +328,8 @@ function testMessnamedFailuresAreSwallowed() {
 }
 
 testMaxWrapperBootsEngineAndExposesHandlers();
+testStatusMessagesEmitUiSelectors();
+testRecomposeCommandsFlushPreviewForCompactUi();
 testCellMessageWritesToEngineSourceAndCoalescesPreview();
 testTransportPositionEmitsNativeSchedulerEvent();
 testResetClearsNativeScheduler();

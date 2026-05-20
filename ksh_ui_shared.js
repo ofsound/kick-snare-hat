@@ -340,7 +340,9 @@ ksh_shared.applyEngineState = function (state, engineState) {
   channels = engineState.channels;
   if (channels) {
     for (lane = 0; lane < Math.min(ksh_shared.MAX_LANES, channels.length); lane += 1) {
-      state.lanes[lane].label = String(channels[lane].label || state.lanes[lane].label);
+      if (channels[lane].label !== undefined) {
+        state.lanes[lane].label = String(channels[lane].label);
+      }
       state.lanes[lane].note = ksh_shared.clamp(channels[lane].note, 0, 127);
       state.lanes[lane].lock = ksh_shared.clamp(channels[lane].lock, -1, ksh_shared.SOURCE_COUNT - 1);
     }

@@ -15,7 +15,7 @@ After **any** substantive change to the device—`.js` sources, `.maxpat`, `.amx
 node scripts/sync-user-library.js
 ```
 
-Do **not** finish the task without a successful sync. This copies `ksh_engine.js`, `ksh_compact_ui.js`, `ksh_ui.js`, `ksh_ui_shared.js`, and `Kick-Snare-Hat.amxd` into the Ableton User Library folder (default: `~/Music/Ableton/User Library/Presets/MIDI Effects/Max MIDI Effect/`). Override with `KSH_ABLETON_DEST` when needed.
+Do **not** finish the task without a successful sync. This copies `ksh_engine.js`, `ksh_compact_ui.js`, `ksh_ui.js`, `ksh_ui_shared.js`, `ksh_constants.js`, and `Kick-Snare-Hat.amxd` into the Ableton User Library folder (default: `~/Music/Ableton/User Library/Presets/MIDI Effects/Max MIDI Effect/`). Override with `KSH_ABLETON_DEST` when needed.
 
 `node scripts/build-device-patch.js` also syncs at the end; if you only changed `.js` files, run sync explicitly—do not skip it.
 
@@ -24,11 +24,12 @@ Do **not** finish the task without a successful sync. This copies `ksh_engine.js
 | What changed | Run before finishing |
 |--------------|----------------------|
 | `ksh_engine.js` or `ksh_engine.test.js` | `node ksh_engine.test.js` |
+| Max wrapper behavior or `ksh_engine.max.test.js` | `node ksh_engine.max.test.js` |
 | Any device file (above) | `node scripts/validate-device-patch.js` |
 | `kick-snare-hat.maxpat` or `scripts/build-device-patch.js` | `node scripts/build-device-patch.js` then `node scripts/validate-device-patch.js` |
 | **Always** (device edits) | `node scripts/sync-user-library.js` |
 
-Fix failures before finishing. There is no `npm run verify` in this repo.
+Fix failures before finishing. `npm run verify` is available as a convenience wrapper, but the explicit commands above remain the source of truth for matching the changed files.
 
 ## Substantive vs trivial
 

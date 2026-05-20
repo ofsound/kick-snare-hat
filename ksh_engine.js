@@ -47,6 +47,30 @@ var KSH_EngineClass = null;
     return ((value % divisor) + divisor) % divisor;
   }
 
+  function normalizeGenerationMode(mode) {
+    mode = String(mode || "").toLowerCase();
+    if (mode === "perchannel" || mode === "per_channel" || mode === "per-channel") {
+      return "per_channel";
+    }
+    return "stack";
+  }
+
+  function normalizeRate(rate) {
+    var allowed = {
+      "4n": 1,
+      "4nt": 1,
+      "8n": 1,
+      "8nt": 1,
+      "16n": 1,
+      "16nt": 1,
+      "32n": 1,
+      "32nt": 1
+    };
+
+    rate = String(rate || "16n");
+    return allowed[rate] ? rate : "16n";
+  }
+
   function normalizeIncomingState(state) {
     var normalized;
 
@@ -187,13 +211,13 @@ var KSH_EngineClass = null;
     this.stepCount = clamp(count, 1, MAX_STEPS);
     this.currentStep = this.currentStep % this.stepCount;
     this.refreshSteps = clamp(this.refreshSteps, 1, this.stepCount);
-    this.recomposeWindow(0, this.stepCount);
+    this.recomposeWindow(0, this.stepCount, true);
     this.status("steps " + this.stepCount);
   };
 
   KickSnareHatEngine.prototype.setChannelCount = function (count) {
     this.channelCount = clamp(count, 1, MAX_LANES);
-    this.recomposeWindow(0, this.stepCount);
+    this.recomposeWindow(0, this.stepCount, true);
     this.status("channels " + this.channelCount);
   };
 
@@ -203,30 +227,13 @@ var KSH_EngineClass = null;
   };
 
   KickSnareHatEngine.prototype.setGenerationMode = function (mode) {
-    mode = String(mode || "").toLowerCase();
-    if (mode === "perchannel" || mode === "per_channel" || mode === "per-channel") {
-      this.generationMode = "per_channel";
-    } else {
-      this.generationMode = "stack";
-    }
-    this.recomposeWindow(0, this.stepCount);
+    this.generationMode = normalizeGenerationMode(mode);
+    this.recomposeWindow(0, this.stepCount, true);
     this.status("mode " + this.generationMode);
   };
 
   KickSnareHatEngine.prototype.setRate = function (rate) {
-    var allowed = {
-      "4n": 1,
-      "4nt": 1,
-      "8n": 1,
-      "8nt": 1,
-      "16n": 1,
-      "16nt": 1,
-      "32n": 1,
-      "32nt": 1
-    };
-
-    rate = String(rate || "16n");
-    this.rate = allowed[rate] ? rate : "16n";
+    this.rate = normalizeRate(rate);
     this.updateStepIntervalMs();
     this.status("rate " + this.rate);
   };
@@ -291,8 +298,13 @@ var KSH_EngineClass = null;
   KickSnareHatEngine.prototype.setChannelLock = function (channel, lock) {
     channel = clamp(channel, 0, MAX_LANES - 1);
     this.channels[channel].lock = clamp(lock, -1, SOURCE_COUNT - 1);
-    this.recomposeWindow(0, this.stepCount);
-    this.status("channel_lock " + (channel + 1) + " " + this.channels[channel].lock);
+    this.recomposeWindow(0, this.stepCount, true);
+    this.status(
+      "channel_lock " +
+      (channel + 1) +
+      " " +
+      (this.channels[channel].lock < 0 ? "random" : this.channels[channel].lock + 1)
+    );
   };
 
   // Returns the generated cell at (channel, step) if that cell is currently
@@ -428,7 +440,7 @@ var KSH_EngineClass = null;
     return "always";
   };
 
-  KickSnareHatEngine.prototype.reset = function () {
+  KickSnareHatEngine.prototype.resetPlayback = function (emitStatus) {
     if (typeof cancelPendingNoteTasks === "function") {
       cancelPendingNoteTasks();
     }
@@ -440,7 +452,13 @@ var KSH_EngineClass = null;
     this.transportPlaying = 0;
     this.generateWindow(0, this.stepCount, true);
     this.reportPlayingStep();
-    this.status("reset");
+    if (emitStatus !== false) {
+      this.status("reset");
+    }
+  };
+
+  KickSnareHatEngine.prototype.reset = function () {
+    this.resetPlayback(true);
   };
 
   KickSnareHatEngine.prototype.isSourceEmpty = function (sourceIndex) {
@@ -472,15 +490,21 @@ var KSH_EngineClass = null;
     return indices;
   };
 
-  KickSnareHatEngine.prototype.randomSource = function () {
-    var active = this.activeSourceIndices();
+  KickSnareHatEngine.prototype.pickRandomSource = function (active) {
     var pick;
 
+    if (!active) {
+      active = this.activeSourceIndices();
+    }
     if (active.length === 0) {
       return 0;
     }
     pick = clamp(Math.floor(this.rng() * active.length), 0, active.length - 1);
     return active[pick];
+  };
+
+  KickSnareHatEngine.prototype.randomSource = function () {
+    return this.pickRandomSource(this.activeSourceIndices());
   };
 
   // Re-roll source choices across the window. Used at transport refresh
@@ -492,6 +516,7 @@ var KSH_EngineClass = null;
     var source;
     var stackSource;
     var cell;
+    var activeSources;
 
     if (forceEmit === undefined) {
       forceEmit = false;
@@ -500,9 +525,10 @@ var KSH_EngineClass = null;
     startStep = clamp(startStep, 0, this.stepCount - 1);
     length = clamp(length, 1, this.stepCount);
 
+    activeSources = this.activeSourceIndices();
     stackSource = -1;
     if (this.generationMode !== "per_channel") {
-      stackSource = this.randomSource();
+      stackSource = this.pickRandomSource(activeSources);
     }
 
     for (offset = 0; offset < length; offset += 1) {
@@ -512,7 +538,7 @@ var KSH_EngineClass = null;
         if (this.channels[channel].lock >= 0) {
           source = this.channels[channel].lock;
         } else if (this.generationMode === "per_channel") {
-          source = this.randomSource();
+          source = this.pickRandomSource(activeSources);
         } else {
           source = stackSource;
         }
@@ -539,6 +565,7 @@ var KSH_EngineClass = null;
     var existing;
     var cell;
     var fallbackStack = -1;
+    var activeSources;
 
     if (forceEmit === undefined) {
       forceEmit = false;
@@ -546,6 +573,8 @@ var KSH_EngineClass = null;
 
     startStep = clamp(startStep, 0, this.stepCount - 1);
     length = clamp(length, 1, this.stepCount);
+
+    activeSources = this.activeSourceIndices();
 
     for (offset = 0; offset < length; offset += 1) {
       step = (startStep + offset) % this.stepCount;
@@ -560,10 +589,10 @@ var KSH_EngineClass = null;
           if (existing >= 0 && existing < SOURCE_COUNT) {
             source = existing;
           } else if (this.generationMode === "per_channel") {
-            source = this.randomSource();
+            source = this.pickRandomSource(activeSources);
           } else {
             if (fallbackStack < 0) {
-              fallbackStack = this.randomSource();
+              fallbackStack = this.pickRandomSource(activeSources);
             }
             source = fallbackStack;
           }
@@ -770,21 +799,45 @@ var KSH_EngineClass = null;
     var channel;
     var step;
     var incomingChannel;
+    var incomingSource;
+    var incomingRow;
 
     state = normalizeIncomingState(state);
     if (!state) {
       return;
     }
 
-    this.setStepCount(state.stepCount || this.stepCount);
-    this.setChannelCount(state.channelCount || this.channelCount);
-    this.setRefreshSteps(state.refreshSteps || this.refreshSteps);
-    this.setGenerationMode(state.generationMode || this.generationMode);
-    this.setRate(state.rate || this.rate);
-    this.setTempo(state.tempo || this.tempo);
-    this.setSwing(state.swing !== undefined ? state.swing : this.swing);
-    this.setMidiChannel(state.midiChannel || this.midiChannel);
-    this.setNoteDurationMs(state.noteDurationMs || this.noteDurationMs);
+    if (state.stepCount !== undefined) {
+      this.stepCount = clamp(state.stepCount, 1, MAX_STEPS);
+    }
+    if (state.channelCount !== undefined) {
+      this.channelCount = clamp(state.channelCount, 1, MAX_LANES);
+    }
+    if (state.refreshSteps !== undefined) {
+      this.refreshSteps = clamp(state.refreshSteps, 1, this.stepCount);
+    }
+    this.refreshSteps = clamp(this.refreshSteps, 1, this.stepCount);
+    if (state.generationMode !== undefined) {
+      this.generationMode = normalizeGenerationMode(state.generationMode);
+    }
+    if (state.rate !== undefined) {
+      this.rate = normalizeRate(state.rate);
+      this.updateStepIntervalMs();
+    }
+    if (state.tempo !== undefined) {
+      state.tempo = parseFloat(state.tempo);
+      this.tempo = isNaN(state.tempo) ? this.tempo : Math.max(20, Math.min(300, state.tempo));
+      this.updateStepIntervalMs();
+    }
+    if (state.swing !== undefined) {
+      this.swing = clamp(state.swing, 0, 100);
+    }
+    if (state.midiChannel !== undefined) {
+      this.midiChannel = clamp(state.midiChannel, 1, 16);
+    }
+    if (state.noteDurationMs !== undefined) {
+      this.noteDurationMs = clamp(state.noteDurationMs, 10, 5000);
+    }
     this.phaseOffsetBeats = parseFloat(state.phaseOffsetBeats) || 0;
 
     if (state.channels) {
@@ -804,15 +857,17 @@ var KSH_EngineClass = null;
 
     if (state.sources) {
       for (source = 0; source < Math.min(SOURCE_COUNT, state.sources.length); source += 1) {
-        for (channel = 0; channel < Math.min(MAX_LANES, state.sources[source].length); channel += 1) {
-          for (step = 0; step < Math.min(MAX_STEPS, state.sources[source][channel].length); step += 1) {
-            this.sources[source][channel][step] = cloneCell(state.sources[source][channel][step]);
+        incomingSource = state.sources[source] || [];
+        for (channel = 0; channel < Math.min(MAX_LANES, incomingSource.length); channel += 1) {
+          incomingRow = incomingSource[channel] || [];
+          for (step = 0; step < Math.min(MAX_STEPS, incomingRow.length); step += 1) {
+            this.sources[source][channel][step] = cloneCell(incomingRow[step]);
           }
         }
       }
     }
 
-    this.reset();
+    this.resetPlayback(false);
   };
 
   KickSnareHatEngine.normalizeIncomingState = normalizeIncomingState;
@@ -902,7 +957,15 @@ if (typeof module === "undefined" || !module.exports) {
       kshPendingPreviewTask.schedule(0);
     },
     emitStatus: function (message) {
-      safeMessnamed("ksh_engine_events", "status", message);
+      var args;
+      var selector;
+
+      message = String(message || "");
+      args = message.split(" ");
+      selector = args.shift();
+      if (selector) {
+        safeMessnamed.apply(this, ["ksh_engine_events", selector].concat(args));
+      }
     },
     emitCurrentStep: function (step) {
       safeMessnamed("ksh_engine_events", "current_step", step);

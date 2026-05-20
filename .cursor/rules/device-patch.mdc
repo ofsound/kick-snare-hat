@@ -39,4 +39,4 @@ Checks patchline inlet/outlet bounds, nested editor subpatcher, `.amxd` payload 
 
 ## dependency_cache
 
-Build script lists all four `ksh_*.js` files so Max resolves them beside the device.
+Build script lists all four `ksh_*.js` files plus `ksh_constants.js` so Max resolves them beside the device.

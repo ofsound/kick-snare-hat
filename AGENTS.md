@@ -40,9 +40,11 @@
 | `ksh_compact_ui.js` | Compact device-strip `jsui` (Presentation) |
 | `ksh_ui.js` | Floating editor `jsui` subpatcher |
 | `ksh_ui_shared.js` | Shared UI helpers (`include` from both UIs) |
+| `ksh_constants.js` | Shared hard limits for engine, UI, and tests |
 | `kick-snare-hat.maxpat` | Editable Max patch JSON (wiring shell) |
 | `Kick-Snare-Hat.amxd` | Generated M4L device (embedded patch) |
 | `ksh_engine.test.js` | Node `assert` tests against exported engine class |
+| `ksh_engine.max.test.js` | VM tests for Max wrapper message plumbing |
 | `scripts/build-device-patch.js` | Regenerates `.maxpat` + `.amxd`, then syncs to User Library |
 | `scripts/validate-device-patch.js` | Patch line wiring + `.amxd` payload checks |
 | `scripts/sync-user-library.js` | Copies device artifacts into Ableton User Library |
@@ -66,6 +68,7 @@ After **any substantive device edit** (see `post-edit-verification.mdc`):
 
 ```sh
 node ksh_engine.test.js
+node ksh_engine.max.test.js
 node scripts/validate-device-patch.js
 node scripts/sync-user-library.js
 ```

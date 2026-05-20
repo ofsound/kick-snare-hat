@@ -454,6 +454,78 @@ function testSerializeDeserializeRestoresSourceData() {
   assert.strictEqual(restored.sources[1][0][2].random, 25);
 }
 
+function testGenerateWindowScansActiveSourcesOnce() {
+  var engine = makeEngine([0, 0.2, 0.4, 0.6]);
+  var originalActiveSourceIndices;
+  var calls = 0;
+
+  clearAll(engine);
+  engine.setStepCount(16);
+  engine.setChannelCount(8);
+  engine.setGenerationMode("per_channel");
+  engine.setCell(0, 0, 0, 1, 80, "always", 100);
+  engine.setCell(1, 1, 1, 1, 90, "always", 100);
+  engine.setCell(2, 2, 2, 1, 100, "always", 100);
+  engine.setCell(3, 3, 3, 1, 110, "always", 100);
+
+  originalActiveSourceIndices = engine.activeSourceIndices;
+  engine.activeSourceIndices = function () {
+    calls += 1;
+    return originalActiveSourceIndices.apply(engine, arguments);
+  };
+
+  engine.generateWindow(0, 16, true);
+
+  assert.strictEqual(calls, 1);
+}
+
+function testDeserializeDoesNotEmitIntermediateStatuses() {
+  var statuses = [];
+  var engine = new KickSnareHatEngine({
+    rng: function () { return 0; },
+    emitStatus: function (message) {
+      statuses.push(message);
+    }
+  });
+
+  engine.deserialize({
+    stepCount: 8,
+    channelCount: 2,
+    refreshSteps: 4,
+    generationMode: "per_channel",
+    rate: "8n",
+    tempo: 100,
+    swing: 20,
+    midiChannel: 3,
+    noteDurationMs: 150,
+    channels: [
+      { label: "Sub", note: 35, lock: 1 }
+    ],
+    sources: [
+      [
+        [
+          { enabled: 1, velocity: 64, gateMode: "always", random: 100, cycle: 1 }
+        ]
+      ]
+    ]
+  });
+
+  assert.deepStrictEqual(statuses, []);
+  assert.strictEqual(engine.stepCount, 8);
+  assert.strictEqual(engine.channelCount, 2);
+  assert.strictEqual(engine.refreshSteps, 4);
+  assert.strictEqual(engine.generationMode, "per_channel");
+  assert.strictEqual(engine.rate, "8n");
+  assert.strictEqual(engine.tempo, 100);
+  assert.strictEqual(engine.swing, 20);
+  assert.strictEqual(engine.midiChannel, 3);
+  assert.strictEqual(engine.noteDurationMs, 150);
+  assert.strictEqual(engine.channels[0].label, "Sub");
+  assert.strictEqual(engine.channels[0].note, 35);
+  assert.strictEqual(engine.channels[0].lock, 1);
+  assert.strictEqual(engine.sources[0][0][0].enabled, 1);
+}
+
 testStackModeMatchesOneSourceAcrossWindow();
 testStackModeUsesOneSourceForAllLanesOnStep();
 testPerChannelModeCanChooseDifferentSources();
@@ -474,5 +546,7 @@ testCellEditDoesNotReRollGeneratedSources();
 testCellEditOnlyMutatesGeneratedWhenSourceMatches();
 testChannelLockRoutesSourceEditsToGenerated();
 testSerializeDeserializeRestoresSourceData();
+testGenerateWindowScansActiveSourcesOnce();
+testDeserializeDoesNotEmitIntermediateStatuses();
 
 console.log("ksh_engine tests passed");

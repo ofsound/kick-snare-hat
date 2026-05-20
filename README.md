@@ -33,9 +33,11 @@ of using unconstrained randomness.
 - `ksh_compact_ui.js`: the compact Live device-strip UI.
 - `ksh_ui.js`: the floating editor UI for source editing and generated preview.
 - `ksh_ui_shared.js`: shared drawing and state-sync helpers for both UIs.
+- `ksh_constants.js`: shared hard limits for engine, UI, and tests.
 - `kick-snare-hat.maxpat`: editable Max patch shell with transport/MIDI wiring.
 - `Kick-Snare-Hat.amxd`: generated Max for Live device file.
 - `ksh_engine.test.js`: Node-based tests for the core generation logic.
+- `ksh_engine.max.test.js`: Node VM tests for Max wrapper message plumbing.
 - `scripts/build-device-patch.js`: regenerates the `.maxpat` and `.amxd` shell.
 - `scripts/validate-device-patch.js`: checks patch wiring and `.amxd` embedding.
 
@@ -77,6 +79,7 @@ snapshot
 
 ```sh
 node ksh_engine.test.js
+node ksh_engine.max.test.js
 node scripts/build-device-patch.js
 node scripts/validate-device-patch.js
 ```
@@ -99,7 +102,7 @@ Override the destination folder with `KSH_ABLETON_DEST` if needed.
 ## Using in Live
 
 Place `Kick-Snare-Hat.amxd` in the same folder as `ksh_engine.js`, `ksh_compact_ui.js`,
-`ksh_ui.js`, and `ksh_ui_shared.js`, then load the device from Ableton’s browser
+`ksh_ui.js`, `ksh_ui_shared.js`, and `ksh_constants.js`, then load the device from Ableton’s browser
 (or drag the `.amxd` onto a MIDI track). Those JavaScript files must stay alongside
 the device unless you freeze it from Max for Live.
 

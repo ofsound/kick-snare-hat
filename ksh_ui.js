@@ -147,7 +147,6 @@ for (key in ksh_shared.colors) {
     colors[key] = ksh_shared.colors[key];
   }
 }
-colors.green = [0.45, 0.76, 0.48, 1];
 colors.edit = [0.96, 0.62, 0.22, 1];
 colors.editLight = [0.58, 0.80, 0.97, 1];
 colors.generated = [0.36, 0.66, 0.95, 1];
@@ -317,7 +316,6 @@ function drawSourceGrid() {
   var x;
   var y;
   var cell;
-  var active;
 
   ksh_shared.text("Source " + (selectedSource + 1) + " Pattern", x0, layout.sourceTitleY, 13, colors.text);
   drawStepNumberLabels(x0, cellW, layout.sourceStepY);
@@ -685,7 +683,7 @@ function onclick(x, y, button, cmd, shift, capslock, option, ctrl) {
     cell.gateMode = z.data.gate;
     sendCell(selectedSource, selectedLane, selectedStep);
   } else {
-    handleStepper(z.id, shift ? -1 : 1);
+    handleStepper(z.id);
   }
 
   mgraphics.redraw();
@@ -704,7 +702,7 @@ function ondrag(x, y, button) {
   applySourceCellDrag(x, y);
 }
 
-function handleStepper(id, direction) {
+function handleStepper(id) {
   var cell = state.sources[selectedSource][selectedLane][selectedStep];
   var delta;
 
