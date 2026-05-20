@@ -8,6 +8,7 @@ const DEVICE_FILES = [
   "ksh_compact_ui.js",
   "ksh_ui.js",
   "ksh_ui_shared.js",
+  "ksh_constants.js",
   "Kick-Snare-Hat.amxd"
 ];
 

@@ -1,9 +1,24 @@
 // Shared UI helpers for ksh_compact_ui.js and ksh_ui.js (included via include()).
 var ksh_shared = {};
 
-ksh_shared.MAX_STEPS = 32;
-ksh_shared.MAX_LANES = 8;
-ksh_shared.SOURCE_COUNT = 4;
+// Load limits from the single source of truth. include() defines a global
+// `ksh_constants` object; if anything goes wrong, fall back to literals that
+// must stay in sync with ksh_constants.js.
+(function () {
+  if (typeof include === "function") {
+    try {
+      include("ksh_constants.js");
+    } catch (error) {
+      // fall through
+    }
+  }
+  var constants = (typeof ksh_constants !== "undefined" && ksh_constants)
+    ? ksh_constants
+    : { MAX_STEPS: 32, MAX_LANES: 8, SOURCE_COUNT: 4 };
+  ksh_shared.MAX_STEPS = constants.MAX_STEPS;
+  ksh_shared.MAX_LANES = constants.MAX_LANES;
+  ksh_shared.SOURCE_COUNT = constants.SOURCE_COUNT;
+}());
 
 ksh_shared.rates = ["4n", "4nt", "8n", "8nt", "16n", "16nt", "32n", "32nt"];
 ksh_shared.defaultLabels = ["Kick", "Snare", "Hat", "Open Hat", "Tom 1", "Tom 2", "Clap", "Ride"];
@@ -99,7 +114,10 @@ ksh_shared.resizePatcherWindow = function (targetPatcher, width, height) {
 
   if (wind) {
     try {
-      wind.setlocation(left, top, top + height, left + width);
+      // setlocation takes (left, top, right, bottom) — i.e. (x1, y1, x2, y2).
+      // The previous call swapped the last two arguments, which produced an
+      // off-shape window on non-square editor sizes.
+      wind.setlocation(left, top, left + width, top + height);
       wind.size = [width, height];
     } catch (error) {}
   }

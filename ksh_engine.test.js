@@ -285,6 +285,121 @@ function testDeserializeAcceptsUILaneSchema() {
   assert.strictEqual(restored.sources[1][0][2].random, 25);
 }
 
+function testCellEditsReachStepsBeyondSixteen() {
+  var engine = makeEngine([0]);
+  clearAll(engine);
+  engine.setStepCount(32);
+  engine.setChannelCount(1);
+  engine.setRate("16n");
+  engine.setCell(0, 0, 31, 1, 123, "always", 100);
+  engine.setCell(0, 0, 20, 1, 77, "random", 50);
+
+  assert.strictEqual(engine.sources[0][0][31].enabled, 1);
+  assert.strictEqual(engine.sources[0][0][31].velocity, 123);
+  assert.strictEqual(engine.sources[0][0][20].enabled, 1);
+  assert.strictEqual(engine.sources[0][0][20].velocity, 77);
+  assert.strictEqual(engine.sources[0][0][20].gateMode, "random");
+  assert.strictEqual(engine.sources[0][0][20].random, 50);
+
+  engine.setCellVelocity(0, 0, 28, 64);
+  assert.strictEqual(engine.sources[0][0][28].velocity, 64);
+
+  engine.setCellEnabled(0, 0, 24, 1);
+  assert.strictEqual(engine.sources[0][0][24].enabled, 1);
+
+  engine.setCellGate(0, 0, 17, "cycle", 4);
+  assert.strictEqual(engine.sources[0][0][17].gateMode, "cycle");
+  assert.strictEqual(engine.sources[0][0][17].cycle, 4);
+
+  // setCell at the original 16-step boundary (the bug capped step at 15) must
+  // not bleed into step 15 anymore.
+  assert.strictEqual(engine.sources[0][0][15].enabled, 0);
+  assert.strictEqual(engine.sources[0][0][16].enabled, 0);
+}
+
+function testCellEditDoesNotReRollGeneratedSources() {
+  var engine = makeEngine([0]);
+  clearAll(engine);
+  engine.setStepCount(4);
+  engine.setChannelCount(1);
+  engine.setGenerationMode("stack");
+  engine.setCell(0, 0, 0, 1, 50, "always", 100);
+  engine.setCell(2, 0, 0, 1, 90, "always", 100);
+  // Seed the generated grid with a known stack roll: rng 0.99 picks the last
+  // active source, which is source 2 here.
+  engine._setRandomValues([0.99]);
+  engine.generateWindow(0, 4, true);
+
+  var step;
+  for (step = 0; step < 4; step += 1) {
+    assert.strictEqual(engine.generated[0][step].source, 2);
+  }
+
+  // An interactive cell edit must not re-roll the visible preview. Even if
+  // the next rng value would pick a different source, the existing source
+  // assignments must be preserved.
+  engine._setRandomValues([0]);
+  engine.setCellVelocity(0, 0, 0, 77);
+  for (step = 0; step < 4; step += 1) {
+    assert.strictEqual(engine.generated[0][step].source, 2);
+  }
+}
+
+function testCellEditOnlyMutatesGeneratedWhenSourceMatches() {
+  var engine = makeEngine([0]);
+  clearAll(engine);
+  engine.setStepCount(4);
+  engine.setChannelCount(1);
+  engine.setGenerationMode("stack");
+  engine.setCell(0, 0, 0, 1, 50, "always", 100);
+  engine.setCell(2, 0, 0, 1, 90, "always", 100);
+  engine._setRandomValues([0.99]);
+  engine.generateWindow(0, 4, true);
+
+  var step;
+  for (step = 0; step < 4; step += 1) {
+    assert.strictEqual(engine.generated[0][step].source, 2);
+  }
+  assert.strictEqual(engine.generated[0][0].velocity, 90);
+
+  // Editing the source the generated cell actually came from must propagate.
+  engine.setCellVelocity(2, 0, 0, 33);
+  assert.strictEqual(engine.generated[0][0].velocity, 33);
+
+  // Editing a different source must NOT touch the generated cell.
+  engine.setCellVelocity(0, 0, 0, 7);
+  assert.strictEqual(engine.generated[0][0].velocity, 33);
+  assert.strictEqual(engine.sources[0][0][0].velocity, 7);
+
+  // Same for enabled.
+  engine.setCellEnabled(0, 0, 0, 0);
+  assert.strictEqual(engine.generated[0][0].enabled, 1);
+  assert.strictEqual(engine.sources[0][0][0].enabled, 0);
+
+  engine.setCellEnabled(2, 0, 0, 0);
+  assert.strictEqual(engine.generated[0][0].enabled, 0);
+}
+
+function testChannelLockRoutesSourceEditsToGenerated() {
+  var engine = makeEngine([0]);
+  clearAll(engine);
+  engine.setStepCount(2);
+  engine.setChannelCount(1);
+  engine.setChannelLock(0, 1);
+  engine.setCell(1, 0, 0, 1, 64, "always", 100);
+  engine._setRandomValues([0]);
+  engine.generateWindow(0, 2, true);
+  assert.strictEqual(engine.generated[0][0].source, 1);
+
+  // Edit to the locked source should be reflected immediately.
+  engine.setCellVelocity(1, 0, 0, 99);
+  assert.strictEqual(engine.generated[0][0].velocity, 99);
+
+  // Edit to a different source must not bleed in via the lock.
+  engine.setCellVelocity(2, 0, 0, 5);
+  assert.strictEqual(engine.generated[0][0].velocity, 99);
+}
+
 function testSerializeDeserializeRestoresSourceData() {
   var engine = makeEngine([0]);
   var restored = makeEngine([0]);
@@ -326,6 +441,10 @@ testTransportPositionFiresOnlyWhenLiveStepChanges();
 testTransportPositionAnchorsJumpsToLiveBeat();
 testTransportPositionDoesNotFireWhileStopped();
 testDeserializeAcceptsUILaneSchema();
+testCellEditsReachStepsBeyondSixteen();
+testCellEditDoesNotReRollGeneratedSources();
+testCellEditOnlyMutatesGeneratedWhenSourceMatches();
+testChannelLockRoutesSourceEditsToGenerated();
 testSerializeDeserializeRestoresSourceData();
 
 console.log("ksh_engine tests passed");

@@ -71,8 +71,8 @@ function editorSubpatcher() {
           jsarguments: ["editor"],
           varname: "ksh_editor_ui",
           numinlets: 1,
-          numoutlets: 2,
-          outlettype: ["", ""],
+          numoutlets: 1,
+          outlettype: [""],
           patching_rect: [0.0, 0.0, editorSize.width, editorSize.height],
           presentation: 1,
           presentation_rect: [0.0, 0.0, editorSize.width, editorSize.height]
@@ -133,8 +133,8 @@ const patch = {
           filename: "ksh_compact_ui.js",
           varname: "ksh_compact_ui",
           numinlets: 1,
-          numoutlets: 2,
-          outlettype: ["", ""],
+          numoutlets: 1,
+          outlettype: [""],
           patching_rect: [20.0, 20.0, 880.0, 160.0],
           presentation: 1,
           presentation_rect: [0.0, 0.0, 880.0, 160.0]
@@ -227,42 +227,48 @@ const patch = {
         numoutlets: 1,
         outlettype: [""]
       }),
-      box("livepath", "newobj", "live.path live_set", [720.0, 760.0, 112.0, 22.0], {
+      // Live state column (x≈720): livepath fans out into two parallel
+      // sub-columns — the transport-stop chain (is_playing → sel 0 → reset)
+      // straight down at x=720, and the tempo chain
+      // (live.observer tempo → prepend tempo → engine) at x=880.
+      box("livepath", "newobj", "live.path live_set", [720.0, 700.0, 112.0, 22.0], {
         numinlets: 1,
         numoutlets: 2,
         outlettype: ["", ""]
       }),
-      box("observer", "newobj", "live.observer is_playing", [720.0, 800.0, 142.0, 22.0], {
+      box("observer", "newobj", "live.observer is_playing", [720.0, 740.0, 142.0, 22.0], {
         numinlets: 1,
         numoutlets: 1,
         outlettype: [""]
       }),
-      box("tempo_observer", "newobj", "live.observer tempo", [720.0, 720.0, 130.0, 22.0], {
-        numinlets: 1,
-        numoutlets: 1,
-        outlettype: [""]
-      }),
-      box("tempoprep", "newobj", "prepend tempo", [720.0, 760.0, 100.0, 22.0], {
-        numinlets: 1,
-        numoutlets: 1,
-        outlettype: [""]
-      }),
-      box("selstop", "newobj", "sel 0", [720.0, 840.0, 42.0, 22.0], {
+      box("selstop", "newobj", "sel 0", [720.0, 780.0, 42.0, 22.0], {
         numinlets: 2,
         numoutlets: 2,
         outlettype: ["bang", ""]
       }),
-      box("resetmsg", "message", "reset", [720.0, 880.0, 46.0, 22.0], {
+      box("resetmsg", "message", "reset", [720.0, 820.0, 46.0, 22.0], {
         numinlets: 2,
         numoutlets: 1,
         outlettype: [""]
       }),
-      box("autopattr", "newobj", "autopattr @greedy 1", [920.0, 760.0, 112.0, 22.0], {
+      box("tempo_observer", "newobj", "live.observer tempo", [880.0, 740.0, 130.0, 22.0], {
+        numinlets: 1,
+        numoutlets: 1,
+        outlettype: [""]
+      }),
+      box("tempoprep", "newobj", "prepend tempo", [880.0, 780.0, 100.0, 22.0], {
+        numinlets: 1,
+        numoutlets: 1,
+        outlettype: [""]
+      }),
+      // Persistence column shifted right so the wide pattrstorage box does
+      // not collide with the tempo column above.
+      box("autopattr", "newobj", "autopattr @greedy 1", [1060.0, 760.0, 112.0, 22.0], {
         numinlets: 1,
         numoutlets: 4,
         outlettype: ["", "", "", ""]
       }),
-      box("pattrstorage", "newobj", "pattrstorage ksh_state @greedy 1 @savemode 0", [920.0, 800.0, 260.0, 22.0], {
+      box("pattrstorage", "newobj", "pattrstorage ksh_state @greedy 1 @savemode 0", [1060.0, 800.0, 260.0, 22.0], {
         varname: "ksh_state",
         numinlets: 1,
         numoutlets: 4,
@@ -301,7 +307,8 @@ const patch = {
       { name: "ksh_engine.js", bootpath: ".", type: "TEXT", implicit: 1 },
       { name: "ksh_ui.js", bootpath: ".", type: "TEXT", implicit: 1 },
       { name: "ksh_compact_ui.js", bootpath: ".", type: "TEXT", implicit: 1 },
-      { name: "ksh_ui_shared.js", bootpath: ".", type: "TEXT", implicit: 1 }
+      { name: "ksh_ui_shared.js", bootpath: ".", type: "TEXT", implicit: 1 },
+      { name: "ksh_constants.js", bootpath: ".", type: "TEXT", implicit: 1 }
     ]
   }
 };

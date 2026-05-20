@@ -1,6 +1,6 @@
 autowatch = 1;
 inlets = 1;
-outlets = 2;
+outlets = 1;
 
 include("ksh_ui_shared.js");
 
@@ -30,7 +30,8 @@ var WIDTH = 968;
 var HEIGHT = 352;
 var uiPatcher = null;
 var editorWasVisible = false;
-var windowResizeTask = null;
+var windowResizeTaskImmediate = null;
+var windowResizeTaskSettle = null;
 
 function computeEditorDimensions() {
   var gridX0 = EDITOR_LAYOUT.LANE_PANEL_X + EDITOR_LAYOUT.LANE_PANEL_W + EDITOR_LAYOUT.LABEL_COL_W;
@@ -64,22 +65,34 @@ function rememberUiContext() {
   }
 }
 
+function runWindowResize() {
+  ksh_shared.resizePatcherWindow(uiPatcher, WIDTH, HEIGHT);
+  mgraphics.redraw();
+}
+
+// Resize twice: once on the next tick (fast feedback) and once after the
+// window has settled (~120ms). A single Task can only hold one pending fire,
+// so we use two distinct Tasks — the previous implementation called
+// schedule(0) then schedule(120) on the same Task, which silently cancelled
+// the immediate pass.
 function scheduleWindowResize() {
   if (typeof Task !== "function") {
-    ksh_shared.resizePatcherWindow(uiPatcher, WIDTH, HEIGHT);
+    runWindowResize();
     return;
   }
 
-  if (windowResizeTask) {
-    windowResizeTask.cancel();
+  if (windowResizeTaskImmediate) {
+    windowResizeTaskImmediate.cancel();
+  }
+  if (windowResizeTaskSettle) {
+    windowResizeTaskSettle.cancel();
   }
 
-  windowResizeTask = new Task(function () {
-    ksh_shared.resizePatcherWindow(uiPatcher, WIDTH, HEIGHT);
-    mgraphics.redraw();
-  }, this);
-  windowResizeTask.schedule(0);
-  windowResizeTask.schedule(120);
+  windowResizeTaskImmediate = new Task(runWindowResize, this);
+  windowResizeTaskImmediate.schedule(0);
+
+  windowResizeTaskSettle = new Task(runWindowResize, this);
+  windowResizeTaskSettle.schedule(120);
 }
 
 function applyEditorSize() {
@@ -809,13 +822,22 @@ function anything() {
 }
 
 var activeStateTask = null;
+var lastEditorActiveSent = null;
 if (typeof Task === "function") {
   activeStateTask = new Task(function () {
     var visible = false;
+    var value;
 
     if (this.patcher && this.patcher.wind) {
       visible = !!this.patcher.wind.visible;
-      send("editor_active", visible ? 1 : 0);
+      value = visible ? 1 : 0;
+      // Only send when the editor's visibility actually changes; otherwise
+      // we'd flood the engine (and the patch's named-message bus) with a
+      // redundant editor_active + current_step every 500ms forever.
+      if (value !== lastEditorActiveSent) {
+        send("editor_active", value);
+        lastEditorActiveSent = value;
+      }
       if (visible && !editorWasVisible) {
         rememberUiContext.call(this);
         applyEditorSize();

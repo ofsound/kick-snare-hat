@@ -1,6 +1,6 @@
 autowatch = 1;
 inlets = 1;
-outlets = 2;
+outlets = 1;
 
 include("ksh_ui_shared.js");
 

@@ -1,0 +1,16 @@
+{
+  "name": "kick-snare-hat",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Max for Live MIDI Generator that re-rolls a live drum pattern from four user-defined source patterns.",
+  "scripts": {
+    "test": "node ksh_engine.test.js && node ksh_engine.max.test.js && node scripts/validate-device-patch.js",
+    "test:engine": "node ksh_engine.test.js",
+    "test:max": "node ksh_engine.max.test.js",
+    "test:patch": "node scripts/validate-device-patch.js",
+    "build": "node scripts/build-device-patch.js",
+    "sync": "node scripts/sync-user-library.js",
+    "sync:watch": "node scripts/sync-user-library.js --watch",
+    "verify": "npm run build && npm test"
+  }
+}

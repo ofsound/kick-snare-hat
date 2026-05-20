@@ -2,10 +2,38 @@ autowatch = 1;
 inlets = 1;
 outlets = 1;
 
+// Load shared limits. In Node, require resolves ksh_constants.js relative to
+// this file. In Max js, include() reads the sibling file and exposes
+// `ksh_constants` as a global. If neither mechanism is available (or fails),
+// we fall back to literal defaults that must stay in sync with
+// ksh_constants.js.
+var KSH_CONSTANTS = (function () {
+  if (typeof require === "function" && typeof module !== "undefined" && module.exports !== undefined) {
+    try {
+      return require("./ksh_constants");
+    } catch (error) {
+      // fall through to include / defaults
+    }
+  }
+  if (typeof include === "function") {
+    try {
+      include("ksh_constants.js");
+      if (typeof ksh_constants !== "undefined") {
+        return ksh_constants;
+      }
+    } catch (error) {
+      // fall through to defaults
+    }
+  }
+  return { MAX_STEPS: 32, MAX_LANES: 8, SOURCE_COUNT: 4 };
+}());
+
 var KSH_EngineClass = null;
 
 (function (root) {
-  var MAX_STEPS = 32;
+  var MAX_STEPS = KSH_CONSTANTS.MAX_STEPS;
+  var MAX_LANES = KSH_CONSTANTS.MAX_LANES;
+  var SOURCE_COUNT = KSH_CONSTANTS.SOURCE_COUNT;
 
   function clamp(value, min, max) {
     value = parseInt(value, 10);
@@ -66,7 +94,7 @@ var KSH_EngineClass = null;
     var ch;
     var st;
 
-    for (ch = 0; ch < 8; ch += 1) {
+    for (ch = 0; ch < MAX_LANES; ch += 1) {
       channels[ch] = [];
       for (st = 0; st < MAX_STEPS; st += 1) {
         channels[ch][st] = defaultCell();
@@ -84,6 +112,14 @@ var KSH_EngineClass = null;
     this.emitPreview = options.emitPreview || function () {};
     this.emitStatus = options.emitStatus || function () {};
     this.emitCurrentStep = options.emitCurrentStep || function () {};
+    // requestPreviewFlush is invoked when a preview becomes dirty without
+    // forceEmit; the Max runtime uses it to coalesce many edits into one
+    // JSON-serialize-and-send per scheduler tick. In Node tests the default
+    // flushes synchronously so existing assertions continue to work.
+    this.requestPreviewFlush = options.requestPreviewFlush || function () {
+      this.flushPreview();
+    };
+    this.previewDirty = false;
     this.playingStepOneBased = 0;
 
     this.stepCount = 16;
@@ -119,7 +155,7 @@ var KSH_EngineClass = null;
     var defaultLabels = ["Kick", "Snare", "Hat", "Open Hat", "Tom 1", "Tom 2", "Clap", "Ride"];
 
     this.channels = [];
-    for (i = 0; i < 8; i += 1) {
+    for (i = 0; i < MAX_LANES; i += 1) {
       this.channels[i] = {
         label: defaultLabels[i],
         note: defaultNotes[i],
@@ -132,7 +168,7 @@ var KSH_EngineClass = null;
     var s;
 
     this.sources = [];
-    for (s = 0; s < 4; s += 1) {
+    for (s = 0; s < SOURCE_COUNT; s += 1) {
       this.sources[s] = makePattern();
     }
   };
@@ -151,13 +187,13 @@ var KSH_EngineClass = null;
     this.stepCount = clamp(count, 1, MAX_STEPS);
     this.currentStep = this.currentStep % this.stepCount;
     this.refreshSteps = clamp(this.refreshSteps, 1, this.stepCount);
-    this.generateWindow(0, this.stepCount);
+    this.recomposeWindow(0, this.stepCount);
     this.status("steps " + this.stepCount);
   };
 
   KickSnareHatEngine.prototype.setChannelCount = function (count) {
-    this.channelCount = clamp(count, 1, 8);
-    this.generateWindow(0, this.stepCount);
+    this.channelCount = clamp(count, 1, MAX_LANES);
+    this.recomposeWindow(0, this.stepCount);
     this.status("channels " + this.channelCount);
   };
 
@@ -173,7 +209,7 @@ var KSH_EngineClass = null;
     } else {
       this.generationMode = "stack";
     }
-    this.generateWindow(0, this.stepCount);
+    this.recomposeWindow(0, this.stepCount);
     this.status("mode " + this.generationMode);
   };
 
@@ -241,30 +277,66 @@ var KSH_EngineClass = null;
   };
 
   KickSnareHatEngine.prototype.setChannelLabel = function (channel, label) {
-    channel = clamp(channel, 0, 7);
+    channel = clamp(channel, 0, MAX_LANES - 1);
     this.channels[channel].label = String(label || "");
     this.status("channel_label " + (channel + 1) + " " + this.channels[channel].label);
   };
 
   KickSnareHatEngine.prototype.setChannelNote = function (channel, note) {
-    channel = clamp(channel, 0, 7);
+    channel = clamp(channel, 0, MAX_LANES - 1);
     this.channels[channel].note = clamp(note, 0, 127);
     this.status("channel_note " + (channel + 1) + " " + this.channels[channel].note);
   };
 
   KickSnareHatEngine.prototype.setChannelLock = function (channel, lock) {
-    channel = clamp(channel, 0, 7);
-    this.channels[channel].lock = clamp(lock, -1, 3);
-    this.generateWindow(0, this.stepCount);
+    channel = clamp(channel, 0, MAX_LANES - 1);
+    this.channels[channel].lock = clamp(lock, -1, SOURCE_COUNT - 1);
+    this.recomposeWindow(0, this.stepCount);
     this.status("channel_lock " + (channel + 1) + " " + this.channels[channel].lock);
+  };
+
+  // Returns the generated cell at (channel, step) if that cell is currently
+  // sourced from `source` (or the channel is locked to `source`). Otherwise
+  // returns null, meaning a source edit at (source, channel, step) has no
+  // effect on the visible generated grid and the preview can be skipped
+  // entirely. This is the hot-path optimization for velocity / paint drags:
+  // we mutate exactly one cell instead of recomposing channelCount × stepCount.
+  function clampSource(source) { return clamp(source, 0, SOURCE_COUNT - 1); }
+  function clampChannel(channel) { return clamp(channel, 0, MAX_LANES - 1); }
+  function clampStep(step) { return clamp(step, 0, MAX_STEPS - 1); }
+
+  KickSnareHatEngine.prototype.generatedCellForSourceEdit = function (source, channel, step) {
+    var generatedRow;
+    var generatedCell;
+
+    if (channel >= this.channelCount || step >= this.stepCount) {
+      return null;
+    }
+
+    generatedRow = this.generated[channel];
+    if (!generatedRow) {
+      return null;
+    }
+
+    generatedCell = generatedRow[step];
+    if (!generatedCell) {
+      return null;
+    }
+
+    if (this.channels[channel].lock >= 0) {
+      return this.channels[channel].lock === source ? generatedCell : null;
+    }
+
+    return generatedCell.source === source ? generatedCell : null;
   };
 
   KickSnareHatEngine.prototype.setCell = function (source, channel, step, enabled, velocity, gateMode, value) {
     var cell;
+    var generatedCell;
 
-    source = clamp(source, 0, 3);
-    channel = clamp(channel, 0, 7);
-    step = clamp(step, 0, 15);
+    source = clampSource(source);
+    channel = clampChannel(channel);
+    step = clampStep(step);
 
     cell = this.sources[source][channel][step];
     cell.enabled = enabled ? 1 : 0;
@@ -277,31 +349,56 @@ var KSH_EngineClass = null;
       cell.cycle = clamp(value, 1, 64);
     }
 
-    this.generateWindow(0, this.stepCount);
+    generatedCell = this.generatedCellForSourceEdit(source, channel, step);
+    if (generatedCell) {
+      generatedCell.enabled = cell.enabled;
+      generatedCell.velocity = cell.velocity;
+      generatedCell.gateMode = cell.gateMode;
+      generatedCell.random = cell.random;
+      generatedCell.cycle = cell.cycle;
+      this.markPreviewDirty(false);
+    }
   };
 
   KickSnareHatEngine.prototype.setCellEnabled = function (source, channel, step, enabled) {
-    source = clamp(source, 0, 3);
-    channel = clamp(channel, 0, 7);
-    step = clamp(step, 0, 15);
-    this.sources[source][channel][step].enabled = enabled ? 1 : 0;
-    this.generateWindow(0, this.stepCount);
+    var generatedCell;
+
+    source = clampSource(source);
+    channel = clampChannel(channel);
+    step = clampStep(step);
+    enabled = enabled ? 1 : 0;
+    this.sources[source][channel][step].enabled = enabled;
+
+    generatedCell = this.generatedCellForSourceEdit(source, channel, step);
+    if (generatedCell) {
+      generatedCell.enabled = enabled;
+      this.markPreviewDirty(false);
+    }
   };
 
   KickSnareHatEngine.prototype.setCellVelocity = function (source, channel, step, velocity) {
-    source = clamp(source, 0, 3);
-    channel = clamp(channel, 0, 7);
-    step = clamp(step, 0, 15);
-    this.sources[source][channel][step].velocity = clamp(velocity, 1, 127);
-    this.generateWindow(0, this.stepCount);
+    var generatedCell;
+
+    source = clampSource(source);
+    channel = clampChannel(channel);
+    step = clampStep(step);
+    velocity = clamp(velocity, 1, 127);
+    this.sources[source][channel][step].velocity = velocity;
+
+    generatedCell = this.generatedCellForSourceEdit(source, channel, step);
+    if (generatedCell) {
+      generatedCell.velocity = velocity;
+      this.markPreviewDirty(false);
+    }
   };
 
   KickSnareHatEngine.prototype.setCellGate = function (source, channel, step, gateMode, value) {
     var cell;
+    var generatedCell;
 
-    source = clamp(source, 0, 3);
-    channel = clamp(channel, 0, 7);
-    step = clamp(step, 0, 15);
+    source = clampSource(source);
+    channel = clampChannel(channel);
+    step = clampStep(step);
     cell = this.sources[source][channel][step];
     cell.gateMode = this.normalizeGateMode(gateMode);
 
@@ -311,7 +408,13 @@ var KSH_EngineClass = null;
       cell.cycle = clamp(value, 1, 64);
     }
 
-    this.generateWindow(0, this.stepCount);
+    generatedCell = this.generatedCellForSourceEdit(source, channel, step);
+    if (generatedCell) {
+      generatedCell.gateMode = cell.gateMode;
+      generatedCell.random = cell.random;
+      generatedCell.cycle = cell.cycle;
+      this.markPreviewDirty(false);
+    }
   };
 
   KickSnareHatEngine.prototype.normalizeGateMode = function (gateMode) {
@@ -345,8 +448,8 @@ var KSH_EngineClass = null;
     var step;
     var cell;
 
-    sourceIndex = clamp(sourceIndex, 0, 3);
-    for (channel = 0; channel < 8; channel += 1) {
+    sourceIndex = clampSource(sourceIndex);
+    for (channel = 0; channel < MAX_LANES; channel += 1) {
       for (step = 0; step < this.stepCount; step += 1) {
         cell = this.sources[sourceIndex][channel][step];
         if (cell.enabled) {
@@ -361,7 +464,7 @@ var KSH_EngineClass = null;
     var indices = [];
     var source;
 
-    for (source = 0; source < 4; source += 1) {
+    for (source = 0; source < SOURCE_COUNT; source += 1) {
       if (!this.isSourceEmpty(source)) {
         indices.push(source);
       }
@@ -380,6 +483,8 @@ var KSH_EngineClass = null;
     return active[pick];
   };
 
+  // Re-roll source choices across the window. Used at transport refresh
+  // boundaries and by reset(); not called from interactive cell edits.
   KickSnareHatEngine.prototype.generateWindow = function (startStep, length, forceEmit) {
     var offset;
     var step;
@@ -418,9 +523,76 @@ var KSH_EngineClass = null;
       }
     }
 
-    if (this.editorActive || forceEmit) {
-      this.emitPreview(this.snapshot());
+    this.markPreviewDirty(forceEmit);
+  };
+
+  // Re-derive generated cells from their existing per-cell source choices.
+  // Cells with no prior source choice (initial state, freshly-grown
+  // stepCount/channelCount, etc.) fall back to a roll; in stack mode that
+  // fallback roll is shared across the whole window so first-time output
+  // still matches stack semantics.
+  KickSnareHatEngine.prototype.recomposeWindow = function (startStep, length, forceEmit) {
+    var offset;
+    var step;
+    var channel;
+    var source;
+    var existing;
+    var cell;
+    var fallbackStack = -1;
+
+    if (forceEmit === undefined) {
+      forceEmit = false;
     }
+
+    startStep = clamp(startStep, 0, this.stepCount - 1);
+    length = clamp(length, 1, this.stepCount);
+
+    for (offset = 0; offset < length; offset += 1) {
+      step = (startStep + offset) % this.stepCount;
+
+      for (channel = 0; channel < this.channelCount; channel += 1) {
+        if (this.channels[channel].lock >= 0) {
+          source = this.channels[channel].lock;
+        } else {
+          existing = this.generated[channel] && this.generated[channel][step]
+            ? this.generated[channel][step].source
+            : -1;
+          if (existing >= 0 && existing < SOURCE_COUNT) {
+            source = existing;
+          } else if (this.generationMode === "per_channel") {
+            source = this.randomSource();
+          } else {
+            if (fallbackStack < 0) {
+              fallbackStack = this.randomSource();
+            }
+            source = fallbackStack;
+          }
+        }
+
+        cell = cloneCell(this.sources[source][channel][step]);
+        cell.source = source;
+        this.generated[channel][step] = cell;
+      }
+    }
+
+    this.markPreviewDirty(forceEmit);
+  };
+
+  KickSnareHatEngine.prototype.markPreviewDirty = function (forceEmit) {
+    this.previewDirty = true;
+    if (forceEmit) {
+      this.flushPreview();
+    } else if (this.editorActive) {
+      this.requestPreviewFlush();
+    }
+  };
+
+  KickSnareHatEngine.prototype.flushPreview = function () {
+    if (!this.previewDirty) {
+      return;
+    }
+    this.previewDirty = false;
+    this.emitPreview(this.snapshot());
   };
 
   KickSnareHatEngine.prototype.cycleKey = function (source, channel, step) {
@@ -615,16 +787,16 @@ var KSH_EngineClass = null;
     this.phaseOffsetBeats = parseFloat(state.phaseOffsetBeats) || 0;
 
     if (state.channels) {
-      for (channel = 0; channel < Math.min(8, state.channels.length); channel += 1) {
+      for (channel = 0; channel < Math.min(MAX_LANES, state.channels.length); channel += 1) {
         this.channels[channel].label = String(state.channels[channel].label || this.channels[channel].label);
         this.channels[channel].note = clamp(state.channels[channel].note, 0, 127);
-        this.channels[channel].lock = clamp(state.channels[channel].lock, -1, 3);
+        this.channels[channel].lock = clamp(state.channels[channel].lock, -1, SOURCE_COUNT - 1);
       }
     }
 
     if (state.sources) {
-      for (source = 0; source < Math.min(4, state.sources.length); source += 1) {
-        for (channel = 0; channel < Math.min(8, state.sources[source].length); channel += 1) {
+      for (source = 0; source < Math.min(SOURCE_COUNT, state.sources.length); source += 1) {
+        for (channel = 0; channel < Math.min(MAX_LANES, state.sources[source].length); channel += 1) {
           for (step = 0; step < Math.min(MAX_STEPS, state.sources[source][channel].length); step += 1) {
             this.sources[source][channel][step] = cloneCell(state.sources[source][channel][step]);
           }
@@ -646,6 +818,7 @@ var KSH_EngineClass = null;
 
 var kshPendingNoteOffs = [];
 var kshEngine = null;
+var kshPendingPreviewTask = null;
 
 function cancelPendingNoteTasks() {
   var i;
@@ -660,10 +833,25 @@ function cancelPendingNoteTasks() {
   kshPendingNoteOffs.length = 0;
 }
 
-function emitFullState() {
-  if (typeof JSON !== "undefined" && typeof messnamed === "function") {
-    messnamed("ksh_engine_events", "engine_state", JSON.stringify(ensureEngine().serialize()));
+function safeMessnamed() {
+  // Wrapper used by all engine_events emitters. messnamed can throw during
+  // device reload/recompile while Max is rewiring named buses; swallowing
+  // the error keeps the engine alive across those transient windows.
+  if (typeof messnamed !== "function") {
+    return;
   }
+  try {
+    messnamed.apply(this, arguments);
+  } catch (error) {
+    // transient — see comment above
+  }
+}
+
+function emitFullState() {
+  if (typeof JSON === "undefined") {
+    return;
+  }
+  safeMessnamed("ksh_engine_events", "engine_state", JSON.stringify(ensureEngine().serialize()));
 }
 
 if (typeof module === "undefined" || !module.exports) {
@@ -721,19 +909,36 @@ if (typeof module === "undefined" || !module.exports) {
       }
     },
     emitPreview: function (snapshot) {
-      if (typeof JSON !== "undefined" && typeof messnamed === "function") {
-        messnamed("ksh_engine_events", "preview", JSON.stringify(snapshot));
+      if (typeof JSON !== "undefined") {
+        safeMessnamed("ksh_engine_events", "preview", JSON.stringify(snapshot));
       }
+    },
+    requestPreviewFlush: function () {
+      // Coalesce many cell edits within the same scheduler tick into a
+      // single flushPreview() so we serialize/stringify/send at most once
+      // per tick instead of per-edit.
+      if (kshPendingPreviewTask) {
+        return;
+      }
+      if (typeof Task !== "function") {
+        if (kshEngine) {
+          kshEngine.flushPreview();
+        }
+        return;
+      }
+      kshPendingPreviewTask = new Task(function () {
+        kshPendingPreviewTask = null;
+        if (kshEngine) {
+          kshEngine.flushPreview();
+        }
+      });
+      kshPendingPreviewTask.schedule(0);
     },
     emitStatus: function (message) {
-      if (typeof messnamed === "function") {
-        messnamed("ksh_engine_events", "status", message);
-      }
+      safeMessnamed("ksh_engine_events", "status", message);
     },
     emitCurrentStep: function (step) {
-      if (typeof messnamed === "function") {
-        messnamed("ksh_engine_events", "current_step", step);
-      }
+      safeMessnamed("ksh_engine_events", "current_step", step);
     }
   });
 }
@@ -843,9 +1048,10 @@ function cell_gate(source, channel, stepIndex, gateMode, value) {
 }
 
 function snapshot() {
-  if (typeof JSON !== "undefined" && typeof messnamed === "function") {
-    messnamed("ksh_engine_events", "preview", JSON.stringify(ensureEngine().snapshot()));
+  if (typeof JSON === "undefined") {
+    return;
   }
+  safeMessnamed("ksh_engine_events", "preview", JSON.stringify(ensureEngine().snapshot()));
 }
 
 function request_state() {

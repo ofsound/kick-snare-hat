@@ -42,9 +42,8 @@
           "filename": "ksh_compact_ui.js",
           "varname": "ksh_compact_ui",
           "numinlets": 1,
-          "numoutlets": 2,
+          "numoutlets": 1,
           "outlettype": [
-            "",
             ""
           ],
           "patching_rect": [
@@ -130,9 +129,8 @@
                   ],
                   "varname": "ksh_editor_ui",
                   "numinlets": 1,
-                  "numoutlets": 2,
+                  "numoutlets": 1,
                   "outlettype": [
-                    "",
                     ""
                   ],
                   "patching_rect": [
@@ -538,7 +536,7 @@
           "numoutlets": 2,
           "patching_rect": [
             720,
-            760,
+            700,
             112,
             22
           ],
@@ -557,7 +555,7 @@
           "numoutlets": 1,
           "patching_rect": [
             720,
-            800,
+            740,
             142,
             22
           ],
@@ -569,49 +567,13 @@
       },
       {
         "box": {
-          "id": "tempo_observer",
-          "maxclass": "newobj",
-          "numinlets": 1,
-          "numoutlets": 1,
-          "patching_rect": [
-            720,
-            720,
-            130,
-            22
-          ],
-          "outlettype": [
-            ""
-          ],
-          "text": "live.observer tempo"
-        }
-      },
-      {
-        "box": {
-          "id": "tempoprep",
-          "maxclass": "newobj",
-          "numinlets": 1,
-          "numoutlets": 1,
-          "patching_rect": [
-            720,
-            760,
-            100,
-            22
-          ],
-          "outlettype": [
-            ""
-          ],
-          "text": "prepend tempo"
-        }
-      },
-      {
-        "box": {
           "id": "selstop",
           "maxclass": "newobj",
           "numinlets": 2,
           "numoutlets": 2,
           "patching_rect": [
             720,
-            840,
+            780,
             42,
             22
           ],
@@ -630,7 +592,7 @@
           "numoutlets": 1,
           "patching_rect": [
             720,
-            880,
+            820,
             46,
             22
           ],
@@ -642,12 +604,48 @@
       },
       {
         "box": {
+          "id": "tempo_observer",
+          "maxclass": "newobj",
+          "numinlets": 1,
+          "numoutlets": 1,
+          "patching_rect": [
+            880,
+            740,
+            130,
+            22
+          ],
+          "outlettype": [
+            ""
+          ],
+          "text": "live.observer tempo"
+        }
+      },
+      {
+        "box": {
+          "id": "tempoprep",
+          "maxclass": "newobj",
+          "numinlets": 1,
+          "numoutlets": 1,
+          "patching_rect": [
+            880,
+            780,
+            100,
+            22
+          ],
+          "outlettype": [
+            ""
+          ],
+          "text": "prepend tempo"
+        }
+      },
+      {
+        "box": {
           "id": "autopattr",
           "maxclass": "newobj",
           "numinlets": 1,
           "numoutlets": 4,
           "patching_rect": [
-            920,
+            1060,
             760,
             112,
             22
@@ -668,7 +666,7 @@
           "numinlets": 1,
           "numoutlets": 4,
           "patching_rect": [
-            920,
+            1060,
             800,
             260,
             22
@@ -1019,6 +1017,12 @@
       },
       {
         "name": "ksh_ui_shared.js",
+        "bootpath": ".",
+        "type": "TEXT",
+        "implicit": 1
+      },
+      {
+        "name": "ksh_constants.js",
         "bootpath": ".",
         "type": "TEXT",
         "implicit": 1
