@@ -8,7 +8,8 @@ mgraphics.init();
 mgraphics.relative_coords = 0;
 mgraphics.autofill = 0;
 
-var WIDTH = 880;
+var COMPACT_BASE_WIDTH = 880;
+var WIDTH = COMPACT_BASE_WIDTH;
 var HEIGHT = 160;
 var MAX_STEPS = ksh_shared.MAX_STEPS;
 var MAX_LANES = ksh_shared.MAX_LANES;
@@ -17,6 +18,27 @@ var colors = ksh_shared.colors;
 var state = makeState();
 var previewData = null;
 var hitZones = [];
+
+function computeCompactWidth() {
+  var previewX0 = 82;
+  var previewCellW = 18;
+
+  if (state.stepCount <= 16) {
+    return COMPACT_BASE_WIDTH;
+  }
+
+  return Math.max(COMPACT_BASE_WIDTH, previewX0 + state.stepCount * previewCellW + 460);
+}
+
+function applyCompactSize() {
+  var newWidth = computeCompactWidth();
+  var changed = newWidth !== WIDTH;
+
+  WIDTH = newWidth;
+  ksh_shared.applyViewSize(WIDTH, HEIGHT, { resizePatcher: false });
+
+  return changed;
+}
 
 function makeState() {
   var lanes = [];
@@ -78,7 +100,13 @@ function drawPreview() {
       ksh_shared.rect(x0 + step * cellW, y0 + lane * cellH, cellW - 3, cellH - 3, cell && cell.enabled ? colors.blue : colors.off);
     }
   }
-  ksh_shared.text("Open editor for source patterns, lane locks, velocity, probability, and cycle values.", 400, 105, 10, colors.muted);
+  ksh_shared.text(
+    "Open editor for source patterns, lane locks, velocity, probability, and cycle values.",
+    Math.max(400, x0 + state.stepCount * cellW + 24),
+    105,
+    10,
+    colors.muted
+  );
 }
 
 function send() {
@@ -90,6 +118,7 @@ function send() {
 }
 
 function sync_all() {
+  applyCompactSize();
   send("request_state");
   send("snapshot");
   mgraphics.redraw();
@@ -113,6 +142,7 @@ function engine_state(json) {
   try {
     engineState = JSON.parse(json);
     ksh_shared.applyEngineState(state, engineState);
+    applyCompactSize();
     mgraphics.redraw();
   } catch (error) {}
 }
@@ -144,6 +174,7 @@ function handleStepper(id) {
     state.refreshSteps = ksh_shared.clamp(state.refreshSteps, 1, state.stepCount);
     send("steps", state.stepCount);
     send("refresh_steps", state.refreshSteps);
+    applyCompactSize();
   } else if (id === "lanes_inc" || id === "lanes_dec") {
     state.laneCount = ksh_shared.clamp(state.laneCount + (id === "lanes_inc" ? 1 : -1), 1, MAX_LANES);
     send("channels", state.laneCount);
@@ -175,6 +206,9 @@ function anything() {
     return;
   } else {
     ksh_shared.applyStatusMessage(state, messagename, arrayfromargs(arguments));
+    if (messagename === "steps") {
+      applyCompactSize();
+    }
     mgraphics.redraw();
   }
 }

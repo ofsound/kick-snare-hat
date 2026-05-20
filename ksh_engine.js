@@ -5,6 +5,8 @@ outlets = 1;
 var KSH_EngineClass = null;
 
 (function (root) {
+  var MAX_STEPS = 32;
+
   function clamp(value, min, max) {
     value = parseInt(value, 10);
     if (isNaN(value)) {
@@ -62,7 +64,7 @@ var KSH_EngineClass = null;
 
     for (ch = 0; ch < 8; ch += 1) {
       channels[ch] = [];
-      for (st = 0; st < 16; st += 1) {
+      for (st = 0; st < MAX_STEPS; st += 1) {
         channels[ch][st] = defaultCell();
       }
     }
@@ -139,7 +141,7 @@ var KSH_EngineClass = null;
   };
 
   KickSnareHatEngine.prototype.setStepCount = function (count) {
-    this.stepCount = clamp(count, 1, 16);
+    this.stepCount = clamp(count, 1, MAX_STEPS);
     this.currentStep = this.currentStep % this.stepCount;
     this.refreshSteps = clamp(this.refreshSteps, 1, this.stepCount);
     this.generateWindow(0, this.stepCount);
@@ -526,7 +528,7 @@ var KSH_EngineClass = null;
     if (state.sources) {
       for (source = 0; source < Math.min(4, state.sources.length); source += 1) {
         for (channel = 0; channel < Math.min(8, state.sources[source].length); channel += 1) {
-          for (step = 0; step < Math.min(16, state.sources[source][channel].length); step += 1) {
+          for (step = 0; step < Math.min(MAX_STEPS, state.sources[source][channel].length); step += 1) {
             this.sources[source][channel][step] = cloneCell(state.sources[source][channel][step]);
           }
         }

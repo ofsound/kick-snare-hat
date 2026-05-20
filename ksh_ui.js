@@ -28,6 +28,9 @@ var EDITOR_LAYOUT = {
 };
 var WIDTH = 968;
 var HEIGHT = 352;
+var uiPatcher = null;
+var editorWasVisible = false;
+var windowResizeTask = null;
 
 function computeEditorDimensions() {
   var gridX0 = EDITOR_LAYOUT.LANE_PANEL_X + EDITOR_LAYOUT.LANE_PANEL_W + EDITOR_LAYOUT.LABEL_COL_W;
@@ -55,31 +58,38 @@ function computeEditorDimensions() {
   };
 }
 
+function rememberUiContext() {
+  if (typeof this !== "undefined" && this.patcher) {
+    uiPatcher = this.patcher;
+  }
+}
+
+function scheduleWindowResize() {
+  if (typeof Task !== "function") {
+    ksh_shared.resizePatcherWindow(uiPatcher, WIDTH, HEIGHT);
+    return;
+  }
+
+  if (windowResizeTask) {
+    windowResizeTask.cancel();
+  }
+
+  windowResizeTask = new Task(function () {
+    ksh_shared.resizePatcherWindow(uiPatcher, WIDTH, HEIGHT);
+    mgraphics.redraw();
+  }, this);
+  windowResizeTask.schedule(0);
+  windowResizeTask.schedule(120);
+}
+
 function applyEditorSize() {
   var dims = computeEditorDimensions();
   var changed = dims.width !== WIDTH || dims.height !== HEIGHT;
 
   WIDTH = dims.width;
   HEIGHT = dims.height;
-
-  if (typeof box !== "undefined" && box) {
-    try {
-      if (box.presentation_rect !== undefined) {
-        box.presentation_rect = [0, 0, WIDTH, HEIGHT];
-      } else {
-        box.message("presentation_rect", 0, 0, WIDTH, HEIGHT);
-      }
-    } catch (error) {}
-  }
-
-  if (typeof this !== "undefined" && this.patcher) {
-    try {
-      if (this.patcher.wind && typeof this.patcher.wind.size === "function") {
-        this.patcher.wind.size(WIDTH, HEIGHT);
-      }
-      this.patcher.message("window", "size", WIDTH, HEIGHT);
-    } catch (error) {}
-  }
+  ksh_shared.applyViewSize(WIDTH, HEIGHT, { patcher: uiPatcher });
+  scheduleWindowResize();
 
   return changed;
 }
@@ -126,6 +136,7 @@ for (key in ksh_shared.colors) {
 }
 colors.green = [0.45, 0.76, 0.48, 1];
 colors.edit = [0.96, 0.62, 0.22, 1];
+colors.editLight = [0.58, 0.80, 0.97, 1];
 colors.generated = [0.36, 0.66, 0.95, 1];
 
 var state = makeState();
@@ -136,7 +147,6 @@ var selectedLane = 0;
 var selectedStep = 0;
 var hitZones = [];
 var editingLabel = false;
-var sourceDropdownOpen = false;
 var velocityDrag = null;
 var VELOCITY_DRAG_THRESHOLD = 4;
 var SOURCE_PAINT_DRAG_THRESHOLD = 4;
@@ -197,45 +207,43 @@ function paint() {
   drawLaneControls();
   drawCellEditor();
   drawFooter();
-  drawSourceDropdownOverlay();
 }
 
 function drawHeader() {
-  var x = 14;
-  var modeX = 110;
+  var i;
+  var sourceX = 14;
+  var sourceBtnW = 26;
+  var sourceBtnGap = 2;
+  var modeX = sourceX + SOURCE_COUNT * (sourceBtnW + sourceBtnGap) - sourceBtnGap + 10;
   var durationX = WIDTH - 12 - 104;
   var midiX = durationX - 8 - 84;
 
   ksh_shared.rect(0, 0, WIDTH, 58, colors.panel2);
 
-  ksh_shared.text("Source", x, 12, 10, colors.muted);
-  ksh_shared.button(hitZones, "source_select", "SRC " + (selectedSource + 1) + " v", x, 18, 82, 25, sourceDropdownOpen);
-  ksh_shared.button(hitZones, "mode", state.generationMode === "stack" ? "Stack" : "Per Lane", modeX, 18, 78, 25, false);
-  ksh_shared.valueBox(hitZones, "steps", "Steps", state.stepCount, 202, 18, 78, 30, 13);
-  ksh_shared.valueBox(hitZones, "lanes", "Lanes", state.laneCount, 294, 18, 78, 30, 13);
-  ksh_shared.valueBox(hitZones, "refresh", "Refresh", state.refreshSteps, 386, 18, 84, 30, 13);
-  ksh_shared.button(hitZones, "rate", state.rate, 484, 18, 62, 25, false);
-  ksh_shared.valueBox(hitZones, "swing", "Swing", state.swing, 560, 18, 78, 30, 13);
-  ksh_shared.valueBox(hitZones, "midi", "MIDI Ch", state.midiChannel, midiX, 18, 84, 30, 13);
-  ksh_shared.valueBox(hitZones, "duration", "Dur ms", state.noteDurationMs, durationX, 18, 104, 30, 13);
-}
-
-function drawSourceDropdownOverlay() {
-  var i;
-  var x = 14;
-  var y = 44;
-
-  if (!sourceDropdownOpen) {
-    return;
-  }
-
-  ksh_shared.rect(x, y, 82, 98, colors.panel2);
-  ksh_shared.strokeRect(x, y, 82, 98, colors.stroke, 1);
+  ksh_shared.text("Source", sourceX, 12, 10, colors.muted);
   for (i = 0; i < SOURCE_COUNT; i += 1) {
-    ksh_shared.rect(x + 3, y + 3 + i * 23, 76, 21, selectedSource === i ? colors.amber : colors.panel);
-    ksh_shared.text("SRC " + (i + 1), x + 41, y + 18 + i * 23, 11, selectedSource === i ? colors.off : colors.text, "center");
-    ksh_shared.zone(hitZones, "source_option", x + 3, y + 3 + i * 23, 76, 21, { source: i });
+    ksh_shared.button(
+      hitZones,
+      "source_pick",
+      String(i + 1),
+      sourceX,
+      18,
+      sourceBtnW,
+      25,
+      selectedSource === i,
+      { source: i }
+    );
+    sourceX += sourceBtnW + sourceBtnGap;
   }
+
+  ksh_shared.button(hitZones, "mode", state.generationMode === "stack" ? "Stack" : "Per Lane", modeX, 18, 78, 25, false);
+  ksh_shared.valueBox(hitZones, "steps", "Steps", state.stepCount, modeX + 92, 18, 78, 30, 13);
+  ksh_shared.valueBox(hitZones, "lanes", "Lanes", state.laneCount, modeX + 184, 18, 78, 30, 13);
+  ksh_shared.valueBox(hitZones, "refresh", "Refresh", state.refreshSteps, modeX + 276, 18, 84, 30, 13);
+  ksh_shared.button(hitZones, "rate", state.rate, modeX + 374, 18, 62, 25, false);
+  ksh_shared.valueBox(hitZones, "swing", "Swing", state.swing, modeX + 450, 18, 78, 30, 13);
+  ksh_shared.valueBox(hitZones, "midi", "MIDI Channel", state.midiChannel, midiX, 18, 84, 30, 13);
+  ksh_shared.valueBox(hitZones, "duration", "Duration (ms)", state.noteDurationMs, durationX, 18, 104, 30, 13);
 }
 
 function drawLaneControls() {
@@ -298,7 +306,7 @@ function drawSourceGrid() {
   var cell;
   var active;
 
-  ksh_shared.text("Source Pattern", x0, layout.sourceTitleY, 13, colors.text);
+  ksh_shared.text("Source " + (selectedSource + 1) + " Pattern", x0, layout.sourceTitleY, 13, colors.text);
   drawStepNumberLabels(x0, cellW, layout.sourceStepY);
 
   for (lane = 0; lane < state.laneCount; lane += 1) {
@@ -307,12 +315,21 @@ function drawSourceGrid() {
       x = x0 + step * cellW;
       y = y0 + lane * cellH;
       cell = state.sources[selectedSource][lane][step];
-      active = cell.enabled ? colors.edit : colors.off;
-      ksh_shared.rect(x + 2, y + 2, cellW - 4, cellH - 4, active);
-      ksh_shared.strokeRect(x + 2, y + 2, cellW - 4, cellH - 4, selectedLane === lane && selectedStep === step ? colors.text : colors.strokeSoft, 1);
       if (cell.enabled) {
-        ksh_shared.text(cell.gateMode === "always" ? String(cell.velocity) : cell.gateMode.charAt(0).toUpperCase(), x + cellW / 2, y + 14, 9, colors.off, "center");
+        ksh_shared.sourceCellBackground(
+          x + 2,
+          y + 2,
+          cellW - 4,
+          cellH - 4,
+          cell.gateMode,
+          colors.edit,
+          colors.editLight
+        );
+        ksh_shared.text(String(cell.velocity), x + cellW / 2, y + 14, 9, colors.off, "center");
+      } else {
+        ksh_shared.rect(x + 2, y + 2, cellW - 4, cellH - 4, colors.off);
       }
+      ksh_shared.strokeRect(x + 2, y + 2, cellW - 4, cellH - 4, selectedLane === lane && selectedStep === step ? colors.text : colors.strokeSoft, 1);
       ksh_shared.zone(hitZones, "source_cell", x + 2, y + 2, cellW - 4, cellH - 4, { lane: lane, step: step });
     }
   }
@@ -356,15 +373,14 @@ function drawCellEditor() {
 
   ksh_shared.rect(x, y, layout.editorW, 248, colors.panel);
   ksh_shared.text("Cell Editor", x + 14, y + 22, 13, colors.text);
-  ksh_shared.text("SRC " + (selectedSource + 1) + " / " + state.lanes[selectedLane].label + " / Step " + (selectedStep + 1), x + 14, y + 44, 11, colors.muted);
 
-  ksh_shared.button(hitZones, "cell_enabled", cell.enabled ? "On" : "Off", x + 14, y + 62, 62, 28, cell.enabled);
-  ksh_shared.button(hitZones, "gate", "Always", x + 14, y + 104, 72, 26, cell.gateMode === "always", { gate: "always" });
-  ksh_shared.button(hitZones, "gate", "Random", x + 94, y + 104, 78, 26, cell.gateMode === "random", { gate: "random" });
-  ksh_shared.button(hitZones, "gate", "Cycle", x + 180, y + 104, 70, 26, cell.gateMode === "cycle", { gate: "cycle" });
-  ksh_shared.valueBox(hitZones, "velocity", "Velocity", cell.velocity, x + 14, y + 156, 104, 30, 13);
-  ksh_shared.valueBox(hitZones, "random", "Random %", cell.random, x + 14, y + 212, 112, 30, 13);
-  ksh_shared.valueBox(hitZones, "cycle", "Every N", cell.cycle, x + 146, y + 212, 104, 30, 13);
+  ksh_shared.button(hitZones, "cell_enabled", cell.enabled ? "On" : "Off", x + 14, y + 44, 62, 28, cell.enabled);
+  ksh_shared.button(hitZones, "gate", "Always", x + 14, y + 86, 72, 26, cell.gateMode === "always", { gate: "always" });
+  ksh_shared.button(hitZones, "gate", "Probability", x + 94, y + 86, 96, 26, cell.gateMode === "random", { gate: "random" });
+  ksh_shared.button(hitZones, "gate", "Cycle", x + 198, y + 86, 70, 26, cell.gateMode === "cycle", { gate: "cycle" });
+  ksh_shared.valueBox(hitZones, "velocity", "Velocity", cell.velocity, x + 14, y + 138, 104, 30, 13);
+  ksh_shared.valueBox(hitZones, "random", "Probability %", cell.random, x + 14, y + 194, 112, 30, 13);
+  ksh_shared.valueBox(hitZones, "cycle", "Every N", cell.cycle, x + 146, y + 194, 104, 30, 13);
 }
 
 function drawFooter() {
@@ -399,6 +415,7 @@ function sendCell(source, lane, step) {
 }
 
 function sync_all() {
+  rememberUiContext.call(this);
   applyEditorSize();
   send("request_state");
   send("snapshot");
@@ -406,15 +423,24 @@ function sync_all() {
 }
 
 function loadbang() {
-  sync_all();
+  rememberUiContext.call(this);
+  sync_all.call(this);
 }
 
 function init() {
-  sync_all();
+  rememberUiContext.call(this);
+  sync_all.call(this);
 }
 
 function open() {
-  sync_all();
+  rememberUiContext.call(this);
+  sync_all.call(this);
+}
+
+function onresize(width, height) {
+  WIDTH = width;
+  HEIGHT = height;
+  mgraphics.redraw();
 }
 
 function sourceStepFromX(x) {
@@ -590,12 +616,13 @@ function onclick(x, y, button, cmd, shift, capslock, option, ctrl) {
   var z = ksh_shared.findZone(hitZones, x, y);
   var cell;
 
+  rememberUiContext.call(this);
+
   if (!z) {
     if (button === 0) {
       endSourceCellInteraction();
     }
     editingLabel = false;
-    sourceDropdownOpen = false;
     mgraphics.redraw();
     return;
   }
@@ -608,37 +635,28 @@ function onclick(x, y, button, cmd, shift, capslock, option, ctrl) {
     editingLabel = false;
   }
 
-  if (z.id === "source_select") {
-    sourceDropdownOpen = !sourceDropdownOpen;
-  } else if (z.id === "source_option") {
+  if (z.id === "source_pick") {
     selectedSource = z.data.source;
-    sourceDropdownOpen = false;
   } else if (z.id === "mode") {
-    sourceDropdownOpen = false;
     state.generationMode = state.generationMode === "stack" ? "per_channel" : "stack";
     send("mode", state.generationMode);
   } else if (z.id === "rate") {
-    sourceDropdownOpen = false;
     ksh_shared.cycleRate(state, shift ? -1 : 1);
     send("rate", state.rate);
   } else if (z.id === "source_cell") {
-    sourceDropdownOpen = false;
     if (button === 0) {
       endSourceCellInteraction();
     } else {
       beginSourceCellInteraction(z, x, y, shift);
     }
   } else if (z.id === "lane_select") {
-    sourceDropdownOpen = false;
     selectedLane = z.data.lane;
     editingLabel = true;
   } else if (z.id === "lane_note") {
-    sourceDropdownOpen = false;
     selectedLane = z.data.lane;
     state.lanes[selectedLane].note = ksh_shared.clamp(state.lanes[selectedLane].note + (shift ? -1 : 1), 0, 127);
     sendLane(selectedLane);
   } else if (z.id === "lane_lock") {
-    sourceDropdownOpen = false;
     selectedLane = z.data.lane;
     state.lanes[selectedLane].lock += 1;
     if (state.lanes[selectedLane].lock >= SOURCE_COUNT) {
@@ -646,17 +664,14 @@ function onclick(x, y, button, cmd, shift, capslock, option, ctrl) {
     }
     sendLane(selectedLane);
   } else if (z.id === "cell_enabled") {
-    sourceDropdownOpen = false;
     cell = state.sources[selectedSource][selectedLane][selectedStep];
     cell.enabled = cell.enabled ? 0 : 1;
     sendCell(selectedSource, selectedLane, selectedStep);
   } else if (z.id === "gate") {
-    sourceDropdownOpen = false;
     cell = state.sources[selectedSource][selectedLane][selectedStep];
     cell.gateMode = z.data.gate;
     sendCell(selectedSource, selectedLane, selectedStep);
   } else {
-    sourceDropdownOpen = false;
     handleStepper(z.id, shift ? -1 : 1);
   }
 
@@ -781,6 +796,7 @@ function anything() {
     playingStep = ksh_shared.clamp(arrayfromargs(arguments)[0], 0, MAX_STEPS);
     mgraphics.redraw();
   } else {
+    rememberUiContext.call(this);
     ksh_shared.applyStatusMessage(state, messagename, arrayfromargs(arguments));
     if (messagename === "channels") {
       selectedLane = ksh_shared.clamp(selectedLane, 0, state.laneCount - 1);
@@ -795,8 +811,16 @@ function anything() {
 var activeStateTask = null;
 if (typeof Task === "function") {
   activeStateTask = new Task(function () {
+    var visible = false;
+
     if (this.patcher && this.patcher.wind) {
-      send("editor_active", this.patcher.wind.visible ? 1 : 0);
+      visible = !!this.patcher.wind.visible;
+      send("editor_active", visible ? 1 : 0);
+      if (visible && !editorWasVisible) {
+        rememberUiContext.call(this);
+        applyEditorSize();
+      }
+      editorWasVisible = visible;
     }
   }, this);
   activeStateTask.interval = 500;

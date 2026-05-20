@@ -1,7 +1,7 @@
 // Shared UI helpers for ksh_compact_ui.js and ksh_ui.js (included via include()).
 var ksh_shared = {};
 
-ksh_shared.MAX_STEPS = 16;
+ksh_shared.MAX_STEPS = 32;
 ksh_shared.MAX_LANES = 8;
 ksh_shared.SOURCE_COUNT = 4;
 
@@ -30,6 +30,112 @@ ksh_shared.clamp = function (value, min, max) {
   return Math.max(min, Math.min(max, value));
 };
 
+ksh_shared.patcherWindowPlacement = function (targetPatcher, wind) {
+  var loc;
+  var rect;
+  var left = 120;
+  var top = 120;
+  var minTop = 50;
+  var usedWind = false;
+
+  if (wind) {
+    try {
+      loc = wind.location;
+      if (loc && loc.length >= 2 && loc[1] >= minTop) {
+        left = loc[0];
+        top = loc[1];
+        usedWind = true;
+      }
+    } catch (error) {}
+  }
+
+  if (!usedWind && typeof targetPatcher.getattr === "function") {
+    try {
+      rect = targetPatcher.getattr("defrect");
+      if (rect && rect.length >= 4 && rect[1] >= minTop) {
+        left = rect[0];
+        top = rect[1];
+      } else {
+        rect = targetPatcher.getattr("openrect");
+        if (rect && rect.length >= 4 && rect[1] >= minTop) {
+          left = rect[0];
+          top = rect[1];
+        }
+      }
+    } catch (error) {}
+  }
+
+  if (top < minTop) {
+    top = 120;
+  }
+  if (left < 0) {
+    left = 120;
+  }
+
+  return { left: left, top: top };
+};
+
+ksh_shared.resizePatcherWindow = function (targetPatcher, width, height) {
+  var wind;
+  var placement;
+  var left;
+  var top;
+
+  if (!targetPatcher) {
+    return;
+  }
+
+  wind = targetPatcher.wind;
+  placement = ksh_shared.patcherWindowPlacement(targetPatcher, wind);
+  left = placement.left;
+  top = placement.top;
+
+  try {
+    if (typeof targetPatcher.setattr === "function") {
+      targetPatcher.setattr("defrect", [left, top, width, height]);
+      targetPatcher.setattr("openrect", [left, top, width, height]);
+    }
+  } catch (error) {}
+
+  if (wind) {
+    try {
+      wind.setlocation(left, top, top + height, left + width);
+      wind.size = [width, height];
+    } catch (error) {}
+  }
+
+  try {
+    targetPatcher.message("window", "size", left, top, left + width, top + height);
+    targetPatcher.message("window", "exec");
+  } catch (error) {}
+};
+
+ksh_shared.applyViewSize = function (width, height, options) {
+  var targetPatcher;
+  var resizePatcher;
+
+  options = options || {};
+  targetPatcher = options.patcher || null;
+  resizePatcher = options.resizePatcher !== false;
+
+  if (typeof box !== "undefined" && box) {
+    try {
+      if (typeof box.size === "function") {
+        box.size(width, height);
+      }
+      if (box.presentation_rect !== undefined) {
+        box.presentation_rect = [0, 0, width, height];
+      } else {
+        box.message("presentation_rect", 0, 0, width, height);
+      }
+    } catch (error) {}
+  }
+
+  if (resizePatcher && targetPatcher) {
+    ksh_shared.resizePatcherWindow(targetPatcher, width, height);
+  }
+};
+
 ksh_shared.setSourceRGBA = function (color) {
   mgraphics.set_source_rgba(color[0], color[1], color[2], color[3]);
 };
@@ -45,6 +151,51 @@ ksh_shared.strokeRect = function (x, y, w, h, color, width) {
   mgraphics.set_line_width(width || 1);
   mgraphics.rectangle(x, y, w, h);
   mgraphics.stroke();
+};
+
+ksh_shared.fillPath = function (points, color) {
+  var i;
+
+  ksh_shared.setSourceRGBA(color);
+  mgraphics.new_path();
+  mgraphics.move_to(points[0][0], points[0][1]);
+  for (i = 1; i < points.length; i += 1) {
+    mgraphics.line_to(points[i][0], points[i][1]);
+  }
+  mgraphics.close_path();
+  mgraphics.fill();
+};
+
+// Gate-mode fill for enabled source cells: solid, horizontal split (random), or diagonal split (cycle).
+ksh_shared.sourceCellBackground = function (x, y, w, h, gateMode, baseColor, lightColor) {
+  var halfH;
+
+  if (gateMode === "random") {
+    halfH = Math.floor(h / 2);
+    ksh_shared.rect(x, y, w, halfH, baseColor);
+    ksh_shared.rect(x, y + halfH, w, h - halfH, lightColor);
+    return;
+  }
+  if (gateMode === "cycle") {
+    ksh_shared.fillPath(
+      [
+        [x, y],
+        [x + w, y],
+        [x, y + h]
+      ],
+      baseColor
+    );
+    ksh_shared.fillPath(
+      [
+        [x + w, y + h],
+        [x + w, y],
+        [x, y + h]
+      ],
+      lightColor
+    );
+    return;
+  }
+  ksh_shared.rect(x, y, w, h, baseColor);
 };
 
 ksh_shared.text = function (label, x, y, size, color, align) {

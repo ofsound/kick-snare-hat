@@ -6,7 +6,7 @@ of using unconstrained randomness.
 
 ## Implemented behavior
 
-- 1-16 sequencer steps.
+- 1-32 sequencer steps.
 - 1-8 monophonic drum lanes.
 - Four source patterns, each containing every active lane.
 - Per-lane label, MIDI note, and source lock.

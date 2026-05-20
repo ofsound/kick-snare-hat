@@ -30,7 +30,7 @@ function clearAll(engine) {
 
   for (source = 0; source < 4; source += 1) {
     for (channel = 0; channel < 8; channel += 1) {
-      for (step = 0; step < 16; step += 1) {
+      for (step = 0; step < 32; step += 1) {
         engine.setCell(source, channel, step, 0, 100, "always", 100);
       }
     }
