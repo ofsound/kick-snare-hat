@@ -22,6 +22,7 @@
 - **Strict scope:** Change only what the task requires.
 - **No side effects:** Do not refactor adjacent code, comments, or formatting.
 - **Style match:** Mirror existing patterns in `ksh_*.js` and `scripts/` (var, IIFE engine export, Max message handlers as top-level functions).
+- **Naming:** New engine/API/persistence fields use **channel**. UI display text may still say “Lane”; avoid widening the internal lane/channel split in new code.
 - **Orphan policy:** Remove symbols made unused by *your* edits. Leave pre-existing dead code alone.
 
 ### C. Goal-driven loop

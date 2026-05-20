@@ -619,7 +619,9 @@ function engine_state(json) {
     selectedStep = ksh_shared.clamp(selectedStep, 0, state.stepCount - 1);
     applyEditorSize();
     mgraphics.redraw();
-  } catch (error) {}
+  } catch (error) {
+    ksh_shared.constants.debugPost("editor engine_state JSON failed", error);
+  }
 }
 
 function onclick(x, y, button, cmd, shift, capslock, option, ctrl) {
@@ -741,26 +743,6 @@ function handleStepper(id) {
   }
 }
 
-function applyIncomingCell(args) {
-  var source;
-  var lane;
-  var stepIndex;
-  var cell;
-
-  source = ksh_shared.clamp(args[0] - 1, 0, SOURCE_COUNT - 1);
-  lane = ksh_shared.clamp(args[1] - 1, 0, MAX_LANES - 1);
-  stepIndex = ksh_shared.clamp(args[2] - 1, 0, MAX_STEPS - 1);
-  cell = state.sources[source][lane][stepIndex];
-  cell.enabled = parseInt(args[3], 10) !== 0 ? 1 : 0;
-  cell.velocity = ksh_shared.clamp(args[4], 1, 127);
-  cell.gateMode = String(args[5] || "always");
-  if (cell.gateMode === "cycle") {
-    cell.cycle = ksh_shared.clamp(args[6], 1, 64);
-  } else {
-    cell.random = ksh_shared.clamp(args[6], 0, 100);
-  }
-}
-
 function onkeydown(key, modifiers, keycode) {
   var label;
 
@@ -789,7 +771,9 @@ function preview(json) {
   try {
     previewData = JSON.parse(json);
     mgraphics.redraw();
-  } catch (error) {}
+  } catch (error) {
+    ksh_shared.constants.debugPost("editor preview JSON failed", error);
+  }
 }
 
 function anything() {
@@ -799,9 +783,6 @@ function anything() {
     engine_state.apply(this, arrayfromargs(arguments));
   } else if (messagename === "open" || messagename === "front" || messagename === "init") {
     sync_all();
-  } else if (messagename === "cell") {
-    applyIncomingCell(arrayfromargs(arguments));
-    mgraphics.redraw();
   } else if (messagename === "current_step") {
     playingStep = ksh_shared.clamp(arrayfromargs(arguments)[0], 0, MAX_STEPS);
     mgraphics.redraw();

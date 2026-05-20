@@ -8,6 +8,71 @@ outlets = 1;
 // we fall back to literal defaults that must stay in sync with
 // ksh_constants.js.
 var KSH_CONSTANTS = (function () {
+  function fallbackConstants() {
+    function fallbackClamp(value, min, max) {
+      value = parseInt(value, 10);
+      if (isNaN(value)) {
+        return min;
+      }
+      return Math.max(min, Math.min(max, value));
+    }
+    var constants = {
+      DEBUG: false,
+      MAX_STEPS: 32,
+      MAX_LANES: 8,
+      SOURCE_COUNT: 4,
+      RATES: ["4n", "4nt", "8n", "8nt", "16n", "16nt", "32n", "32nt"],
+      DEFAULT_RATE: "16n",
+      DEFAULT_CELL: {
+        enabled: 0,
+        velocity: 100,
+        gateMode: "always",
+        random: 100,
+        cycle: 1,
+        source: -1
+      },
+      debugPost: function () {}
+    };
+
+    constants.normalizeGateMode = function (gateMode) {
+      gateMode = String(gateMode || "always").toLowerCase();
+      if (gateMode === "random" || gateMode === "probability") {
+        return "random";
+      }
+      if (gateMode === "cycle" || gateMode === "every") {
+        return "cycle";
+      }
+      return "always";
+    };
+    constants.cloneCell = function (cell) {
+      cell = cell || constants.DEFAULT_CELL;
+      return {
+        enabled: cell.enabled ? 1 : 0,
+        velocity: fallbackClamp(cell.velocity, 1, 127),
+        gateMode: constants.normalizeGateMode(cell.gateMode),
+        random: fallbackClamp(cell.random, 0, 100),
+        cycle: fallbackClamp(cell.cycle, 1, 64),
+        source: typeof cell.source === "number" ? cell.source : -1
+      };
+    };
+    constants.defaultCell = function () {
+      return constants.cloneCell(constants.DEFAULT_CELL);
+    };
+    constants.normalizeRate = function (rate) {
+      var i;
+
+      rate = String(rate || constants.DEFAULT_RATE);
+      for (i = 0; i < constants.RATES.length; i += 1) {
+        if (constants.RATES[i] === rate) {
+          return rate;
+        }
+      }
+
+      return constants.DEFAULT_RATE;
+    };
+    return constants;
+  }
+
   if (typeof require === "function" && typeof module !== "undefined" && module.exports !== undefined) {
     try {
       return require("./ksh_constants");
@@ -25,7 +90,7 @@ var KSH_CONSTANTS = (function () {
       // fall through to defaults
     }
   }
-  return { MAX_STEPS: 32, MAX_LANES: 8, SOURCE_COUNT: 4 };
+  return fallbackConstants();
 }());
 
 var KSH_EngineClass = null;
@@ -56,19 +121,7 @@ var KSH_EngineClass = null;
   }
 
   function normalizeRate(rate) {
-    var allowed = {
-      "4n": 1,
-      "4nt": 1,
-      "8n": 1,
-      "8nt": 1,
-      "16n": 1,
-      "16nt": 1,
-      "32n": 1,
-      "32nt": 1
-    };
-
-    rate = String(rate || "16n");
-    return allowed[rate] ? rate : "16n";
+    return KSH_CONSTANTS.normalizeRate(rate);
   }
 
   function normalizeIncomingState(state) {
@@ -92,25 +145,11 @@ var KSH_EngineClass = null;
   }
 
   function cloneCell(cell) {
-    return {
-      enabled: cell.enabled ? 1 : 0,
-      velocity: clamp(cell.velocity, 1, 127),
-      gateMode: cell.gateMode || "always",
-      random: clamp(cell.random, 0, 100),
-      cycle: clamp(cell.cycle, 1, 64),
-      source: typeof cell.source === "number" ? cell.source : -1
-    };
+    return KSH_CONSTANTS.cloneCell(cell);
   }
 
   function defaultCell() {
-    return {
-      enabled: 0,
-      velocity: 100,
-      gateMode: "always",
-      random: 100,
-      cycle: 1,
-      source: -1
-    };
+    return KSH_CONSTANTS.defaultCell();
   }
 
   function makePattern() {
@@ -439,14 +478,7 @@ var KSH_EngineClass = null;
   };
 
   KickSnareHatEngine.prototype.normalizeGateMode = function (gateMode) {
-    gateMode = String(gateMode || "always").toLowerCase();
-    if (gateMode === "random" || gateMode === "probability") {
-      return "random";
-    }
-    if (gateMode === "cycle" || gateMode === "every") {
-      return "cycle";
-    }
-    return "always";
+    return KSH_CONSTANTS.normalizeGateMode(gateMode);
   };
 
   KickSnareHatEngine.prototype.resetPlayback = function (emitStatus) {
@@ -885,6 +917,21 @@ var KSH_EngineClass = null;
 var kshEngine = null;
 var kshPendingPreviewTask = null;
 
+function postPersistenceError(error) {
+  var message;
+
+  if (typeof post !== "function") {
+    return;
+  }
+
+  message = error && error.message ? error.message : String(error || "unknown error");
+  try {
+    post("[ksh] Could not restore saved state; keeping current pattern. " + message + "\n");
+  } catch (postError) {
+    // Avoid making persistence recovery depend on Max console output.
+  }
+}
+
 function cancelPendingNoteTasks() {
   safeMessnamed("ksh_scheduler_commands", "clear");
 }
@@ -899,6 +946,7 @@ function safeMessnamed() {
   try {
     messnamed.apply(this, arguments);
   } catch (error) {
+    KSH_CONSTANTS.debugPost("messnamed failed", error);
     // transient — see comment above
   }
 }
@@ -924,6 +972,7 @@ if (typeof module === "undefined" || !module.exports) {
     try {
       outlet.apply(this, [index].concat(args));
     } catch (error) {
+      KSH_CONSTANTS.debugPost("outlet failed", error);
       // Keep the Live audio thread clear of transient JS outlet errors while
       // Max recompiles or reloads the device.
     }
@@ -1108,6 +1157,10 @@ function getvalueof() {
 }
 
 function setvalueof(value) {
+  var engine;
+  var parsed;
+  var previous;
+
   if (typeof JSON === "undefined" || !value) {
     return;
   }
@@ -1116,7 +1169,22 @@ function setvalueof(value) {
     value = String(value);
   }
 
-  ensureEngine().deserialize(JSON.parse(value));
+  engine = ensureEngine();
+  previous = JSON.parse(JSON.stringify(engine.serialize()));
+
+  try {
+    parsed = JSON.parse(value);
+    engine.deserialize(parsed);
+  } catch (error) {
+    try {
+      engine.deserialize(previous);
+    } catch (restoreError) {
+      KSH_CONSTANTS.debugPost("setvalueof restore failed", restoreError);
+    }
+    postPersistenceError(error);
+    return;
+  }
+
   emitFullState();
 }
 
@@ -1125,8 +1193,8 @@ function state(json) {
     try {
       ensureEngine().deserialize(JSON.parse(json));
       emitFullState();
-    } catch (e) {
-      // safe catch
+    } catch (error) {
+      KSH_CONSTANTS.debugPost("state JSON failed", error);
     }
   }
 }

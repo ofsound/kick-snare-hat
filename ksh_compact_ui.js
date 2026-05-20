@@ -143,7 +143,9 @@ function engine_state(json) {
     ksh_shared.applyEngineState(state, engineState);
     applyCompactSize();
     mgraphics.redraw();
-  } catch (error) {}
+  } catch (error) {
+    ksh_shared.constants.debugPost("compact engine_state JSON failed", error);
+  }
 }
 
 function onclick(x, y, button, cmd, shift) {
@@ -193,7 +195,9 @@ function preview(json) {
   try {
     previewData = JSON.parse(json);
     mgraphics.redraw();
-  } catch (error) {}
+  } catch (error) {
+    ksh_shared.constants.debugPost("compact preview JSON failed", error);
+  }
 }
 
 function anything() {

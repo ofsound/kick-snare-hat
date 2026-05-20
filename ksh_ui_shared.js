@@ -5,6 +5,71 @@ var ksh_shared = {};
 // `ksh_constants` object; if anything goes wrong, fall back to literals that
 // must stay in sync with ksh_constants.js.
 (function () {
+  function fallbackConstants() {
+    function fallbackClamp(value, min, max) {
+      value = parseInt(value, 10);
+      if (isNaN(value)) {
+        return min;
+      }
+      return Math.max(min, Math.min(max, value));
+    }
+    var constants = {
+      DEBUG: false,
+      MAX_STEPS: 32,
+      MAX_LANES: 8,
+      SOURCE_COUNT: 4,
+      RATES: ["4n", "4nt", "8n", "8nt", "16n", "16nt", "32n", "32nt"],
+      DEFAULT_RATE: "16n",
+      DEFAULT_CELL: {
+        enabled: 0,
+        velocity: 100,
+        gateMode: "always",
+        random: 100,
+        cycle: 1,
+        source: -1
+      },
+      debugPost: function () {}
+    };
+
+    constants.normalizeGateMode = function (gateMode) {
+      gateMode = String(gateMode || "always").toLowerCase();
+      if (gateMode === "random" || gateMode === "probability") {
+        return "random";
+      }
+      if (gateMode === "cycle" || gateMode === "every") {
+        return "cycle";
+      }
+      return "always";
+    };
+    constants.cloneCell = function (cell) {
+      cell = cell || constants.DEFAULT_CELL;
+      return {
+        enabled: cell.enabled ? 1 : 0,
+        velocity: fallbackClamp(cell.velocity, 1, 127),
+        gateMode: constants.normalizeGateMode(cell.gateMode),
+        random: fallbackClamp(cell.random, 0, 100),
+        cycle: fallbackClamp(cell.cycle, 1, 64),
+        source: typeof cell.source === "number" ? cell.source : -1
+      };
+    };
+    constants.defaultCell = function () {
+      return constants.cloneCell(constants.DEFAULT_CELL);
+    };
+    constants.normalizeRate = function (rate) {
+      var i;
+
+      rate = String(rate || constants.DEFAULT_RATE);
+      for (i = 0; i < constants.RATES.length; i += 1) {
+        if (constants.RATES[i] === rate) {
+          return rate;
+        }
+      }
+
+      return constants.DEFAULT_RATE;
+    };
+    return constants;
+  }
+
   if (typeof include === "function") {
     try {
       include("ksh_constants.js");
@@ -14,13 +79,14 @@ var ksh_shared = {};
   }
   var constants = (typeof ksh_constants !== "undefined" && ksh_constants)
     ? ksh_constants
-    : { MAX_STEPS: 32, MAX_LANES: 8, SOURCE_COUNT: 4 };
+    : fallbackConstants();
+  ksh_shared.constants = constants;
   ksh_shared.MAX_STEPS = constants.MAX_STEPS;
   ksh_shared.MAX_LANES = constants.MAX_LANES;
   ksh_shared.SOURCE_COUNT = constants.SOURCE_COUNT;
 }());
 
-ksh_shared.rates = ["4n", "4nt", "8n", "8nt", "16n", "16nt", "32n", "32nt"];
+ksh_shared.rates = ksh_shared.constants.RATES;
 ksh_shared.defaultLabels = ["Kick", "Snare", "Hat", "Open Hat", "Tom 1", "Tom 2", "Clap", "Ride"];
 ksh_shared.defaultNotes = [36, 37, 38, 39, 40, 41, 42, 43];
 
@@ -61,7 +127,9 @@ ksh_shared.patcherWindowPlacement = function (targetPatcher, wind) {
         top = loc[1];
         usedWind = true;
       }
-    } catch (error) {}
+    } catch (error) {
+      ksh_shared.constants.debugPost("patcher window location failed", error);
+    }
   }
 
   if (!usedWind && typeof targetPatcher.getattr === "function") {
@@ -77,7 +145,9 @@ ksh_shared.patcherWindowPlacement = function (targetPatcher, wind) {
           top = rect[1];
         }
       }
-    } catch (error) {}
+    } catch (error) {
+      ksh_shared.constants.debugPost("patcher window rect failed", error);
+    }
   }
 
   if (top < minTop) {
@@ -110,7 +180,9 @@ ksh_shared.resizePatcherWindow = function (targetPatcher, width, height) {
       targetPatcher.setattr("defrect", [left, top, width, height]);
       targetPatcher.setattr("openrect", [left, top, width, height]);
     }
-  } catch (error) {}
+  } catch (error) {
+    ksh_shared.constants.debugPost("patcher resize attrs failed", error);
+  }
 
   if (wind) {
     try {
@@ -119,13 +191,17 @@ ksh_shared.resizePatcherWindow = function (targetPatcher, width, height) {
       // off-shape window on non-square editor sizes.
       wind.setlocation(left, top, left + width, top + height);
       wind.size = [width, height];
-    } catch (error) {}
+    } catch (error) {
+      ksh_shared.constants.debugPost("patcher window resize failed", error);
+    }
   }
 
   try {
     targetPatcher.message("window", "size", left, top, left + width, top + height);
     targetPatcher.message("window", "exec");
-  } catch (error) {}
+  } catch (error) {
+    ksh_shared.constants.debugPost("patcher resize message failed", error);
+  }
 };
 
 ksh_shared.applyViewSize = function (width, height, options) {
@@ -146,7 +222,9 @@ ksh_shared.applyViewSize = function (width, height, options) {
       } else {
         box.message("presentation_rect", 0, 0, width, height);
       }
-    } catch (error) {}
+    } catch (error) {
+      ksh_shared.constants.debugPost("box resize failed", error);
+    }
   }
 
   if (resizePatcher && targetPatcher) {
@@ -292,25 +370,11 @@ ksh_shared.cycleRate = function (state, direction) {
 };
 
 ksh_shared.defaultCell = function () {
-  return {
-    enabled: 0,
-    velocity: 100,
-    gateMode: "always",
-    random: 100,
-    cycle: 1
-  };
+  return ksh_shared.constants.defaultCell();
 };
 
 ksh_shared.cloneCell = function (cell) {
-  var clamp = ksh_shared.clamp;
-
-  return {
-    enabled: cell && cell.enabled ? 1 : 0,
-    velocity: clamp(cell && cell.velocity, 1, 127),
-    gateMode: cell && cell.gateMode ? cell.gateMode : "always",
-    random: clamp(cell && cell.random, 0, 100),
-    cycle: clamp(cell && cell.cycle, 1, 64)
-  };
+  return ksh_shared.constants.cloneCell(cell);
 };
 
 ksh_shared.applyEngineState = function (state, engineState) {
@@ -327,7 +391,7 @@ ksh_shared.applyEngineState = function (state, engineState) {
   state.laneCount = ksh_shared.clamp(engineState.channelCount, 1, ksh_shared.MAX_LANES);
   state.refreshSteps = ksh_shared.clamp(engineState.refreshSteps, 1, state.stepCount);
   state.generationMode = engineState.generationMode === "per_channel" ? "per_channel" : "stack";
-  state.rate = engineState.rate || "16n";
+  state.rate = ksh_shared.constants.normalizeRate(engineState.rate);
   state.swing = ksh_shared.clamp(engineState.swing, 0, 100);
 
   if (engineState.midiChannel !== undefined) {
@@ -372,7 +436,7 @@ ksh_shared.applyStatusMessage = function (state, name, args) {
   } else if (name === "mode") {
     state.generationMode = String(args[0]) === "per_channel" ? "per_channel" : "stack";
   } else if (name === "rate") {
-    state.rate = String(args[0] || "16n");
+    state.rate = ksh_shared.constants.normalizeRate(args[0]);
   } else if (name === "swing") {
     state.swing = ksh_shared.clamp(args[0], 0, 100);
   } else if (name === "midi_channel") {

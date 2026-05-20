@@ -13,6 +13,7 @@ function makeMaxSandbox() {
   var notes = [];
   var named = [];
   var scheduled = [];
+  var posts = [];
 
   function TaskStub(fn, ctx) {
     var self = this;
@@ -58,6 +59,9 @@ function makeMaxSandbox() {
       var args = Array.prototype.slice.call(arguments, 1);
       named.push({ bus: busName, args: args });
     },
+    post: function () {
+      posts.push(Array.prototype.slice.call(arguments).join(""));
+    },
     Task: TaskStub,
     JSON: JSON,
     Math: Math,
@@ -87,8 +91,10 @@ function makeMaxSandbox() {
     notes.length = 0;
     named.length = 0;
     scheduled.length = 0;
+    posts.length = 0;
   };
   sandbox._scheduledCount = function () { return scheduled.length; };
+  sandbox._posts = function () { return posts.slice(); };
 
   vm.createContext(sandbox);
   var src = fs.readFileSync(path.join(__dirname, "ksh_engine.js"), "utf8");
@@ -303,6 +309,42 @@ function testGetValueOfSetValueOfRoundtripsEngineState() {
   assert.ok(engineStateEvents.length >= 1, "setvalueof should emit engine_state");
 }
 
+function testSetValueOfRejectsMalformedJsonWithoutChangingState() {
+  var sb = makeMaxSandbox();
+  var before;
+  var posts;
+
+  sb._clear();
+  sb.steps(8);
+  sb.channels(2);
+  before = sb.getvalueof();
+  sb._clear();
+
+  assert.doesNotThrow(function () {
+    sb.setvalueof("{");
+  }, "malformed setvalueof JSON should not throw");
+
+  assert.strictEqual(sb.getvalueof(), before,
+    "malformed setvalueof input should keep the current engine state");
+  assert.strictEqual(eventsOn(sb, "engine_state").length, 0,
+    "failed setvalueof should not emit engine_state");
+  posts = sb._posts().join("");
+  assert.ok(posts.indexOf("Could not restore saved state") >= 0,
+    "failed setvalueof should post an actionable persistence message");
+}
+
+function testSetValueOfAppliesValidPartialState() {
+  var sb = makeMaxSandbox();
+
+  sb._clear();
+  sb.setvalueof("{\"stepCount\":6,\"channelCount\":2}");
+
+  assert.strictEqual(sb.kshEngine.stepCount, 6);
+  assert.strictEqual(sb.kshEngine.channelCount, 2);
+  assert.ok(eventsOn(sb, "engine_state").length >= 1,
+    "valid partial setvalueof state should emit engine_state");
+}
+
 function testEditorActiveEnablesCurrentStepEmission() {
   var sb = makeMaxSandbox();
   sb._clear();
@@ -357,6 +399,8 @@ testCellMessageWritesToEngineSourceAndCoalescesPreview();
 testTransportPositionEmitsNativeSchedulerEvent();
 testResetClearsNativeScheduler();
 testGetValueOfSetValueOfRoundtripsEngineState();
+testSetValueOfRejectsMalformedJsonWithoutChangingState();
+testSetValueOfAppliesValidPartialState();
 testEditorActiveEnablesCurrentStepEmission();
 testMessnamedFailuresAreSwallowed();
 

@@ -40,6 +40,7 @@ of using unconstrained randomness.
 - `ksh_engine.max.test.js`: Node VM tests for Max wrapper message plumbing.
 - `scripts/build-device-patch.js`: regenerates the `.maxpat` and `.amxd` shell.
 - `scripts/validate-device-patch.js`: checks patch wiring and `.amxd` embedding.
+- `docs/ui-sync.md`: documents the UI ↔ engine event contract.
 
 ## Max `js` messages
 
@@ -79,12 +80,13 @@ snapshot
 
 ## Adding a parameter
 
-1. Add engine state, setter logic, serialization, deserialization, and focused coverage in `ksh_engine.test.js`.
-2. Add the Max `js` message handler in `ksh_engine.js`, keeping Max-facing indexes 1-based when the parameter addresses channels, sources, or steps.
-3. Make the setter emit a status selector if the UIs need an incremental update.
-4. Add UI controls or state handling in `ksh_compact_ui.js`, `ksh_ui.js`, or `ksh_ui_shared.js` only when the parameter is user-facing.
-5. Update this README message list and any wrapper coverage in `ksh_engine.max.test.js`.
-6. Run the post-edit gate, including `node scripts/sync-user-library.js`; rebuild first when patch wiring or `scripts/build-device-patch.js` changes.
+1. Add shared defaults or normalization to `ksh_constants.js` first when the parameter affects cells, rates, limits, or UI/engine validation.
+2. Add engine state, setter logic, serialization, deserialization, and focused coverage in `ksh_engine.test.js`.
+3. Add the Max `js` message handler in `ksh_engine.js`, keeping Max-facing indexes 1-based when the parameter addresses channels, sources, or steps.
+4. Make the setter emit a status selector if the UIs need an incremental update; see `docs/ui-sync.md` for the event contract.
+5. Add UI controls or state handling in `ksh_compact_ui.js`, `ksh_ui.js`, or `ksh_ui_shared.js` only when the parameter is user-facing.
+6. Update this README message list and any wrapper coverage in `ksh_engine.max.test.js`.
+7. Run the post-edit gate, including `node scripts/sync-user-library.js`; rebuild first when patch wiring or `scripts/build-device-patch.js` changes.
 
 ## Development verification
 

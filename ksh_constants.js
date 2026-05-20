@@ -1,16 +1,84 @@
-// Single source of truth for the device's hard limits.
+// Single source of truth for device limits, schema defaults, and small shared
+// normalization helpers.
 //
 // Loaded as a module in Node (`require("./ksh_constants")`) and via Max's
 // include() in the engine (`js`) and UI (`jsui`) scripts. Both load paths
 // expose the constants as the global `ksh_constants` object; the Node load
 // additionally sets module.exports so tests can pull values directly.
 //
-// If you change any of these values, update them HERE only.
+function kshClamp(value, min, max) {
+  value = parseInt(value, 10);
+  if (isNaN(value)) {
+    return min;
+  }
+  return Math.max(min, Math.min(max, value));
+}
 
 var ksh_constants = {
+  DEBUG: false,
   MAX_STEPS: 32,
   MAX_LANES: 8,
-  SOURCE_COUNT: 4
+  SOURCE_COUNT: 4,
+  RATES: ["4n", "4nt", "8n", "8nt", "16n", "16nt", "32n", "32nt"],
+  DEFAULT_RATE: "16n",
+  DEFAULT_CELL: {
+    enabled: 0,
+    velocity: 100,
+    gateMode: "always",
+    random: 100,
+    cycle: 1,
+    source: -1
+  },
+  defaultCell: function () {
+    return this.cloneCell(this.DEFAULT_CELL);
+  },
+  cloneCell: function (cell) {
+    cell = cell || this.DEFAULT_CELL;
+    return {
+      enabled: cell.enabled ? 1 : 0,
+      velocity: kshClamp(cell.velocity, 1, 127),
+      gateMode: this.normalizeGateMode(cell.gateMode),
+      random: kshClamp(cell.random, 0, 100),
+      cycle: kshClamp(cell.cycle, 1, 64),
+      source: typeof cell.source === "number" ? cell.source : -1
+    };
+  },
+  normalizeRate: function (rate) {
+    var i;
+
+    rate = String(rate || this.DEFAULT_RATE);
+    for (i = 0; i < this.RATES.length; i += 1) {
+      if (this.RATES[i] === rate) {
+        return rate;
+      }
+    }
+
+    return this.DEFAULT_RATE;
+  },
+  normalizeGateMode: function (gateMode) {
+    gateMode = String(gateMode || "always").toLowerCase();
+    if (gateMode === "random" || gateMode === "probability") {
+      return "random";
+    }
+    if (gateMode === "cycle" || gateMode === "every") {
+      return "cycle";
+    }
+    return "always";
+  },
+  debugPost: function (context, error) {
+    var message;
+
+    if (!this.DEBUG || typeof post !== "function") {
+      return;
+    }
+
+    message = error && error.message ? error.message : String(error || "unknown error");
+    try {
+      post("[ksh] " + context + ": " + message + "\n");
+    } catch (postError) {
+      // Keep debug logging from becoming a new failure path.
+    }
+  }
 };
 
 if (typeof module !== "undefined" && module.exports) {
