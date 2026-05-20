@@ -495,6 +495,28 @@ function testGenerateWindowScansActiveSourcesOnce() {
   assert.strictEqual(calls, 1);
 }
 
+function testChannelAuditionEmitsConfiguredNote() {
+  var engine = makeEngine([]);
+  var note;
+
+  clearAll(engine);
+  engine.setChannelCount(3);
+  engine.setChannelNote(1, 42);
+  engine.setMidiChannel(5);
+  engine.setNoteDurationMs(200);
+  engine._notes.length = 0;
+
+  note = engine.auditionChannel(1);
+
+  assert.strictEqual(engine._notes.length, 1);
+  assert.strictEqual(engine._notes[0], note);
+  assert.strictEqual(note.pitch, 42);
+  assert.strictEqual(note.velocity, 100);
+  assert.strictEqual(note.channel, 5);
+  assert.strictEqual(note.durationMs, 200);
+  assert.strictEqual(note.delayMs, 0);
+}
+
 function testDeserializeDoesNotEmitIntermediateStatuses() {
   var statuses = [];
   var engine = new KickSnareHatEngine({
@@ -564,6 +586,7 @@ testCellEditOnlyMutatesGeneratedWhenSourceMatches();
 testChannelLockRoutesSourceEditsToGenerated();
 testSerializeDeserializeRestoresSourceData();
 testGenerateWindowScansActiveSourcesOnce();
+testChannelAuditionEmitsConfiguredNote();
 testDeserializeDoesNotEmitIntermediateStatuses();
 
 console.log("ksh_engine tests passed");

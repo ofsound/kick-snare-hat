@@ -14,6 +14,9 @@ persist independent state.
   `swing`, `midi_channel`, `duration_ms`, `phase_offset_beats`,
   `channel_label`, `channel_note`, and `channel_lock` are incremental UI hints
   emitted by setters.
+- `channel_audition <channel>` triggers a one-shot MIDI note for that channel's
+  configured pitch (editor lane row/label click). Uses device `midi_channel` and
+  `duration_ms`; does not change engine state.
 - `current_step` is editor-only playback position feedback and is suppressed
   while the editor is inactive.
 
@@ -21,6 +24,7 @@ persist independent state.
 
 - `sync_all` asks the engine to emit both `engine_state` and `preview`.
 - `request_state` asks for `engine_state` only.
+- `channel_audition` (1-based channel index) previews that channel's MIDI note once.
 - Compact and editor UIs call `sync_all` during init/load/open paths so a newly
   visible UI catches up to the persisted engine state.
 

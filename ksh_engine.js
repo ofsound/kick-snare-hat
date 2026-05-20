@@ -302,6 +302,21 @@ var KSH_EngineClass = null;
     );
   };
 
+  KickSnareHatEngine.prototype.auditionChannel = function (channel) {
+    var note;
+
+    channel = clamp(channel, 0, this.channelCount - 1);
+    note = {
+      pitch: this.channels[channel].note,
+      velocity: KSH_CONSTANTS.DEFAULT_CELL.velocity,
+      channel: this.midiChannel,
+      durationMs: this.noteDurationMs,
+      delayMs: 0
+    };
+    this.emitNote(note);
+    return note;
+  };
+
   // Returns the generated cell at (channel, step) if that cell is currently
   // sourced from `source` (or the channel is locked to `source`). Otherwise
   // returns null, meaning a source edit at (source, channel, step) has no
@@ -1044,6 +1059,10 @@ function channel_label() {
 
 function channel_note(channel, note) {
   ensureEngine().setChannelNote(zeroBased(channel), note);
+}
+
+function channel_audition(channel) {
+  ensureEngine().auditionChannel(zeroBased(channel));
 }
 
 function channel_lock(channel, lock) {

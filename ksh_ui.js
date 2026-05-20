@@ -282,7 +282,7 @@ function drawLaneControls() {
     var labelW = Math.max(24, noteX - labelX - 4);
 
     y = listTop + lane * rowPitch;
-    ksh_shared.rect(layout.lanePanelX + 12, y, layout.lanePanelW - 24, 23, lane === selectedLane ? [0.27, 0.29, 0.33, 1] : colors.panel2);
+    ksh_shared.rect(layout.lanePanelX + 12, y, layout.lanePanelW - 24, 23, colors.panel2);
     ksh_shared.strokeRect(layout.lanePanelX + 12, y, layout.lanePanelW - 24, 23, colors.strokeSoft, 1);
     ksh_shared.text(
       state.lanes[lane].label,
@@ -406,7 +406,7 @@ function drawFooter() {
   var layout = uiLayout();
 
   ksh_shared.rect(0, layout.footerY, WIDTH, 28, colors.panel2);
-  ksh_shared.text("Select lanes, notes, locks, and source cells to edit the pattern.", 18, layout.footerY + 16, 10, colors.muted);
+  ksh_shared.text("Click a lane row or label to preview its note; edit note, lock, and cells elsewhere.", 18, layout.footerY + 16, 10, colors.muted);
 }
 
 function send() {
@@ -664,12 +664,8 @@ function onclick(x, y, button, cmd, shift, capslock, option, ctrl) {
     } else {
       beginSourceCellInteraction(z, x, y, shift);
     }
-  } else if (z.id === "lane_select") {
-    var lane = z.data.lane;
-    selectedLane = lane;
-  } else if (z.id === "lane_label") {
-    lane = z.data.lane;
-    selectedLane = lane;
+  } else if (z.id === "lane_select" || z.id === "lane_label") {
+    send("channel_audition", z.data.lane + 1);
   } else if (z.id === "lane_note") {
     selectedLane = z.data.lane;
     state.lanes[selectedLane].note = ksh_shared.clamp(state.lanes[selectedLane].note + (shift ? -1 : 1), 0, 127);

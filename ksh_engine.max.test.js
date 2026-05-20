@@ -218,6 +218,20 @@ function testCellMessageWritesToEngineSourceAndCoalescesPreview() {
   assert.strictEqual(sb.kshEngine.sources[1][0][4].velocity, 110);
 }
 
+function testChannelAuditionEmitsNoteToOutlet() {
+  var sb = makeMaxSandbox();
+
+  sb._clear();
+  sb.channels(2);
+  sb.channel_note(2, 50);
+  sb.midi_channel(7);
+  sb.duration_ms(250);
+  sb.channel_audition(2);
+
+  assert.strictEqual(sb._notes().length, 1);
+  assert.deepStrictEqual(sb._notes()[0].args, [50, 100, 250, 7, 0]);
+}
+
 function testTransportPositionEmitsNativeSchedulerEvent() {
   var sb = makeMaxSandbox();
   sb._clear();
@@ -400,6 +414,7 @@ testStatusMessagesEmitUiSelectors();
 testSyncAllEmitsStateAndPreview();
 testRecomposeCommandsFlushPreviewForCompactUi();
 testCellMessageWritesToEngineSourceAndCoalescesPreview();
+testChannelAuditionEmitsNoteToOutlet();
 testTransportPositionEmitsNativeSchedulerEvent();
 testResetClearsNativeScheduler();
 testGetValueOfSetValueOfRoundtripsEngineState();
