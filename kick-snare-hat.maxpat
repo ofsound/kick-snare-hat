@@ -151,6 +151,51 @@
               },
               {
                 "box": {
+                  "id": "lane-textedit",
+                  "maxclass": "textedit",
+                  "varname": "lane_label_edit",
+                  "numinlets": 1,
+                  "numoutlets": 4,
+                  "outlettype": [
+                    "",
+                    "",
+                    "",
+                    ""
+                  ],
+                  "patching_rect": [
+                    40,
+                    600,
+                    120,
+                    22
+                  ],
+                  "presentation": 1,
+                  "presentation_rect": [
+                    30,
+                    106,
+                    70,
+                    19
+                  ],
+                  "layer": 1,
+                  "hidden": 1,
+                  "keymode": 1,
+                  "fontsize": 10,
+                  "fontname": "Ableton Sans Medium",
+                  "bgcolor": [
+                    0.1,
+                    0.11,
+                    0.13,
+                    1
+                  ],
+                  "textcolor": [
+                    0.96,
+                    0.62,
+                    0.22,
+                    1
+                  ]
+                }
+              },
+              {
+                "box": {
                   "id": "editor-out",
                   "maxclass": "outlet",
                   "numinlets": 1,
@@ -216,6 +261,155 @@
                   ],
                   "text": "t a"
                 }
+              },
+              {
+                "box": {
+                  "id": "editor-label-route",
+                  "maxclass": "newobj",
+                  "numinlets": 1,
+                  "numoutlets": 4,
+                  "patching_rect": [
+                    40,
+                    540,
+                    280,
+                    22
+                  ],
+                  "outlettype": [
+                    "",
+                    "",
+                    "",
+                    ""
+                  ],
+                  "text": "route label_edit_show label_edit_set label_edit_hide"
+                }
+              },
+              {
+                "box": {
+                  "id": "editor-show-trigger",
+                  "maxclass": "newobj",
+                  "numinlets": 1,
+                  "numoutlets": 3,
+                  "patching_rect": [
+                    40,
+                    570,
+                    100,
+                    22
+                  ],
+                  "outlettype": [
+                    "bang",
+                    "bang",
+                    ""
+                  ],
+                  "text": "t b b l"
+                }
+              },
+              {
+                "box": {
+                  "id": "editor-pos-prep",
+                  "maxclass": "newobj",
+                  "numinlets": 1,
+                  "numoutlets": 1,
+                  "patching_rect": [
+                    40,
+                    600,
+                    180,
+                    22
+                  ],
+                  "outlettype": [
+                    ""
+                  ],
+                  "text": "prepend presentation_rect"
+                }
+              },
+              {
+                "box": {
+                  "id": "editor-unhide-msg",
+                  "maxclass": "message",
+                  "numinlets": 2,
+                  "numoutlets": 1,
+                  "patching_rect": [
+                    180,
+                    600,
+                    60,
+                    22
+                  ],
+                  "outlettype": [
+                    ""
+                  ],
+                  "text": "hidden 0"
+                }
+              },
+              {
+                "box": {
+                  "id": "editor-select-msg",
+                  "maxclass": "message",
+                  "numinlets": 2,
+                  "numoutlets": 1,
+                  "patching_rect": [
+                    260,
+                    600,
+                    60,
+                    22
+                  ],
+                  "outlettype": [
+                    ""
+                  ],
+                  "text": "select"
+                }
+              },
+              {
+                "box": {
+                  "id": "editor-hide-msg",
+                  "maxclass": "message",
+                  "numinlets": 2,
+                  "numoutlets": 1,
+                  "patching_rect": [
+                    340,
+                    600,
+                    60,
+                    22
+                  ],
+                  "outlettype": [
+                    ""
+                  ],
+                  "text": "hidden 1"
+                }
+              },
+              {
+                "box": {
+                  "id": "editor-set-prep",
+                  "maxclass": "newobj",
+                  "numinlets": 1,
+                  "numoutlets": 1,
+                  "patching_rect": [
+                    420,
+                    600,
+                    80,
+                    22
+                  ],
+                  "outlettype": [
+                    ""
+                  ],
+                  "text": "prepend set"
+                }
+              },
+              {
+                "box": {
+                  "id": "editor-done-prep",
+                  "maxclass": "newobj",
+                  "numinlets": 1,
+                  "numoutlets": 1,
+                  "patching_rect": [
+                    180,
+                    660,
+                    160,
+                    22
+                  ],
+                  "outlettype": [
+                    ""
+                  ],
+                  "text": "prepend label_edit_done"
+                }
               }
             ],
             "lines": [
@@ -238,7 +432,175 @@
                     0
                   ],
                   "destination": [
+                    "editor-label-route",
+                    0
+                  ]
+                }
+              },
+              {
+                "patchline": {
+                  "source": [
+                    "editor-label-route",
+                    0
+                  ],
+                  "destination": [
+                    "editor-show-trigger",
+                    0
+                  ]
+                }
+              },
+              {
+                "patchline": {
+                  "source": [
+                    "editor-label-route",
+                    1
+                  ],
+                  "destination": [
+                    "editor-set-prep",
+                    0
+                  ]
+                }
+              },
+              {
+                "patchline": {
+                  "source": [
+                    "editor-label-route",
+                    2
+                  ],
+                  "destination": [
+                    "editor-hide-msg",
+                    0
+                  ]
+                }
+              },
+              {
+                "patchline": {
+                  "source": [
+                    "editor-label-route",
+                    3
+                  ],
+                  "destination": [
                     "editor-pass",
+                    0
+                  ]
+                }
+              },
+              {
+                "patchline": {
+                  "source": [
+                    "editor-show-trigger",
+                    0
+                  ],
+                  "destination": [
+                    "editor-select-msg",
+                    0
+                  ]
+                }
+              },
+              {
+                "patchline": {
+                  "source": [
+                    "editor-show-trigger",
+                    1
+                  ],
+                  "destination": [
+                    "editor-unhide-msg",
+                    0
+                  ]
+                }
+              },
+              {
+                "patchline": {
+                  "source": [
+                    "editor-show-trigger",
+                    2
+                  ],
+                  "destination": [
+                    "editor-pos-prep",
+                    0
+                  ]
+                }
+              },
+              {
+                "patchline": {
+                  "source": [
+                    "editor-pos-prep",
+                    0
+                  ],
+                  "destination": [
+                    "lane-textedit",
+                    0
+                  ]
+                }
+              },
+              {
+                "patchline": {
+                  "source": [
+                    "editor-unhide-msg",
+                    0
+                  ],
+                  "destination": [
+                    "lane-textedit",
+                    0
+                  ]
+                }
+              },
+              {
+                "patchline": {
+                  "source": [
+                    "editor-select-msg",
+                    0
+                  ],
+                  "destination": [
+                    "lane-textedit",
+                    0
+                  ]
+                }
+              },
+              {
+                "patchline": {
+                  "source": [
+                    "editor-hide-msg",
+                    0
+                  ],
+                  "destination": [
+                    "lane-textedit",
+                    0
+                  ]
+                }
+              },
+              {
+                "patchline": {
+                  "source": [
+                    "editor-set-prep",
+                    0
+                  ],
+                  "destination": [
+                    "lane-textedit",
+                    0
+                  ]
+                }
+              },
+              {
+                "patchline": {
+                  "source": [
+                    "lane-textedit",
+                    0
+                  ],
+                  "destination": [
+                    "editor-done-prep",
+                    0
+                  ]
+                }
+              },
+              {
+                "patchline": {
+                  "source": [
+                    "editor-done-prep",
+                    0
+                  ],
+                  "destination": [
+                    "editor-ui",
                     0
                   ]
                 }

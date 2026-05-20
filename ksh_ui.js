@@ -158,6 +158,7 @@ var selectedSource = 0;
 var selectedLane = 0;
 var selectedStep = 0;
 var hitZones = [];
+var editingLane = -1;
 var velocityDrag = null;
 var VELOCITY_DRAG_THRESHOLD = 4;
 var SOURCE_PAINT_DRAG_THRESHOLD = 4;
@@ -409,10 +410,20 @@ function drawFooter() {
   ksh_shared.text("Click a lane row or label to preview its note; edit note, lock, and cells elsewhere.", 18, layout.footerY + 16, 10, colors.muted);
 }
 
+// Messages handled inside the editor subpatcher (lane rename overlay).
+// They must reach the patch wiring via `outlet` but must NOT be re-broadcast
+// to ksh_engine_commands.
+var LOCAL_OUTLET_MESSAGES = {
+  open_editor: 1,
+  label_edit_show: 1,
+  label_edit_set: 1,
+  label_edit_hide: 1
+};
+
 function send() {
   var args = arrayfromargs(arguments);
   outlet.apply(this, [0].concat(args));
-  if (args[0] !== "open_editor" && typeof messnamed === "function") {
+  if (!LOCAL_OUTLET_MESSAGES[args[0]] && typeof messnamed === "function") {
     messnamed.apply(this, ["ksh_engine_commands"].concat(args));
   }
 }
@@ -436,6 +447,9 @@ function sendCell(source, lane, step) {
 function sync_all() {
   rememberUiContext.call(this);
   applyEditorSize();
+  // Make sure no stale rename overlay is left visible after a re-open.
+  editingLane = -1;
+  send("label_edit_hide");
   send("sync_all");
   mgraphics.redraw();
 }
@@ -703,6 +717,53 @@ function ondrag(x, y, button) {
   }
 
   applySourceCellDrag(x, y);
+}
+
+// Double-click a lane label to open the inline rename overlay (a real Max
+// textedit driven by the editor subpatcher).
+function ondblclick(x, y, button, cmd, shift, capslock, option, ctrl) {
+  var z = ksh_shared.findZone(hitZones, x, y);
+
+  rememberUiContext.call(this);
+
+  if (!z || z.id !== "lane_label") {
+    return;
+  }
+
+  editingLane = z.data.lane;
+  selectedLane = editingLane;
+  send("label_edit_set", state.lanes[editingLane].label);
+  send(
+    "label_edit_show",
+    Math.round(z.x),
+    Math.round(z.y),
+    Math.round(z.w),
+    Math.round(z.h)
+  );
+  mgraphics.redraw();
+}
+
+// Receives the committed text from the textedit overlay (Enter pressed).
+function label_edit_done() {
+  var args = arrayfromargs(arguments);
+  var lane = editingLane;
+  var text;
+
+  editingLane = -1;
+  send("label_edit_hide");
+
+  if (lane < 0) {
+    return;
+  }
+
+  text = args.join(" ").replace(/^\s+|\s+$/g, "");
+  if (!text) {
+    text = ksh_shared.defaultLabels[lane] || String(lane + 1);
+  }
+
+  state.lanes[lane].label = text;
+  send("channel_label", lane + 1, text);
+  mgraphics.redraw();
 }
 
 function handleStepper(id) {

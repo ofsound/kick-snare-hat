@@ -79,6 +79,30 @@ function editorSubpatcher() {
           layer: 0
         }
       },
+      // Inline lane-label rename overlay: a real Max textedit sitting on a
+      // higher layer than the jsui so it always paints above the lanes panel
+      // when shown. ksh_ui.js positions and shows/hides it via the
+      // label_edit_* messages routed below.
+      {
+        box: {
+          id: "lane-textedit",
+          maxclass: "textedit",
+          varname: "lane_label_edit",
+          numinlets: 1,
+          numoutlets: 4,
+          outlettype: ["", "", "", ""],
+          patching_rect: [40.0, 600.0, 120.0, 22.0],
+          presentation: 1,
+          presentation_rect: [30.0, 106.0, 70.0, 19.0],
+          layer: 1,
+          hidden: 1,
+          keymode: 1,
+          fontsize: 10.0,
+          fontname: "Ableton Sans Medium",
+          bgcolor: [0.10, 0.11, 0.13, 1.0],
+          textcolor: [0.96, 0.62, 0.22, 1.0]
+        }
+      },
       box("editor-out", "outlet", "", [420.0, 470.0, 30.0, 22.0], {
         numinlets: 1,
         numoutlets: 0
@@ -97,11 +121,88 @@ function editorSubpatcher() {
         numinlets: 1,
         numoutlets: 1,
         outlettype: [""]
-      })
+      }),
+      // Intercept the lane-rename overlay messages emitted by the jsui so
+      // they never reach the parent patcher (they stay inside the editor
+      // subpatcher); the unmatched 4th outlet preserves the existing
+      // outbound message flow (open_editor, etc.).
+      box(
+        "editor-label-route",
+        "newobj",
+        "route label_edit_show label_edit_set label_edit_hide",
+        [40.0, 540.0, 280.0, 22.0],
+        {
+          numinlets: 1,
+          numoutlets: 4,
+          outlettype: ["", "", "", ""]
+        }
+      ),
+      // Right-to-left firing: position first, then unhide, then grab focus.
+      box("editor-show-trigger", "newobj", "t b b l", [40.0, 570.0, 100.0, 22.0], {
+        numinlets: 1,
+        numoutlets: 3,
+        outlettype: ["bang", "bang", ""]
+      }),
+      box(
+        "editor-pos-prep",
+        "newobj",
+        "prepend presentation_rect",
+        [40.0, 600.0, 180.0, 22.0],
+        {
+          numinlets: 1,
+          numoutlets: 1,
+          outlettype: [""]
+        }
+      ),
+      box("editor-unhide-msg", "message", "hidden 0", [180.0, 600.0, 60.0, 22.0], {
+        numinlets: 2,
+        numoutlets: 1,
+        outlettype: [""]
+      }),
+      box("editor-select-msg", "message", "select", [260.0, 600.0, 60.0, 22.0], {
+        numinlets: 2,
+        numoutlets: 1,
+        outlettype: [""]
+      }),
+      box("editor-hide-msg", "message", "hidden 1", [340.0, 600.0, 60.0, 22.0], {
+        numinlets: 2,
+        numoutlets: 1,
+        outlettype: [""]
+      }),
+      box("editor-set-prep", "newobj", "prepend set", [420.0, 600.0, 80.0, 22.0], {
+        numinlets: 1,
+        numoutlets: 1,
+        outlettype: [""]
+      }),
+      box(
+        "editor-done-prep",
+        "newobj",
+        "prepend label_edit_done",
+        [180.0, 660.0, 160.0, 22.0],
+        {
+          numinlets: 1,
+          numoutlets: 1,
+          outlettype: [""]
+        }
+      )
     ],
     lines: [
       line("editor-in", 0, "editor-ui", 0),
-      line("editor-ui", 0, "editor-pass", 0),
+      line("editor-ui", 0, "editor-label-route", 0),
+      line("editor-label-route", 0, "editor-show-trigger", 0),
+      line("editor-label-route", 1, "editor-set-prep", 0),
+      line("editor-label-route", 2, "editor-hide-msg", 0),
+      line("editor-label-route", 3, "editor-pass", 0),
+      line("editor-show-trigger", 0, "editor-select-msg", 0),
+      line("editor-show-trigger", 1, "editor-unhide-msg", 0),
+      line("editor-show-trigger", 2, "editor-pos-prep", 0),
+      line("editor-pos-prep", 0, "lane-textedit", 0),
+      line("editor-unhide-msg", 0, "lane-textedit", 0),
+      line("editor-select-msg", 0, "lane-textedit", 0),
+      line("editor-hide-msg", 0, "lane-textedit", 0),
+      line("editor-set-prep", 0, "lane-textedit", 0),
+      line("lane-textedit", 0, "editor-done-prep", 0),
+      line("editor-done-prep", 0, "editor-ui", 0),
       line("editor-pass", 0, "editor-out", 0),
       line("editor-cmds", 0, "editor-ui", 0),
       line("editor-events", 0, "editor-ui", 0)
