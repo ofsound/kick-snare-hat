@@ -81,6 +81,21 @@ node scripts/build-device-patch.js
 node scripts/validate-device-patch.js
 ```
 
+`build-device-patch.js` also copies the device into your Ableton User Library. To sync
+after editing `.js` files without rebuilding:
+
+```sh
+node scripts/sync-user-library.js
+```
+
+Keep a terminal open while developing to sync on every save:
+
+```sh
+node scripts/sync-user-library.js --watch
+```
+
+Override the destination folder with `KSH_ABLETON_DEST` if needed.
+
 ## Using in Live
 
 Place `Kick-Snare-Hat.amxd` in the same folder as `ksh_engine.js`, `ksh_compact_ui.js`,

@@ -28,13 +28,14 @@ function editorSubpatcher() {
       modernui: 1
     },
     classnamespace: "box",
-    rect: [120.0, 120.0, 900.0, 460.0],
+    rect: [120.0, 120.0, 1060.0, 560.0],
     bglocked: 0,
     openinpresentation: 1,
     default_fontsize: 12.0,
     default_fontface: 0,
     default_fontname: "Ableton Sans Medium",
     toolbarvisible: 1,
+    title: "Kick Snare Hat",
     boxes: [
       box("editor-in", "inlet", "", [360.0, 470.0, 30.0, 22.0], {
         numinlets: 0,
@@ -51,9 +52,9 @@ function editorSubpatcher() {
           numinlets: 1,
           numoutlets: 2,
           outlettype: ["", ""],
-          patching_rect: [0.0, 0.0, 880.0, 420.0],
+          patching_rect: [0.0, 0.0, 1040.0, 520.0],
           presentation: 1,
-          presentation_rect: [0.0, 0.0, 880.0, 420.0]
+          presentation_rect: [0.0, 0.0, 1040.0, 520.0]
         }
       },
       box("editor-out", "outlet", "", [420.0, 470.0, 30.0, 22.0], {
@@ -302,3 +303,5 @@ header.write("ptch", 24, "ascii");
 header.writeUInt32LE(payload.length, 28);
 fs.writeFileSync("Kick-Snare-Hat.amxd", Buffer.concat([header, payload]));
 console.log("wrote kick-snare-hat.maxpat and Kick-Snare-Hat.amxd");
+
+require("./sync-user-library.js")();

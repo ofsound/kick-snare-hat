@@ -51,8 +51,6 @@ function paint() {
 function drawHeader() {
   ksh_shared.rect(0, 0, WIDTH, 58, colors.panel2);
   ksh_shared.text("Kick Snare Hat", 14, 24, 17, colors.text);
-  ksh_shared.text("source-constrained drum sequencer", 14, 44, 10, colors.muted);
-  ksh_shared.text("4 source patterns", 172, 24, 10, colors.muted);
   ksh_shared.button(hitZones, "mode", state.generationMode === "stack" ? "Stack" : "Per Lane", 250, 18, 78, 25, false);
   ksh_shared.valueBox(hitZones, "steps", "Steps", state.stepCount, 342, 18, 78);
   ksh_shared.valueBox(hitZones, "lanes", "Lanes", state.laneCount, 434, 18, 78);
@@ -173,6 +171,8 @@ function anything() {
     preview.apply(this, arrayfromargs(arguments));
   } else if (messagename === "engine_state") {
     engine_state.apply(this, arrayfromargs(arguments));
+  } else if (messagename === "current_step") {
+    return;
   } else {
     ksh_shared.applyStatusMessage(state, messagename, arrayfromargs(arguments));
     mgraphics.redraw();

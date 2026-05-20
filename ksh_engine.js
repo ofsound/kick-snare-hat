@@ -77,6 +77,8 @@ var KSH_EngineClass = null;
     this.emitNote = options.emitNote || function () {};
     this.emitPreview = options.emitPreview || function () {};
     this.emitStatus = options.emitStatus || function () {};
+    this.emitCurrentStep = options.emitCurrentStep || function () {};
+    this.playingStepOneBased = 0;
 
     this.stepCount = 16;
     this.channelCount = 3;
@@ -104,7 +106,7 @@ var KSH_EngineClass = null;
 
   KickSnareHatEngine.prototype.initChannels = function () {
     var i;
-    var defaultNotes = [36, 38, 42, 46, 41, 43, 45, 49];
+    var defaultNotes = [36, 37, 38, 39, 40, 41, 42, 43];
     var defaultLabels = ["Kick", "Snare", "Hat", "Open Hat", "Tom 1", "Tom 2", "Clap", "Ride"];
 
     this.channels = [];
@@ -128,6 +130,12 @@ var KSH_EngineClass = null;
 
   KickSnareHatEngine.prototype.status = function (message) {
     this.emitStatus(message);
+  };
+
+  KickSnareHatEngine.prototype.reportPlayingStep = function () {
+    if (this.editorActive) {
+      this.emitCurrentStep(this.playingStepOneBased);
+    }
   };
 
   KickSnareHatEngine.prototype.setStepCount = function (count) {
@@ -309,9 +317,11 @@ var KSH_EngineClass = null;
       cancelPendingNoteTasks();
     }
     this.currentStep = 0;
+    this.playingStepOneBased = 0;
     this.cycleCounters = {};
     this.lastStepTime = 0;
     this.generateWindow(0, this.stepCount, true);
+    this.reportPlayingStep();
     this.status("reset");
   };
 
@@ -390,6 +400,9 @@ var KSH_EngineClass = null;
     var notes = [];
     var note;
     var now;
+
+    this.playingStepOneBased = this.currentStep + 1;
+    this.reportPlayingStep();
 
     now = Date.now();
     if (this.lastStepTime > 0 && now > this.lastStepTime) {
@@ -617,6 +630,11 @@ if (typeof module === "undefined" || !module.exports) {
       if (typeof messnamed === "function") {
         messnamed("ksh_engine_events", "status", message);
       }
+    },
+    emitCurrentStep: function (step) {
+      if (typeof messnamed === "function") {
+        messnamed("ksh_engine_events", "current_step", step);
+      }
     }
   });
 }
@@ -767,5 +785,7 @@ function state(json) {
 }
 
 function editor_active(val) {
-  ensureEngine().editorActive = parseInt(val, 10) !== 0;
+  var engine = ensureEngine();
+  engine.editorActive = parseInt(val, 10) !== 0;
+  engine.reportPlayingStep();
 }

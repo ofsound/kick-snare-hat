@@ -7,7 +7,7 @@ ksh_shared.SOURCE_COUNT = 4;
 
 ksh_shared.rates = ["4n", "4nt", "8n", "8nt", "16n", "16nt", "32n", "32nt"];
 ksh_shared.defaultLabels = ["Kick", "Snare", "Hat", "Open Hat", "Tom 1", "Tom 2", "Clap", "Ride"];
-ksh_shared.defaultNotes = [36, 38, 42, 46, 41, 43, 45, 49];
+ksh_shared.defaultNotes = [36, 37, 38, 39, 40, 41, 42, 43];
 
 ksh_shared.colors = {
   bg: [0.16, 0.18, 0.21, 1],
@@ -84,7 +84,7 @@ ksh_shared.valueBox = function (hitZones, id, label, value, x, y, w, boxHeight, 
   ksh_shared.text(label, x, y - 6, 10, colors.muted);
   ksh_shared.rect(x, y, w, h, colors.panel2);
   ksh_shared.strokeRect(x, y, w, h, colors.strokeSoft, 1);
-  ksh_shared.text(String(value), x + 8, y + h - 8, fs, colors.text);
+  ksh_shared.text(String(value), x + 8, y + h / 2 + 4, fs, colors.text);
   ksh_shared.button(hitZones, id + "_dec", "-", x + w - 48, y + 4, 20, h - 8, false);
   ksh_shared.button(hitZones, id + "_inc", "+", x + w - 24, y + 4, 20, h - 8, false);
 };

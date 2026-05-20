@@ -8,12 +8,53 @@ mgraphics.init();
 mgraphics.relative_coords = 0;
 mgraphics.autofill = 0;
 
-var WIDTH = 880;
-var HEIGHT = 420;
+var WIDTH = 1040;
+var HEIGHT = 520;
 var MAX_STEPS = ksh_shared.MAX_STEPS;
 var MAX_LANES = ksh_shared.MAX_LANES;
 var SOURCE_COUNT = ksh_shared.SOURCE_COUNT;
-var VISIBLE_LANES = MAX_LANES;
+var GRID_CELL_W = 25;
+var GRID_CELL_H = 22;
+
+function uiLayout() {
+  var lanePanelX = 12;
+  var lanePanelW = 158;
+  var labelColW = 84;
+  var gridX0 = lanePanelX + lanePanelW + labelColW;
+  var gridW = state.stepCount * GRID_CELL_W;
+  var visibleRows = state.laneCount;
+  var mainTop = 68;
+  var sectionTitleY = mainTop + 22;
+  var sourceTitleY = sectionTitleY;
+  var sourceStepY = sourceTitleY + 18;
+  var sourceGridY0 = sourceStepY + 16;
+  var sourceBlockH = visibleRows * GRID_CELL_H;
+  var generatedTitleY = sourceGridY0 + sourceBlockH + 28;
+  var generatedStepY = generatedTitleY + 18;
+  var generatedGridY0 = generatedStepY + 14;
+  var editorX = gridX0 + gridW + 24;
+  var footerY = HEIGHT - 28;
+
+  return {
+    lanePanelX: lanePanelX,
+    lanePanelW: lanePanelW,
+    lanePanelTop: mainTop,
+    lanePanelH: footerY - 68 - 8,
+    labelRight: gridX0 - 10,
+    gridX0: gridX0,
+    gridW: gridW,
+    sourceTitleY: sourceTitleY,
+    sourceStepY: sourceStepY,
+    sourceGridY0: sourceGridY0,
+    generatedTitleY: generatedTitleY,
+    generatedStepY: generatedStepY,
+    generatedGridY0: generatedGridY0,
+    editorX: editorX,
+    editorY: mainTop,
+    editorW: Math.max(260, WIDTH - editorX - 12),
+    footerY: footerY
+  };
+}
 
 var colors = {};
 var key;
@@ -28,13 +69,17 @@ colors.generated = [0.36, 0.66, 0.95, 1];
 
 var state = makeState();
 var previewData = null;
+var playingStep = 0;
 var selectedSource = 0;
 var selectedLane = 0;
 var selectedStep = 0;
-var laneOffset = 0;
 var hitZones = [];
 var editingLabel = false;
 var sourceDropdownOpen = false;
+var velocityDrag = null;
+var VELOCITY_DRAG_THRESHOLD = 4;
+var SOURCE_PAINT_DRAG_THRESHOLD = 4;
+var VELOCITY_DRAG_SCALE = 2;
 
 function makeSource() {
   var source = [];
@@ -94,37 +139,29 @@ function paint() {
   drawSourceDropdownOverlay();
 }
 
-function clampLaneOffset() {
-  var maxOffset = Math.max(0, state.laneCount - VISIBLE_LANES);
-  laneOffset = ksh_shared.clamp(laneOffset, 0, maxOffset);
-  if (selectedLane < laneOffset) {
-    laneOffset = selectedLane;
-  } else if (selectedLane >= laneOffset + VISIBLE_LANES) {
-    laneOffset = selectedLane - VISIBLE_LANES + 1;
-  }
-  laneOffset = ksh_shared.clamp(laneOffset, 0, maxOffset);
-}
-
 function drawHeader() {
-  var x = 172;
+  var x = 14;
+  var modeX = 110;
+  var durationX = WIDTH - 12 - 104;
+  var midiX = durationX - 8 - 84;
 
   ksh_shared.rect(0, 0, WIDTH, 58, colors.panel2);
-  ksh_shared.text("Kick Snare Hat", 14, 24, 17, colors.text);
-  ksh_shared.text("source-constrained drum sequencer", 14, 44, 10, colors.muted);
 
   ksh_shared.text("Source", x, 12, 10, colors.muted);
   ksh_shared.button(hitZones, "source_select", "SRC " + (selectedSource + 1) + " v", x, 18, 82, 25, sourceDropdownOpen);
-  ksh_shared.button(hitZones, "mode", state.generationMode === "stack" ? "Stack" : "Per Lane", 268, 18, 78, 25, false);
-  ksh_shared.valueBox(hitZones, "steps", "Steps", state.stepCount, 360, 18, 78, 30, 13);
-  ksh_shared.valueBox(hitZones, "lanes", "Lanes", state.laneCount, 452, 18, 78, 30, 13);
-  ksh_shared.valueBox(hitZones, "refresh", "Refresh", state.refreshSteps, 544, 18, 84, 30, 13);
-  ksh_shared.button(hitZones, "rate", state.rate, 642, 18, 62, 25, false);
-  ksh_shared.valueBox(hitZones, "swing", "Swing", state.swing, 718, 18, 78, 30, 13);
+  ksh_shared.button(hitZones, "mode", state.generationMode === "stack" ? "Stack" : "Per Lane", modeX, 18, 78, 25, false);
+  ksh_shared.valueBox(hitZones, "steps", "Steps", state.stepCount, 202, 18, 78, 30, 13);
+  ksh_shared.valueBox(hitZones, "lanes", "Lanes", state.laneCount, 294, 18, 78, 30, 13);
+  ksh_shared.valueBox(hitZones, "refresh", "Refresh", state.refreshSteps, 386, 18, 84, 30, 13);
+  ksh_shared.button(hitZones, "rate", state.rate, 484, 18, 62, 25, false);
+  ksh_shared.valueBox(hitZones, "swing", "Swing", state.swing, 560, 18, 78, 30, 13);
+  ksh_shared.valueBox(hitZones, "midi", "MIDI Ch", state.midiChannel, midiX, 18, 84, 30, 13);
+  ksh_shared.valueBox(hitZones, "duration", "Dur ms", state.noteDurationMs, durationX, 18, 104, 30, 13);
 }
 
 function drawSourceDropdownOverlay() {
   var i;
-  var x = 172;
+  var x = 14;
   var y = 44;
 
   if (!sourceDropdownOpen) {
@@ -142,79 +179,72 @@ function drawSourceDropdownOverlay() {
 
 function drawLaneControls() {
   var lane;
-  var row;
   var y;
   var lockLabel;
-  var maxOffset;
-  var thumbY;
-  var thumbH;
+  var layout = uiLayout();
+  var panelTop = layout.lanePanelTop;
+  var panelHeight = layout.lanePanelH;
+  var listTop = panelTop + 36;
+  var rowPitch = 28;
 
-  clampLaneOffset();
-  ksh_shared.rect(12, 78, 142, 306, colors.panel);
-  ksh_shared.text("Lanes", 24, 100, 13, colors.text);
-  ksh_shared.button(hitZones, "lane_scroll_up", "^", 112, 84, 24, 20, false);
-  ksh_shared.button(hitZones, "lane_scroll_down", "v", 112, 110, 24, 20, false);
+  ksh_shared.rect(layout.lanePanelX, panelTop, layout.lanePanelW, panelHeight, colors.panel);
+  ksh_shared.text("Lanes", layout.lanePanelX + 12, panelTop + 22, 13, colors.text);
 
-  maxOffset = Math.max(0, state.laneCount - VISIBLE_LANES);
-  ksh_shared.rect(144, 112, 6, 55, colors.panel2);
-  if (maxOffset > 0) {
-    thumbH = Math.max(14, 55 * (VISIBLE_LANES / state.laneCount));
-    thumbY = 112 + (55 - thumbH) * (laneOffset / maxOffset);
-  } else {
-    thumbH = 55;
-    thumbY = 112;
-  }
-  ksh_shared.rect(144, thumbY, 6, thumbH, colors.amber);
-  ksh_shared.zone(hitZones, "lane_scroll_track", 140, 112, 14, 55);
+  var lockW = 28;
+  var noteW = 26;
 
-  for (row = 0; row < VISIBLE_LANES; row += 1) {
-    lane = laneOffset + row;
-    if (lane >= state.laneCount) {
-      break;
-    }
-    y = 112 + row * 28;
-    ksh_shared.rect(24, y, 118, 23, lane === selectedLane ? [0.27, 0.29, 0.33, 1] : colors.panel2);
-    ksh_shared.strokeRect(24, y, 118, 23, colors.strokeSoft, 1);
-    ksh_shared.text(state.lanes[lane].label, 32, y + 15, 10, colors.text);
-    ksh_shared.text(String(state.lanes[lane].note), 92, y + 15, 10, colors.blue);
+  for (lane = 0; lane < state.laneCount; lane += 1) {
+    var lockX = layout.lanePanelX + layout.lanePanelW - 12 - lockW;
+    var noteX = lockX - noteW;
+    var selectX = layout.lanePanelX + 12;
+    var selectW = noteX - selectX;
+
+    y = listTop + lane * rowPitch;
+    ksh_shared.rect(layout.lanePanelX + 12, y, layout.lanePanelW - 24, 23, lane === selectedLane ? [0.27, 0.29, 0.33, 1] : colors.panel2);
+    ksh_shared.strokeRect(layout.lanePanelX + 12, y, layout.lanePanelW - 24, 23, colors.strokeSoft, 1);
+    ksh_shared.text(state.lanes[lane].label, layout.lanePanelX + 18, y + 15, 10, colors.text);
+    ksh_shared.text(String(state.lanes[lane].note), noteX + noteW / 2, y + 15, 10, colors.blue, "center");
     lockLabel = state.lanes[lane].lock < 0 ? "R" : "S" + (state.lanes[lane].lock + 1);
-    ksh_shared.text(lockLabel, 124, y + 15, 10, colors.amber, "center");
-    ksh_shared.zone(hitZones, "lane_select", 24, y, 62, 23, { lane: lane });
-    ksh_shared.zone(hitZones, "lane_note", 88, y, 26, 23, { lane: lane });
-    ksh_shared.zone(hitZones, "lane_lock", 114, y, 28, 23, { lane: lane });
+    ksh_shared.text(lockLabel, lockX + lockW / 2, y + 15, 10, colors.amber, "center");
+    ksh_shared.zone(hitZones, "lane_select", selectX, y, selectW, 23, { lane: lane });
+    ksh_shared.zone(hitZones, "lane_note", noteX, y, noteW, 23, { lane: lane });
+    ksh_shared.zone(hitZones, "lane_lock", lockX, y, lockW, 23, { lane: lane });
   }
+}
 
-  ksh_shared.text("Showing " + (laneOffset + 1) + "-" + Math.min(state.laneCount, laneOffset + VISIBLE_LANES) + " of " + state.laneCount, 24, 184, 10, colors.muted);
+function stepLabelColor(stepIndex) {
+  return playingStep > 0 && stepIndex + 1 === playingStep ? colors.text : colors.muted;
+}
+
+function drawStepNumberLabels(x0, cellW, y) {
+  var step;
+
+  for (step = 0; step < state.stepCount; step += 1) {
+    ksh_shared.text(String(step + 1), x0 + step * cellW + cellW / 2, y, 10, stepLabelColor(step), "center");
+  }
 }
 
 function drawSourceGrid() {
-  var x0 = 178;
-  var y0 = 82;
-  var cellW = 25;
-  var cellH = 20;
+  var layout = uiLayout();
+  var x0 = layout.gridX0;
+  var y0 = layout.sourceGridY0;
+  var cellW = GRID_CELL_W;
+  var cellH = GRID_CELL_H;
   var lane;
   var step;
   var x;
   var y;
   var cell;
   var active;
-  var row;
 
-  clampLaneOffset();
-  ksh_shared.text("Source Pattern", x0, 70, 13, colors.text);
-  for (step = 0; step < state.stepCount; step += 1) {
-    ksh_shared.text(String(step + 1), x0 + step * cellW + cellW / 2, y0 - 10, 10, colors.muted, "center");
-  }
+  ksh_shared.text("Source Pattern", x0, layout.sourceTitleY, 13, colors.text);
+  drawStepNumberLabels(x0, cellW, layout.sourceStepY);
 
-  for (row = 0; row < VISIBLE_LANES; row += 1) {
-    lane = laneOffset + row;
-    if (lane >= state.laneCount) {
-      break;
-    }
-    ksh_shared.text(state.lanes[lane].label, x0 - 12, y0 + row * cellH + 17, 10, colors.muted, "right");
+  for (lane = 0; lane < state.laneCount; lane += 1) {
+    ksh_shared.text(state.lanes[lane].label, layout.labelRight, y0 + lane * cellH + 16, 10, colors.muted, "right");
     for (step = 0; step < state.stepCount; step += 1) {
       x = x0 + step * cellW;
-      y = y0 + row * cellH;
+      y = y0 + lane * cellH;
       cell = state.sources[selectedSource][lane][step];
       active = cell.enabled ? colors.edit : colors.off;
       ksh_shared.rect(x + 2, y + 2, cellW - 4, cellH - 4, active);
@@ -228,65 +258,59 @@ function drawSourceGrid() {
 }
 
 function drawGeneratedGrid() {
-  var x0 = 178;
-  var y0 = 268;
-  var cellW = 25;
-  var cellH = 14;
+  var layout = uiLayout();
+  var x0 = layout.gridX0;
+  var y0 = layout.generatedGridY0;
+  var cellW = GRID_CELL_W;
+  var cellH = GRID_CELL_H;
   var lane;
   var step;
   var x;
   var y;
   var cell;
-  var row;
 
-  clampLaneOffset();
-  ksh_shared.text("Generated Pattern", x0, 254, 13, colors.text);
-  for (step = 0; step < state.stepCount; step += 1) {
-    ksh_shared.text(String(step + 1), x0 + step * cellW + cellW / 2, y0 - 8, 10, colors.muted, "center");
-  }
+  ksh_shared.text("Generated Pattern", x0, layout.generatedTitleY, 13, colors.text);
+  drawStepNumberLabels(x0, cellW, layout.generatedStepY);
 
-  for (row = 0; row < VISIBLE_LANES; row += 1) {
-    lane = laneOffset + row;
-    if (lane >= state.laneCount) {
-      break;
-    }
-    ksh_shared.text(state.lanes[lane].label, x0 - 12, y0 + row * cellH + 14, 10, colors.muted, "right");
+  for (lane = 0; lane < state.laneCount; lane += 1) {
+    ksh_shared.text(state.lanes[lane].label, layout.labelRight, y0 + lane * cellH + 16, 10, colors.muted, "right");
     for (step = 0; step < state.stepCount; step += 1) {
       x = x0 + step * cellW;
-      y = y0 + row * cellH;
+      y = y0 + lane * cellH;
       cell = previewData && previewData.generated && previewData.generated[lane] ? previewData.generated[lane][step] : null;
       ksh_shared.rect(x + 2, y + 2, cellW - 4, cellH - 4, cell && cell.enabled ? colors.generated : colors.off);
       ksh_shared.strokeRect(x + 2, y + 2, cellW - 4, cellH - 4, colors.strokeSoft, 1);
       if (cell && cell.enabled) {
-        ksh_shared.text(String(cell.velocity), x + cellW / 2, y + 11, 8, colors.off, "center");
+        ksh_shared.text(String(cell.velocity), x + cellW / 2, y + 14, 9, colors.off, "center");
       }
     }
   }
 }
 
 function drawCellEditor() {
-  var x = 596;
-  var y = 78;
+  var layout = uiLayout();
+  var x = layout.editorX;
+  var y = layout.editorY;
   var cell = state.sources[selectedSource][selectedLane][selectedStep];
 
-  ksh_shared.rect(x, y, 270, 236, colors.panel);
-  ksh_shared.text("Cell Editor", x + 14, y + 24, 13, colors.text);
+  ksh_shared.rect(x, y, layout.editorW, 248, colors.panel);
+  ksh_shared.text("Cell Editor", x + 14, y + 22, 13, colors.text);
   ksh_shared.text("SRC " + (selectedSource + 1) + " / " + state.lanes[selectedLane].label + " / Step " + (selectedStep + 1), x + 14, y + 44, 11, colors.muted);
 
   ksh_shared.button(hitZones, "cell_enabled", cell.enabled ? "On" : "Off", x + 14, y + 62, 62, 28, cell.enabled);
-  ksh_shared.valueBox(hitZones, "velocity", "Velocity", cell.velocity, x + 98, y + 62, 104, 30, 13);
-  ksh_shared.button(hitZones, "gate", "Always", x + 14, y + 128, 72, 26, cell.gateMode === "always", { gate: "always" });
-  ksh_shared.button(hitZones, "gate", "Random", x + 94, y + 128, 78, 26, cell.gateMode === "random", { gate: "random" });
-  ksh_shared.button(hitZones, "gate", "Cycle", x + 180, y + 128, 70, 26, cell.gateMode === "cycle", { gate: "cycle" });
-  ksh_shared.valueBox(hitZones, "random", "Random %", cell.random, x + 14, y + 184, 112, 30, 13);
-  ksh_shared.valueBox(hitZones, "cycle", "Every N", cell.cycle, x + 146, y + 184, 104, 30, 13);
+  ksh_shared.button(hitZones, "gate", "Always", x + 14, y + 104, 72, 26, cell.gateMode === "always", { gate: "always" });
+  ksh_shared.button(hitZones, "gate", "Random", x + 94, y + 104, 78, 26, cell.gateMode === "random", { gate: "random" });
+  ksh_shared.button(hitZones, "gate", "Cycle", x + 180, y + 104, 70, 26, cell.gateMode === "cycle", { gate: "cycle" });
+  ksh_shared.valueBox(hitZones, "velocity", "Velocity", cell.velocity, x + 14, y + 156, 104, 30, 13);
+  ksh_shared.valueBox(hitZones, "random", "Random %", cell.random, x + 14, y + 212, 112, 30, 13);
+  ksh_shared.valueBox(hitZones, "cycle", "Every N", cell.cycle, x + 146, y + 212, 104, 30, 13);
 }
 
 function drawFooter() {
-  ksh_shared.rect(0, 396, WIDTH, 24, colors.panel2);
-  ksh_shared.text("Click source cells to toggle/select. Shift-click +/- steps downward. Live transport drives playback.", 18, 412, 10, colors.muted);
-  ksh_shared.valueBox(hitZones, "midi", "MIDI Ch", state.midiChannel, 596, 340, 84, 30, 13);
-  ksh_shared.valueBox(hitZones, "duration", "Dur ms", state.noteDurationMs, 696, 340, 104, 30, 13);
+  var layout = uiLayout();
+
+  ksh_shared.rect(0, layout.footerY, WIDTH, 28, colors.panel2);
+  ksh_shared.text("Click source cells to toggle. Shift-click to select only. Drag horizontally to paint, vertically for velocity.", 18, layout.footerY + 16, 10, colors.muted);
 }
 
 function send() {
@@ -331,6 +355,158 @@ function open() {
   sync_all();
 }
 
+function sourceStepFromX(x) {
+  var layout = uiLayout();
+
+  return ksh_shared.clamp(
+    Math.floor((x - layout.gridX0) / GRID_CELL_W),
+    0,
+    state.stepCount - 1
+  );
+}
+
+function applySourcePaintRange(fromStep, toStep) {
+  var lo;
+  var hi;
+  var step;
+  var cell;
+  var changed;
+
+  if (!velocityDrag || velocityDrag.mode !== "paint") {
+    return;
+  }
+
+  lo = Math.min(fromStep, toStep);
+  hi = Math.max(fromStep, toStep);
+  changed = false;
+
+  for (step = lo; step <= hi; step += 1) {
+    cell = state.sources[selectedSource][velocityDrag.lane][step];
+    if (cell.enabled !== velocityDrag.paintEnabled) {
+      cell.enabled = velocityDrag.paintEnabled;
+      sendCell(selectedSource, velocityDrag.lane, step);
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    selectedStep = toStep;
+    mgraphics.redraw();
+  }
+}
+
+function beginSourceCellInteraction(z, x, y, selectOnly) {
+  var cell;
+
+  selectedLane = z.data.lane;
+  selectedStep = z.data.step;
+  cell = state.sources[selectedSource][selectedLane][selectedStep];
+  velocityDrag = {
+    lane: selectedLane,
+    step: selectedStep,
+    startX: x,
+    startY: y,
+    startVelocity: cell.velocity,
+    paintEnabled: cell.enabled ? 0 : 1,
+    mode: null,
+    moved: false,
+    selectOnly: selectOnly ? 1 : 0
+  };
+}
+
+function applySourceCellDrag(x, y) {
+  var dx;
+  var dy;
+  var step;
+
+  if (!velocityDrag) {
+    return;
+  }
+
+  dx = x - velocityDrag.startX;
+  dy = y - velocityDrag.startY;
+
+  if (!velocityDrag.mode) {
+    if (
+      !velocityDrag.selectOnly &&
+      Math.abs(dx) >= SOURCE_PAINT_DRAG_THRESHOLD &&
+      Math.abs(dx) > Math.abs(dy)
+    ) {
+      velocityDrag.mode = "paint";
+      velocityDrag.moved = true;
+      applySourcePaintRange(velocityDrag.step, sourceStepFromX(x));
+    } else if (Math.abs(dy) >= VELOCITY_DRAG_THRESHOLD) {
+      velocityDrag.mode = "velocity";
+      applyVelocityDrag(y);
+    }
+    return;
+  }
+
+  if (velocityDrag.mode === "paint") {
+    step = sourceStepFromX(x);
+    applySourcePaintRange(velocityDrag.step, step);
+  } else {
+    applyVelocityDrag(y);
+  }
+}
+
+function applyVelocityDrag(y) {
+  var cell;
+  var delta;
+  var nextVelocity;
+
+  if (!velocityDrag || velocityDrag.mode === "paint") {
+    return;
+  }
+
+  if (!velocityDrag.mode) {
+    velocityDrag.mode = "velocity";
+  }
+
+  delta = velocityDrag.startY - y;
+  if (Math.abs(delta) < VELOCITY_DRAG_THRESHOLD) {
+    return;
+  }
+
+  velocityDrag.moved = true;
+  cell = state.sources[selectedSource][velocityDrag.lane][velocityDrag.step];
+  if (cell.gateMode !== "always") {
+    return;
+  }
+
+  if (!cell.enabled) {
+    cell.enabled = 1;
+  }
+
+  nextVelocity = ksh_shared.clamp(
+    velocityDrag.startVelocity + Math.round(delta / VELOCITY_DRAG_SCALE),
+    1,
+    127
+  );
+  if (cell.velocity !== nextVelocity) {
+    cell.velocity = nextVelocity;
+    sendCell(selectedSource, velocityDrag.lane, velocityDrag.step);
+    mgraphics.redraw();
+  }
+}
+
+function endSourceCellInteraction() {
+  var cell;
+
+  if (!velocityDrag) {
+    return;
+  }
+
+  cell = state.sources[selectedSource][velocityDrag.lane][velocityDrag.step];
+  if (!velocityDrag.moved && !velocityDrag.selectOnly) {
+    cell.enabled = cell.enabled ? 0 : 1;
+    sendCell(selectedSource, velocityDrag.lane, velocityDrag.step);
+  }
+
+  velocityDrag = null;
+  mgraphics.redraw();
+}
+
 function engine_state(json) {
   var engineState;
 
@@ -343,7 +519,6 @@ function engine_state(json) {
     ksh_shared.applyEngineState(state, engineState);
     selectedLane = ksh_shared.clamp(selectedLane, 0, state.laneCount - 1);
     selectedStep = ksh_shared.clamp(selectedStep, 0, state.stepCount - 1);
-    clampLaneOffset();
     mgraphics.redraw();
   } catch (error) {}
 }
@@ -353,10 +528,17 @@ function onclick(x, y, button, cmd, shift, capslock, option, ctrl) {
   var cell;
 
   if (!z) {
+    if (button === 0) {
+      endSourceCellInteraction();
+    }
     editingLabel = false;
     sourceDropdownOpen = false;
     mgraphics.redraw();
     return;
+  }
+
+  if (button === 0 && velocityDrag && z.id !== "source_cell") {
+    endSourceCellInteraction();
   }
 
   if (z.id !== "lane_select") {
@@ -378,26 +560,23 @@ function onclick(x, y, button, cmd, shift, capslock, option, ctrl) {
     send("rate", state.rate);
   } else if (z.id === "source_cell") {
     sourceDropdownOpen = false;
-    selectedLane = z.data.lane;
-    selectedStep = z.data.step;
-    cell = state.sources[selectedSource][selectedLane][selectedStep];
-    cell.enabled = cell.enabled ? 0 : 1;
-    sendCell(selectedSource, selectedLane, selectedStep);
+    if (button === 0) {
+      endSourceCellInteraction();
+    } else {
+      beginSourceCellInteraction(z, x, y, shift);
+    }
   } else if (z.id === "lane_select") {
     sourceDropdownOpen = false;
     selectedLane = z.data.lane;
-    clampLaneOffset();
     editingLabel = true;
   } else if (z.id === "lane_note") {
     sourceDropdownOpen = false;
     selectedLane = z.data.lane;
-    clampLaneOffset();
     state.lanes[selectedLane].note = ksh_shared.clamp(state.lanes[selectedLane].note + (shift ? -1 : 1), 0, 127);
     sendLane(selectedLane);
   } else if (z.id === "lane_lock") {
     sourceDropdownOpen = false;
     selectedLane = z.data.lane;
-    clampLaneOffset();
     state.lanes[selectedLane].lock += 1;
     if (state.lanes[selectedLane].lock >= SOURCE_COUNT) {
       state.lanes[selectedLane].lock = -1;
@@ -413,21 +592,25 @@ function onclick(x, y, button, cmd, shift, capslock, option, ctrl) {
     cell = state.sources[selectedSource][selectedLane][selectedStep];
     cell.gateMode = z.data.gate;
     sendCell(selectedSource, selectedLane, selectedStep);
-  } else if (z.id === "lane_scroll_up") {
-    sourceDropdownOpen = false;
-    laneOffset = ksh_shared.clamp(laneOffset - 1, 0, Math.max(0, state.laneCount - VISIBLE_LANES));
-  } else if (z.id === "lane_scroll_down") {
-    sourceDropdownOpen = false;
-    laneOffset = ksh_shared.clamp(laneOffset + 1, 0, Math.max(0, state.laneCount - VISIBLE_LANES));
-  } else if (z.id === "lane_scroll_track") {
-    sourceDropdownOpen = false;
-    laneOffset = y < 140 ? ksh_shared.clamp(laneOffset - VISIBLE_LANES, 0, Math.max(0, state.laneCount - VISIBLE_LANES)) : ksh_shared.clamp(laneOffset + VISIBLE_LANES, 0, Math.max(0, state.laneCount - VISIBLE_LANES));
   } else {
     sourceDropdownOpen = false;
     handleStepper(z.id, shift ? -1 : 1);
   }
 
   mgraphics.redraw();
+}
+
+function ondrag(x, y, button) {
+  if (!velocityDrag) {
+    return;
+  }
+
+  if (button === 0) {
+    endSourceCellInteraction();
+    return;
+  }
+
+  applySourceCellDrag(x, y);
 }
 
 function handleStepper(id, direction) {
@@ -442,7 +625,6 @@ function handleStepper(id, direction) {
   } else if (id === "lanes_inc" || id === "lanes_dec") {
     state.laneCount = ksh_shared.clamp(state.laneCount + (id === "lanes_inc" ? 1 : -1), 1, MAX_LANES);
     selectedLane = ksh_shared.clamp(selectedLane, 0, state.laneCount - 1);
-    clampLaneOffset();
     send("channels", state.laneCount);
   } else if (id === "refresh_inc" || id === "refresh_dec") {
     state.refreshSteps = ksh_shared.clamp(state.refreshSteps + (id === "refresh_inc" ? 1 : -1), 1, state.stepCount);
@@ -489,15 +671,6 @@ function applyIncomingCell(args) {
   }
 }
 
-function onmousewheel(x, y, delta) {
-  var maxScrollX = 178 + state.stepCount * 25;
-  var maxScrollY = 78 + VISIBLE_LANES * 28;
-  if (x >= 12 && x <= maxScrollX && y >= 78 && y <= maxScrollY) {
-    laneOffset = ksh_shared.clamp(laneOffset + (delta < 0 ? 1 : -1), 0, Math.max(0, state.laneCount - VISIBLE_LANES));
-    mgraphics.redraw();
-  }
-}
-
 function onkeydown(key, modifiers, keycode) {
   var label;
 
@@ -539,11 +712,13 @@ function anything() {
   } else if (messagename === "cell") {
     applyIncomingCell(arrayfromargs(arguments));
     mgraphics.redraw();
+  } else if (messagename === "current_step") {
+    playingStep = ksh_shared.clamp(arrayfromargs(arguments)[0], 0, MAX_STEPS);
+    mgraphics.redraw();
   } else {
     ksh_shared.applyStatusMessage(state, messagename, arrayfromargs(arguments));
     if (messagename === "channels") {
       selectedLane = ksh_shared.clamp(selectedLane, 0, state.laneCount - 1);
-      clampLaneOffset();
     }
     mgraphics.redraw();
   }
