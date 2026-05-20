@@ -73,6 +73,36 @@ function testPerChannelModeCanChooseDifferentSources() {
   assert.strictEqual(engine._notes[1].source, 4);
 }
 
+function testRandomSourceIgnoresEmptySources() {
+  var engine = makeEngine([0]);
+  clearAll(engine);
+  engine.setChannelCount(1);
+  engine.setGenerationMode("stack");
+  engine.setCell(0, 0, 0, 1, 55, "always", 100);
+  engine._notes.length = 0;
+  engine._setRandomValues([0.99]);
+  engine.step();
+
+  assert.strictEqual(engine._notes.length, 1);
+  assert.strictEqual(engine._notes[0].source, 1);
+  assert.strictEqual(engine._notes[0].velocity, 55);
+}
+
+function testRandomSourceUsesOnlyPopulatedSourceWhenOthersEmpty() {
+  var engine = makeEngine([0]);
+  clearAll(engine);
+  engine.setChannelCount(1);
+  engine.setGenerationMode("per_channel");
+  engine.setCell(2, 0, 0, 1, 66, "always", 100);
+  engine._notes.length = 0;
+  engine._setRandomValues([0, 0.99]);
+  engine.step();
+
+  assert.strictEqual(engine._notes.length, 1);
+  assert.strictEqual(engine._notes[0].source, 3);
+  assert.strictEqual(engine._notes[0].velocity, 66);
+}
+
 function testChannelLockOverridesRandomSource() {
   var engine = makeEngine([0]);
   clearAll(engine);
@@ -200,6 +230,8 @@ function testSerializeDeserializeRestoresSourceData() {
 
 testStackModeUsesOneSourcePerStep();
 testPerChannelModeCanChooseDifferentSources();
+testRandomSourceIgnoresEmptySources();
+testRandomSourceUsesOnlyPopulatedSourceWhenOthersEmpty();
 testChannelLockOverridesRandomSource();
 testCycleGateFiresEveryNthEncounter();
 testRandomGateUsesPercentage();

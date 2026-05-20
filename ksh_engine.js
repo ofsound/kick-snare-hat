@@ -327,8 +327,44 @@ var KSH_EngineClass = null;
     this.status("reset");
   };
 
+  KickSnareHatEngine.prototype.isSourceEmpty = function (sourceIndex) {
+    var channel;
+    var step;
+    var cell;
+
+    sourceIndex = clamp(sourceIndex, 0, 3);
+    for (channel = 0; channel < 8; channel += 1) {
+      for (step = 0; step < this.stepCount; step += 1) {
+        cell = this.sources[sourceIndex][channel][step];
+        if (cell.enabled) {
+          return false;
+        }
+      }
+    }
+    return true;
+  };
+
+  KickSnareHatEngine.prototype.activeSourceIndices = function () {
+    var indices = [];
+    var source;
+
+    for (source = 0; source < 4; source += 1) {
+      if (!this.isSourceEmpty(source)) {
+        indices.push(source);
+      }
+    }
+    return indices;
+  };
+
   KickSnareHatEngine.prototype.randomSource = function () {
-    return clamp(Math.floor(this.rng() * 4), 0, 3);
+    var active = this.activeSourceIndices();
+    var pick;
+
+    if (active.length === 0) {
+      return 0;
+    }
+    pick = clamp(Math.floor(this.rng() * active.length), 0, active.length - 1);
+    return active[pick];
   };
 
   KickSnareHatEngine.prototype.generateWindow = function (startStep, length, forceEmit) {
