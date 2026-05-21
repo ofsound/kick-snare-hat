@@ -899,6 +899,16 @@ var KSH_EngineClass = null;
         };
         notes.push(note);
         this.emitNote(note);
+        this.status(
+          "note_hit " +
+          (channel + 1) +
+          " " +
+          (step + 1) +
+          " " +
+          (cell.source + 1) +
+          " " +
+          ((typeof cell.sourceStep === "number" ? cell.sourceStep : step) + 1)
+        );
       }
     }
 

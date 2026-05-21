@@ -297,6 +297,8 @@ function testChannelAuditionEmitsNoteToOutlet() {
 
 function testTransportPositionEmitsNativeSchedulerEvent() {
   var sb = makeMaxSandbox();
+  var hitEvents;
+
   sb._clear();
   sb.steps(4);
   sb.channels(1);
@@ -316,6 +318,10 @@ function testTransportPositionEmitsNativeSchedulerEvent() {
     "raw note event should be pitch velocity duration channel delay");
   assert.strictEqual(sb._scheduledCount(), 0,
     "note output should not allocate per-note Task objects");
+  hitEvents = eventsOn(sb, "note_hit");
+  assert.strictEqual(hitEvents.length, 1,
+    "emitted MIDI notes should send one lightweight note_hit UI event");
+  assert.deepStrictEqual(hitEvents[0].args, ["note_hit", "1", "1", "1", "1"]);
 }
 
 function testResetClearsNativeScheduler() {

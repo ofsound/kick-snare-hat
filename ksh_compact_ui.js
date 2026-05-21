@@ -22,10 +22,13 @@ var PREVIEW_GRID_Y = 18;
 var PREVIEW_CELL_H = 18;
 var colors = ksh_shared.colors;
 var inactiveStepColor = [0.14, 0.16, 0.19, 1];
+var NOTE_HIT_FLASH_MS = 80;
 
 var state = makeState();
 var previewData = null;
 var hitZones = [];
+var noteHitFlashes = [];
+var noteHitFlashTask = null;
 
 function computeCompactWidth() {
   return COMPACT_BASE_WIDTH;
@@ -85,6 +88,7 @@ function drawPreview() {
   var maxPreviewLanes = Math.min(MAX_LANES, state.laneCount);
   var activeStep;
   var fillColor;
+  var now = Date.now();
 
   for (lane = 0; lane < maxPreviewLanes; lane += 1) {
     ksh_shared.text(state.lanes[lane].label, PREVIEW_GRID_X - 10, PREVIEW_GRID_Y + lane * PREVIEW_CELL_H + 12, 9, colors.muted, "right");
@@ -92,9 +96,38 @@ function drawPreview() {
       activeStep = step < state.stepCount;
       cell = previewData && previewData.generated && previewData.generated[lane] ? previewData.generated[lane][step] : null;
       fillColor = activeStep ? (cell && cell.enabled ? colors.blue : colors.off) : inactiveStepColor;
+      if (noteHitFlashes[lane] && noteHitFlashes[lane][step] && noteHitFlashes[lane][step] > now) {
+        fillColor = colors.text;
+      }
       ksh_shared.rect(PREVIEW_GRID_X + step * PREVIEW_CELL_W, PREVIEW_GRID_Y + lane * PREVIEW_CELL_H, PREVIEW_CELL_W - 3, PREVIEW_CELL_H - 3, fillColor);
     }
   }
+}
+
+function scheduleNoteHitFlashClear() {
+  if (typeof Task !== "function") {
+    return;
+  }
+  if (noteHitFlashTask) {
+    noteHitFlashTask.cancel();
+  }
+  noteHitFlashTask = new Task(function () {
+    noteHitFlashTask = null;
+    mgraphics.redraw();
+  }, this);
+  noteHitFlashTask.schedule(NOTE_HIT_FLASH_MS);
+}
+
+function note_hit(channel, stepIndex) {
+  var lane = ksh_shared.clamp(channel - 1, 0, MAX_LANES - 1);
+  var step = ksh_shared.clamp(stepIndex - 1, 0, MAX_STEPS - 1);
+
+  if (!noteHitFlashes[lane]) {
+    noteHitFlashes[lane] = [];
+  }
+  noteHitFlashes[lane][step] = Date.now() + NOTE_HIT_FLASH_MS;
+  mgraphics.redraw();
+  scheduleNoteHitFlashClear();
 }
 
 function send() {
@@ -168,6 +201,8 @@ function anything() {
     engine_state.apply(this, arrayfromargs(arguments));
   } else if (messagename === "current_step") {
     return;
+  } else if (messagename === "note_hit") {
+    note_hit.apply(this, arrayfromargs(arguments));
   } else {
     ksh_shared.applyStatusMessage(state, messagename, arrayfromargs(arguments));
     if (messagename === "steps") {

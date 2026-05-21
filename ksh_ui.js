@@ -162,6 +162,12 @@ colors.mutedCellOff = [0.12, 0.13, 0.14, 1];
 colors.inactiveCell = [0.075, 0.082, 0.095, 1];
 colors.inactiveStroke = [0.16, 0.18, 0.21, 1];
 colors.inactiveText = [0.36, 0.39, 0.43, 1];
+colors.sourceHitText = [
+  (colors.off[0] + colors.text[0]) * 0.5,
+  (colors.off[1] + colors.text[1]) * 0.5,
+  (colors.off[2] + colors.text[2]) * 0.5,
+  1
+];
 
 var state = makeState();
 var previewData = null;
@@ -189,6 +195,9 @@ var SOURCE_PAINT_DRAG_THRESHOLD = 4;
 var VELOCITY_DRAG_SCALE = 2;
 var PROBABILITY_DRAG_SCALE = 2;
 var CYCLE_DRAG_SCALE = 4;
+var NOTE_HIT_FLASH_MS = 80;
+var sourceHitFlashes = [];
+var sourceHitFlashTask = null;
 var DC_LANE_COLORS = [
   [0.86, 0.25, 0.28, 1],
   [0.93, 0.55, 0.36, 1],
@@ -410,6 +419,18 @@ function drawHeader() {
   var sourceDividerX = sourceEndX + dividerGap;
   var stepsX = sourceDividerX + dividerW + dividerGap;
   var rateX = stepsX + sourceBtnW + groupedControlGap;
+  var patternDividerX = rateX + 62 + dividerGap;
+  var patternX = patternDividerX + dividerW + dividerGap;
+  var patternLabelW = 60;
+  var patternShiftW = EDITOR_LAYOUT.ROW_SHIFT_W * GRID_SCALE;
+  var patternShiftGap = EDITOR_LAYOUT.ROW_CONTROL_GAP * GRID_SCALE;
+  var patternShiftLeftX = patternX + patternLabelW + 8;
+  var patternShiftRightX = patternShiftLeftX + patternShiftW + patternShiftGap;
+  var patternClearW = 14 * GRID_SCALE;
+  var patternClearX = patternShiftRightX + patternShiftW + patternShiftGap;
+  var patternRightDividerX = patternClearX + patternClearW + dividerGap;
+  var patternTextY = headerControlY + headerControlH / 2 + 4;
+  var patternIconY = headerControlY + headerControlH / 2;
   var rightLayerDividerX = dcX - dividerGap - dividerW;
   var layerX = rightLayerDividerX - dividerGap - layerW;
   var leftLayerDividerX = layerX - dividerGap - dividerW;
@@ -424,7 +445,7 @@ function drawHeader() {
 
   ksh_shared.rect(0, 0, WIDTH, 58, colors.panel2);
 
-  ksh_shared.text("Source", sourceX, 12, 10, colors.muted);
+  ksh_shared.text("Patterns", sourceX, 12, 10, colors.muted);
   for (i = 0; i < SOURCE_COUNT; i += 1) {
     ksh_shared.button(
       hitZones,
@@ -444,6 +465,15 @@ function drawHeader() {
   drawHeaderValueCell("steps", "Steps", state.stepCount, stepsX, headerControlY, sourceBtnW, headerControlH);
   ksh_shared.text("Step Value", rateX, 12, 10, colors.muted);
   ksh_shared.button(hitZones, "rate", state.rate, rateX, headerControlY, 62, headerControlH, false);
+  drawVerticalDivider(patternDividerX, 12, dividerW, 36);
+  ksh_shared.text("Pattern:", patternX, patternTextY, 14, colors.text);
+  drawShiftArrow(patternShiftLeftX + patternShiftW / 2, patternIconY, -1);
+  drawShiftArrow(patternShiftRightX + patternShiftW / 2, patternIconY, 1);
+  drawClearIcon(patternClearX + patternClearW / 2, patternIconY);
+  ksh_shared.zone(hitZones, "source_pattern_shift", patternShiftLeftX, headerControlY, patternShiftW, headerControlH, { direction: -1 });
+  ksh_shared.zone(hitZones, "source_pattern_shift", patternShiftRightX, headerControlY, patternShiftW, headerControlH, { direction: 1 });
+  ksh_shared.zone(hitZones, "source_pattern_clear", patternClearX, headerControlY, patternClearW, headerControlH);
+  drawVerticalDivider(patternRightDividerX, 12, dividerW, 36);
   drawVerticalDivider(leftHumanizeDividerX, 12, dividerW, 36);
   drawHeaderValueCell("swing", "Swing", state.swing, swingX, headerControlY, sourceBtnW, headerControlH);
   drawHeaderValueCell("velocity_humanize", "Vel %", state.velocityHumanize, velocityHumanizeX, headerControlY, sourceBtnW, headerControlH);
@@ -495,6 +525,19 @@ function drawShiftArrow(cx, cy, direction) {
   mgraphics.close_path();
   ksh_shared.setSourceRGBA(colors.amber);
   mgraphics.fill();
+}
+
+function drawClearIcon(cx, cy) {
+  var r = 5;
+
+  ksh_shared.setSourceRGBA(colors.amber);
+  mgraphics.set_line_width(2);
+  mgraphics.new_path();
+  mgraphics.move_to(cx - r, cy - r);
+  mgraphics.line_to(cx + r, cy + r);
+  mgraphics.move_to(cx + r, cy - r);
+  mgraphics.line_to(cx - r, cy + r);
+  mgraphics.stroke();
 }
 
 function drawSourceRowControls(layout, lane, y, cellH, muted, scale) {
@@ -570,6 +613,8 @@ function drawSourceGrid() {
   var layerValue;
   var loopLength;
   var inactive;
+  var now = Date.now();
+  var sourceFlashActive;
 
   drawStepNumberLabels(x0, cellW, layout.sourceStepY);
 
@@ -582,6 +627,10 @@ function drawSourceGrid() {
       x = x0 + step * cellW;
       cell = state.sources[selectedSource][lane][step];
       inactive = step >= loopLength;
+      sourceFlashActive = sourceHitFlashes[selectedSource] &&
+        sourceHitFlashes[selectedSource][lane] &&
+        sourceHitFlashes[selectedSource][lane][step] &&
+        sourceHitFlashes[selectedSource][lane][step] > now;
       if (inactive) {
         ksh_shared.rect(x + cellPad, y + cellPad, cellW - cellPad * 2, cellH - cellPad * 2, colors.inactiveCell);
         if (cell.enabled) {
@@ -605,7 +654,7 @@ function drawSourceGrid() {
           lightColor,
           layerValue
         );
-        ksh_shared.text(String(layerValue), x + cellW / 2, y + 14 * scale, 9 * scale, muted ? colors.muted : colors.off, "center");
+        ksh_shared.text(String(layerValue), x + cellW / 2, y + 14 * scale, 9 * scale, sourceFlashActive ? colors.sourceHitText : muted ? colors.muted : colors.off, "center");
       } else {
         offColor = step % 4 === 0 ? colors.downbeatCellOff : colors.off;
         ksh_shared.rect(x + cellPad, y + cellPad, cellW - cellPad * 2, cellH - cellPad * 2, muted ? colors.mutedCellOff : offColor);
@@ -704,6 +753,22 @@ function shiftSourceChannelRow(lane, direction) {
   for (step = 0; step < state.stepCount; step += 1) {
     row[step] = shifted[step];
     sendCell(source, lane, step);
+  }
+}
+
+function shiftCurrentSourcePattern(direction) {
+  var lane;
+
+  for (lane = 0; lane < state.laneCount; lane += 1) {
+    shiftSourceChannelRow(lane, direction);
+  }
+}
+
+function clearCurrentSourcePattern() {
+  var lane;
+
+  for (lane = 0; lane < state.laneCount; lane += 1) {
+    resetSourceChannelRow(selectedSource, lane);
   }
 }
 
@@ -1169,6 +1234,40 @@ function endRowLoopInteraction() {
   mgraphics.redraw();
 }
 
+function scheduleSourceHitFlashClear() {
+  if (typeof Task !== "function") {
+    return;
+  }
+  if (sourceHitFlashTask) {
+    sourceHitFlashTask.cancel();
+  }
+  sourceHitFlashTask = new Task(function () {
+    sourceHitFlashTask = null;
+    mgraphics.redraw();
+  }, this);
+  sourceHitFlashTask.schedule(NOTE_HIT_FLASH_MS);
+}
+
+function note_hit(channel, generatedStep, source, sourceStep) {
+  var sourceIndex = ksh_shared.clamp(source - 1, 0, SOURCE_COUNT - 1);
+  var lane = ksh_shared.clamp(channel - 1, 0, MAX_LANES - 1);
+  var step = ksh_shared.clamp(sourceStep - 1, 0, MAX_STEPS - 1);
+
+  if (sourceIndex !== selectedSource) {
+    return;
+  }
+
+  if (!sourceHitFlashes[sourceIndex]) {
+    sourceHitFlashes[sourceIndex] = [];
+  }
+  if (!sourceHitFlashes[sourceIndex][lane]) {
+    sourceHitFlashes[sourceIndex][lane] = [];
+  }
+  sourceHitFlashes[sourceIndex][lane][step] = Date.now() + NOTE_HIT_FLASH_MS;
+  mgraphics.redraw();
+  scheduleSourceHitFlashClear();
+}
+
 function engine_state(json) {
   var engineState;
 
@@ -1248,6 +1347,14 @@ function onclick(x, y, button, cmd, shift, capslock, option, ctrl) {
     if (button !== 0) {
       selectedLane = z.data.lane;
       shiftSourceChannelRow(z.data.lane, z.data.direction);
+    }
+  } else if (z.id === "source_pattern_shift") {
+    if (button !== 0) {
+      shiftCurrentSourcePattern(z.data.direction);
+    }
+  } else if (z.id === "source_pattern_clear") {
+    if (button !== 0) {
+      clearCurrentSourcePattern();
     }
   } else if (isLanePreviewZone(z.id)) {
     handleLaneLabelClick(z, button);
@@ -1378,6 +1485,8 @@ function anything() {
   } else if (messagename === "current_step") {
     playingStep = ksh_shared.clamp(arrayfromargs(arguments)[0], 0, MAX_STEPS);
     mgraphics.redraw();
+  } else if (messagename === "note_hit") {
+    note_hit.apply(this, arrayfromargs(arguments));
   } else {
     rememberUiContext.call(this);
     ksh_shared.applyStatusMessage(state, messagename, arrayfromargs(arguments));
