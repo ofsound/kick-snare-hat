@@ -12,16 +12,16 @@
     "rect": [
       80,
       80,
-      900,
-      220
+      736,
+      176
     ],
     "bglocked": 0,
     "openinpresentation": 1,
     "openrect": [
       0,
       0,
-      900,
-      220
+      736,
+      176
     ],
     "devicewidth": 0,
     "statusbarvisible": 2,
@@ -49,15 +49,15 @@
           "patching_rect": [
             20,
             20,
-            880,
-            160
+            736,
+            176
           ],
           "presentation": 1,
           "presentation_rect": [
             0,
             0,
-            880,
-            160
+            736,
+            176
           ]
         }
       },

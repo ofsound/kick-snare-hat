@@ -216,15 +216,24 @@ ksh_shared.fillPath = function (points, color) {
   mgraphics.fill();
 };
 
-// Layer fill for enabled source cells: solid (velocity), horizontal split
-// (probability), or diagonal split (cycle).
-ksh_shared.sourceCellBackground = function (x, y, w, h, layerMode, baseColor, lightColor) {
-  var halfH;
+// Layer fill for enabled source cells: live vertical meter (velocity and
+// probability), or diagonal split (cycle).
+ksh_shared.sourceCellBackground = function (x, y, w, h, layerMode, baseColor, lightColor, layerValue) {
+  var fillH;
+  var fillY;
+  var value;
+  var maxValue;
 
-  if (layerMode === "probability") {
-    halfH = Math.floor(h / 2);
-    ksh_shared.rect(x, y, w, halfH, baseColor);
-    ksh_shared.rect(x, y + halfH, w, h - halfH, lightColor);
+  if (layerMode === "velocity" || layerMode === "probability") {
+    maxValue = layerMode === "velocity" ? 127 : 100;
+    value = ksh_shared.clamp(layerValue, 0, maxValue);
+    ksh_shared.rect(x, y, w, h, lightColor);
+    if (value <= 0) {
+      return;
+    }
+    fillH = value >= maxValue ? h : Math.round(h * value / maxValue);
+    fillY = y + h - fillH;
+    ksh_shared.rect(x, fillY, w, fillH, baseColor);
     return;
   }
   if (layerMode === "cycle") {

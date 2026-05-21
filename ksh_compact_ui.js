@@ -8,26 +8,27 @@ mgraphics.init();
 mgraphics.relative_coords = 0;
 mgraphics.autofill = 0;
 
-var COMPACT_BASE_WIDTH = 880;
+var COMPACT_BASE_WIDTH = 736;
 var WIDTH = COMPACT_BASE_WIDTH;
-var HEIGHT = 160;
+var HEIGHT = 176;
 var MAX_STEPS = ksh_shared.MAX_STEPS;
 var MAX_LANES = ksh_shared.MAX_LANES;
+var DEFAULT_CHANNEL_COUNT = ksh_shared.constants.DEFAULT_CHANNEL_COUNT;
+var DEFAULT_GENERATION_MODE = ksh_shared.constants.DEFAULT_GENERATION_MODE;
+var ACTION_COLUMN_WIDTH = 86;
+var PREVIEW_CELL_W = 18;
+var PREVIEW_GRID_X = ACTION_COLUMN_WIDTH + 50;
+var PREVIEW_GRID_Y = 18;
+var PREVIEW_CELL_H = 18;
 var colors = ksh_shared.colors;
+var inactiveStepColor = [0.14, 0.16, 0.19, 1];
 
 var state = makeState();
 var previewData = null;
 var hitZones = [];
 
 function computeCompactWidth() {
-  var previewX0 = 82;
-  var previewCellW = 18;
-
-  if (state.stepCount <= 16) {
-    return COMPACT_BASE_WIDTH;
-  }
-
-  return Math.max(COMPACT_BASE_WIDTH, previewX0 + state.stepCount * previewCellW + 460);
+  return COMPACT_BASE_WIDTH;
 }
 
 function applyCompactSize() {
@@ -54,9 +55,9 @@ function makeState() {
 
   return {
     stepCount: 16,
-    laneCount: 3,
+    laneCount: DEFAULT_CHANNEL_COUNT,
     refreshSteps: 1,
-    generationMode: "stack",
+    generationMode: DEFAULT_GENERATION_MODE,
     staticSource: 0,
     rate: "16n",
     swing: 0,
@@ -67,47 +68,32 @@ function makeState() {
 function paint() {
   hitZones = [];
   ksh_shared.rect(0, 0, WIDTH, HEIGHT, colors.bg);
-  drawHeader();
+  drawActionColumn();
   drawPreview();
 }
 
-function drawHeader() {
-  ksh_shared.rect(0, 0, WIDTH, 58, colors.panel2);
-  ksh_shared.text("Kick Snare Hat", 14, 24, 17, colors.text);
-  ksh_shared.button(hitZones, "mode", ksh_shared.generationModeLabel(state.generationMode), 250, 18, 78, 25, false);
-  ksh_shared.valueBox(hitZones, "steps", "Steps", state.stepCount, 342, 18, 78);
-  ksh_shared.valueBox(hitZones, "lanes", "Lanes", state.laneCount, 434, 18, 78);
-  ksh_shared.valueBox(hitZones, "refresh", "Refresh", state.refreshSteps, 526, 18, 84);
-  ksh_shared.button(hitZones, "rate", state.rate, 624, 18, 62, 25, false);
-  ksh_shared.valueBox(hitZones, "swing", "Swing", state.swing, 700, 18, 78);
-  ksh_shared.button(hitZones, "open_editor", "Edit", 792, 18, 58, 25, true);
+function drawActionColumn() {
+  ksh_shared.rect(0, 0, ACTION_COLUMN_WIDTH, HEIGHT, colors.panel2);
+  ksh_shared.button(hitZones, "open_editor", "Edit", 14, 18, 58, 25, true);
 }
 
 function drawPreview() {
-  var x0 = 82;
-  var y0 = 84;
-  var cellW = 18;
-  var cellH = 14;
   var lane;
   var step;
   var cell;
-  var maxPreviewLanes = Math.min(4, state.laneCount);
+  var maxPreviewLanes = Math.min(MAX_LANES, state.laneCount);
+  var activeStep;
+  var fillColor;
 
-  ksh_shared.text("Generated", 14, 78, 11, colors.muted);
   for (lane = 0; lane < maxPreviewLanes; lane += 1) {
-    ksh_shared.text(state.lanes[lane].label, x0 - 10, y0 + lane * cellH + 11, 9, colors.muted, "right");
-    for (step = 0; step < state.stepCount; step += 1) {
+    ksh_shared.text(state.lanes[lane].label, PREVIEW_GRID_X - 10, PREVIEW_GRID_Y + lane * PREVIEW_CELL_H + 12, 9, colors.muted, "right");
+    for (step = 0; step < MAX_STEPS; step += 1) {
+      activeStep = step < state.stepCount;
       cell = previewData && previewData.generated && previewData.generated[lane] ? previewData.generated[lane][step] : null;
-      ksh_shared.rect(x0 + step * cellW, y0 + lane * cellH, cellW - 3, cellH - 3, cell && cell.enabled ? colors.blue : colors.off);
+      fillColor = activeStep ? (cell && cell.enabled ? colors.blue : colors.off) : inactiveStepColor;
+      ksh_shared.rect(PREVIEW_GRID_X + step * PREVIEW_CELL_W, PREVIEW_GRID_Y + lane * PREVIEW_CELL_H, PREVIEW_CELL_W - 3, PREVIEW_CELL_H - 3, fillColor);
     }
   }
-  ksh_shared.text(
-    "Open editor for source patterns, lane locks, velocity, probability, and cycle values.",
-    Math.max(400, x0 + state.stepCount * cellW + 24),
-    105,
-    10,
-    colors.muted
-  );
 }
 
 function send() {
@@ -158,35 +144,8 @@ function onclick(x, y, button, cmd, shift) {
 
   if (z.id === "open_editor") {
     send("open_editor");
-  } else if (z.id === "mode") {
-    ksh_shared.cycleGenerationMode(state);
-    send("mode", state.generationMode);
-  } else if (z.id === "rate") {
-    ksh_shared.cycleRate(state, shift ? -1 : 1);
-    send("rate", state.rate);
-  } else {
-    handleStepper(z.id);
   }
   mgraphics.redraw();
-}
-
-function handleStepper(id) {
-  if (id === "steps_inc" || id === "steps_dec") {
-    state.stepCount = ksh_shared.clamp(state.stepCount + (id === "steps_inc" ? 1 : -1), 1, MAX_STEPS);
-    state.refreshSteps = ksh_shared.clamp(state.refreshSteps, 1, state.stepCount);
-    send("steps", state.stepCount);
-    send("refresh_steps", state.refreshSteps);
-    applyCompactSize();
-  } else if (id === "lanes_inc" || id === "lanes_dec") {
-    state.laneCount = ksh_shared.clamp(state.laneCount + (id === "lanes_inc" ? 1 : -1), 1, MAX_LANES);
-    send("channels", state.laneCount);
-  } else if (id === "refresh_inc" || id === "refresh_dec") {
-    state.refreshSteps = ksh_shared.clamp(state.refreshSteps + (id === "refresh_inc" ? 1 : -1), 1, state.stepCount);
-    send("refresh_steps", state.refreshSteps);
-  } else if (id === "swing_inc" || id === "swing_dec") {
-    state.swing = ksh_shared.clamp(state.swing + (id === "swing_inc" ? 1 : -1), 0, 100);
-    send("swing", state.swing);
-  }
 }
 
 function preview(json) {

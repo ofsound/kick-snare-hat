@@ -213,6 +213,7 @@ function testRecomposeCommandsFlushPreviewForCompactUi() {
 function testCellMessageWritesToEngineSourceAndCoalescesPreview() {
   var sb = makeMaxSandbox();
   sb.editor_active(1);
+  sb.mode("stack");
   // Lock channel 1 to source 2 so the generated cell at (channel 0, step 4)
   // is guaranteed to be sourced from source index 1, which is exactly what
   // the cell edits below modify. Without the lock the generated grid might

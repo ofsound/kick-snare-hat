@@ -10,6 +10,8 @@ mgraphics.autofill = 0;
 
 var MAX_STEPS = ksh_shared.MAX_STEPS;
 var MAX_LANES = ksh_shared.MAX_LANES;
+var DEFAULT_CHANNEL_COUNT = ksh_shared.constants.DEFAULT_CHANNEL_COUNT;
+var DEFAULT_GENERATION_MODE = ksh_shared.constants.DEFAULT_GENERATION_MODE;
 var SOURCE_COUNT = ksh_shared.SOURCE_COUNT;
 var BASE_GRID_CELL_W = 25;
 var BASE_GRID_CELL_H = 22;
@@ -39,11 +41,10 @@ function computeEditorDimensions() {
   var minGridX0 = EDITOR_LAYOUT.LANE_PANEL_X + EDITOR_LAYOUT.LANE_PANEL_W + EDITOR_LAYOUT.LABEL_COL_W * scale;
   var gridW = state.stepCount * gridCellW();
   var minPatternRight = minGridX0 + gridW + EDITOR_LAYOUT.PATTERN_MIN_RIGHT_PAD * scale;
-  var sourceGridY0 = EDITOR_LAYOUT.MAIN_TOP + EDITOR_LAYOUT.PATTERN_TOP_PAD + 22 + 34 * scale;
+  var sourceGridY0 = EDITOR_LAYOUT.MAIN_TOP + EDITOR_LAYOUT.PATTERN_TOP_PAD + 22 + 18 * scale;
   var sourceBlockH = state.laneCount * cellH;
-  var generatedGridY0 = sourceGridY0 + sourceBlockH + 60 * scale;
-  var generatedBottom = generatedGridY0 + state.laneCount * cellH + EDITOR_LAYOUT.PATTERN_BOTTOM_PAD;
-  var footerY = generatedBottom + EDITOR_LAYOUT.FOOTER_GAP;
+  var sourceBottom = sourceGridY0 + sourceBlockH + EDITOR_LAYOUT.PATTERN_BOTTOM_PAD;
+  var footerY = sourceBottom + EDITOR_LAYOUT.FOOTER_GAP;
   var width = Math.max(
     EDITOR_LAYOUT.HEADER_MIN_WIDTH,
     minPatternRight + EDITOR_LAYOUT.RIGHT_MARGIN
@@ -111,14 +112,8 @@ function uiLayout() {
   var scale = patternGridScale();
   var cellH = gridCellH();
   var mainTop = EDITOR_LAYOUT.MAIN_TOP;
-  var sectionTitleY = mainTop + EDITOR_LAYOUT.PATTERN_TOP_PAD + 22;
-  var sourceTitleY = sectionTitleY;
-  var sourceStepY = sourceTitleY + 18 * scale;
+  var sourceStepY = mainTop + EDITOR_LAYOUT.PATTERN_TOP_PAD + 22;
   var sourceGridY0 = sourceStepY + 16 * scale;
-  var sourceBlockH = state.laneCount * cellH;
-  var generatedTitleY = sourceGridY0 + sourceBlockH + 28 * scale;
-  var generatedStepY = generatedTitleY + 18 * scale;
-  var generatedGridY0 = generatedStepY + 14 * scale;
   var availableLeft = EDITOR_LAYOUT.LANE_PANEL_X + EDITOR_LAYOUT.LANE_PANEL_W;
   var availableRight = WIDTH - EDITOR_LAYOUT.RIGHT_MARGIN - EDITOR_LAYOUT.PATTERN_MIN_RIGHT_PAD * scale;
   var centeredGridX0 = Math.floor(availableLeft + (availableRight - availableLeft - dims.gridW) / 2);
@@ -132,12 +127,8 @@ function uiLayout() {
     labelRight: gridX0 - 10 * scale,
     gridX0: gridX0,
     gridW: dims.gridW,
-    sourceTitleY: sourceTitleY,
     sourceStepY: sourceStepY,
     sourceGridY0: sourceGridY0,
-    generatedTitleY: generatedTitleY,
-    generatedStepY: generatedStepY,
-    generatedGridY0: generatedGridY0,
     footerY: dims.footerY
   };
 }
@@ -151,7 +142,6 @@ for (key in ksh_shared.colors) {
 }
 colors.edit = [0.96, 0.62, 0.22, 1];
 colors.editLight = [0.58, 0.80, 0.97, 1];
-colors.generated = [0.36, 0.66, 0.95, 1];
 colors.mutedCellOff = [0.12, 0.13, 0.14, 1];
 
 var state = makeState();
@@ -160,8 +150,8 @@ var playingStep = 0;
 var selectedSource = 0;
 var selectedLane = 0;
 var selectedStep = 0;
-var patternZoom2x = 0;
-var dcColors = 0;
+var patternZoom2x = 1;
+var dcColors = 1;
 var sourceLayerMode = "velocity";
 var hoverLayerMode = null;
 var hitZones = [];
@@ -331,9 +321,9 @@ function makeState() {
 
   return {
     stepCount: 16,
-    laneCount: 3,
+    laneCount: DEFAULT_CHANNEL_COUNT,
     refreshSteps: 1,
-    generationMode: "stack",
+    generationMode: DEFAULT_GENERATION_MODE,
     staticSource: 0,
     rate: "16n",
     swing: 0,
@@ -351,7 +341,6 @@ function paint() {
   ksh_shared.rect(0, 0, WIDTH, HEIGHT, colors.bg);
   drawHeader();
   drawSourceGrid();
-  drawGeneratedGrid();
   drawLaneControls();
   drawFooter();
 }
@@ -482,8 +471,8 @@ function drawSourceGrid() {
   var labelZoneX = layout.gridX0 - labelZoneW;
   var baseColor;
   var lightColor;
+  var layerValue;
 
-  ksh_shared.text("Source " + (selectedSource + 1) + " Pattern", x0, layout.sourceTitleY, 13, colors.text);
   drawStepNumberLabels(x0, cellW, layout.sourceStepY);
 
   for (lane = 0; lane < state.laneCount; lane += 1) {
@@ -495,6 +484,7 @@ function drawSourceGrid() {
       x = x0 + step * cellW;
       cell = state.sources[selectedSource][lane][step];
       if (cell.enabled) {
+        layerValue = sourceLayerValue(cell, layerMode);
         baseColor = sourceCellColor(lane, 0);
         lightColor = sourceCellColor(lane, 1);
         if (muted) {
@@ -508,46 +498,15 @@ function drawSourceGrid() {
           cellH - cellPad * 2,
           layerMode,
           baseColor,
-          lightColor
+          lightColor,
+          layerValue
         );
-        ksh_shared.text(String(sourceLayerValue(cell, layerMode)), x + cellW / 2, y + 14 * scale, 9 * scale, muted ? colors.muted : colors.off, "center");
+        ksh_shared.text(String(layerValue), x + cellW / 2, y + 14 * scale, 9 * scale, muted ? colors.muted : colors.off, "center");
       } else {
         ksh_shared.rect(x + cellPad, y + cellPad, cellW - cellPad * 2, cellH - cellPad * 2, muted ? colors.mutedCellOff : colors.off);
       }
       ksh_shared.strokeRect(x + cellPad, y + cellPad, cellW - cellPad * 2, cellH - cellPad * 2, selectedLane === lane && selectedStep === step ? colors.text : muted ? colors.muted : colors.strokeSoft, 1);
       ksh_shared.zone(hitZones, "source_cell", x + cellPad, y + cellPad, cellW - cellPad * 2, cellH - cellPad * 2, { lane: lane, step: step });
-    }
-  }
-}
-
-function drawGeneratedGrid() {
-  var layout = uiLayout();
-  var x0 = layout.gridX0;
-  var y0 = layout.generatedGridY0;
-  var scale = patternGridScale();
-  var cellW = gridCellW();
-  var cellH = gridCellH();
-  var cellPad = 2 * scale;
-  var lane;
-  var step;
-  var x;
-  var y;
-  var cell;
-
-  ksh_shared.text("Generated Pattern", x0, layout.generatedTitleY, 13, colors.text);
-  drawStepNumberLabels(x0, cellW, layout.generatedStepY);
-
-  for (lane = 0; lane < state.laneCount; lane += 1) {
-    ksh_shared.text(state.lanes[lane].label, layout.labelRight, y0 + lane * cellH + 16 * scale, 10 * scale, colors.muted, "right");
-    for (step = 0; step < state.stepCount; step += 1) {
-      x = x0 + step * cellW;
-      y = y0 + lane * cellH;
-      cell = previewData && previewData.generated && previewData.generated[lane] ? previewData.generated[lane][step] : null;
-      ksh_shared.rect(x + cellPad, y + cellPad, cellW - cellPad * 2, cellH - cellPad * 2, cell && cell.enabled ? colors.generated : colors.off);
-      ksh_shared.strokeRect(x + cellPad, y + cellPad, cellW - cellPad * 2, cellH - cellPad * 2, colors.strokeSoft, 1);
-      if (cell && cell.enabled) {
-        ksh_shared.text(String(cell.velocity), x + cellW / 2, y + 14 * scale, 9 * scale, colors.off, "center");
-      }
     }
   }
 }

@@ -18,6 +18,8 @@ var ksh_constants = {
   DEBUG: false,
   MAX_STEPS: 32,
   MAX_LANES: 8,
+  DEFAULT_CHANNEL_COUNT: 8,
+  DEFAULT_GENERATION_MODE: "static",
   SOURCE_COUNT: 4,
   DEFAULT_CHANNEL_LABELS: ["1", "2", "3", "4", "5", "6", "7", "8"],
   DEFAULT_CHANNEL_NOTES: [36, 37, 38, 39, 40, 41, 42, 43],

@@ -265,10 +265,10 @@ const patch = {
       modernui: 1
     },
     classnamespace: "box",
-    rect: [80.0, 80.0, 900.0, 220.0],
+    rect: [80.0, 80.0, 736.0, 176.0],
     bglocked: 0,
     openinpresentation: 1,
-    openrect: [0.0, 0.0, 900.0, 220.0],
+    openrect: [0.0, 0.0, 736.0, 176.0],
     devicewidth: 0.0,
     statusbarvisible: 2,
     default_fontsize: 12.0,
@@ -287,9 +287,9 @@ const patch = {
           numinlets: 1,
           numoutlets: 1,
           outlettype: [""],
-          patching_rect: [20.0, 20.0, 880.0, 160.0],
+          patching_rect: [20.0, 20.0, 736.0, 176.0],
           presentation: 1,
-          presentation_rect: [0.0, 0.0, 880.0, 160.0]
+          presentation_rect: [0.0, 0.0, 736.0, 176.0]
         }
       },
       {

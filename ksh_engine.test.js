@@ -218,6 +218,7 @@ function testChannelLockOverridesRandomSource() {
   var engine = makeEngine([0]);
   clearAll(engine);
   engine.setChannelCount(1);
+  engine.setGenerationMode("stack");
   engine.setChannelLock(0, 2);
   engine.setCell(2, 0, 0, 1, 101, 100, 1);
   engine._notes.length = 0;
@@ -250,6 +251,7 @@ function testRandomGateUsesPercentage() {
   clearAll(engine);
   engine.setStepCount(1);
   engine.setChannelCount(1);
+  engine.setGenerationMode("stack");
   engine.setCell(0, 0, 0, 1, 100, 50, 1);
   engine._notes.length = 0;
   engine._setRandomValues([0, 0.10, 0, 0.90]);
@@ -670,6 +672,7 @@ function testChannelLockRoutesSourceEditsToGenerated() {
   clearAll(engine);
   engine.setStepCount(2);
   engine.setChannelCount(1);
+  engine.setGenerationMode("stack");
   engine.setChannelLock(0, 1);
   engine.setCell(1, 0, 0, 1, 64, 100, 1);
   engine._setRandomValues([0]);

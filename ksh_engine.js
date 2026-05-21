@@ -45,6 +45,8 @@ var KSH_EngineClass = null;
 (function (root) {
   var MAX_STEPS = KSH_CONSTANTS.MAX_STEPS;
   var MAX_LANES = KSH_CONSTANTS.MAX_LANES;
+  var DEFAULT_CHANNEL_COUNT = KSH_CONSTANTS.DEFAULT_CHANNEL_COUNT;
+  var DEFAULT_GENERATION_MODE = KSH_CONSTANTS.DEFAULT_GENERATION_MODE;
   var SOURCE_COUNT = KSH_CONSTANTS.SOURCE_COUNT;
 
   function clamp(value, min, max) {
@@ -164,9 +166,9 @@ var KSH_EngineClass = null;
     this.playingStepOneBased = 0;
 
     this.stepCount = 16;
-    this.channelCount = 3;
+    this.channelCount = DEFAULT_CHANNEL_COUNT;
     this.refreshSteps = 1;
-    this.generationMode = "stack";
+    this.generationMode = DEFAULT_GENERATION_MODE;
     this.staticSource = 0;
     this.rate = "16n";
     this.tempo = 120;
