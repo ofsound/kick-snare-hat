@@ -91,8 +91,8 @@
             "rect": [
               120,
               120,
-              968,
-              352
+              1024,
+              382
             ],
             "bglocked": 0,
             "openinpresentation": 1,
@@ -136,15 +136,15 @@
                   "patching_rect": [
                     0,
                     0,
-                    968,
-                    352
+                    1024,
+                    382
                   ],
                   "presentation": 1,
                   "presentation_rect": [
                     0,
                     0,
-                    968,
-                    352
+                    1024,
+                    382
                   ],
                   "layer": 0
                 }
@@ -242,6 +242,102 @@
                     ""
                   ],
                   "text": "r ksh_engine_events"
+                }
+              },
+              {
+                "box": {
+                  "id": "editor-key",
+                  "maxclass": "newobj",
+                  "numinlets": 0,
+                  "numoutlets": 4,
+                  "patching_rect": [
+                    560,
+                    470,
+                    36,
+                    22
+                  ],
+                  "outlettype": [
+                    "int",
+                    "int",
+                    "int",
+                    "int"
+                  ],
+                  "text": "key"
+                }
+              },
+              {
+                "box": {
+                  "id": "editor-key-select",
+                  "maxclass": "newobj",
+                  "numinlets": 1,
+                  "numoutlets": 4,
+                  "patching_rect": [
+                    560,
+                    500,
+                    100,
+                    22
+                  ],
+                  "outlettype": [
+                    "bang",
+                    "bang",
+                    "bang",
+                    ""
+                  ],
+                  "text": "sel 49 50 51"
+                }
+              },
+              {
+                "box": {
+                  "id": "editor-key-velocity",
+                  "maxclass": "message",
+                  "numinlets": 2,
+                  "numoutlets": 1,
+                  "patching_rect": [
+                    560,
+                    530,
+                    150,
+                    22
+                  ],
+                  "outlettype": [
+                    ""
+                  ],
+                  "text": "source_layer_mode velocity"
+                }
+              },
+              {
+                "box": {
+                  "id": "editor-key-cycle",
+                  "maxclass": "message",
+                  "numinlets": 2,
+                  "numoutlets": 1,
+                  "patching_rect": [
+                    560,
+                    560,
+                    140,
+                    22
+                  ],
+                  "outlettype": [
+                    ""
+                  ],
+                  "text": "source_layer_mode cycle"
+                }
+              },
+              {
+                "box": {
+                  "id": "editor-key-probability",
+                  "maxclass": "message",
+                  "numinlets": 2,
+                  "numoutlets": 1,
+                  "patching_rect": [
+                    560,
+                    590,
+                    176,
+                    22
+                  ],
+                  "outlettype": [
+                    ""
+                  ],
+                  "text": "source_layer_mode probability"
                 }
               },
               {
@@ -395,13 +491,32 @@
               },
               {
                 "box": {
+                  "id": "editor-done-route",
+                  "maxclass": "newobj",
+                  "numinlets": 1,
+                  "numoutlets": 2,
+                  "patching_rect": [
+                    180,
+                    640,
+                    80,
+                    22
+                  ],
+                  "outlettype": [
+                    "",
+                    ""
+                  ],
+                  "text": "route text"
+                }
+              },
+              {
+                "box": {
                   "id": "editor-done-prep",
                   "maxclass": "newobj",
                   "numinlets": 1,
                   "numoutlets": 1,
                   "patching_rect": [
                     180,
-                    660,
+                    680,
                     160,
                     22
                   ],
@@ -588,6 +703,18 @@
                     0
                   ],
                   "destination": [
+                    "editor-done-route",
+                    0
+                  ]
+                }
+              },
+              {
+                "patchline": {
+                  "source": [
+                    "editor-done-route",
+                    0
+                  ],
+                  "destination": [
                     "editor-done-prep",
                     0
                   ]
@@ -633,6 +760,90 @@
                 "patchline": {
                   "source": [
                     "editor-events",
+                    0
+                  ],
+                  "destination": [
+                    "editor-ui",
+                    0
+                  ]
+                }
+              },
+              {
+                "patchline": {
+                  "source": [
+                    "editor-key",
+                    0
+                  ],
+                  "destination": [
+                    "editor-key-select",
+                    0
+                  ]
+                }
+              },
+              {
+                "patchline": {
+                  "source": [
+                    "editor-key-select",
+                    0
+                  ],
+                  "destination": [
+                    "editor-key-velocity",
+                    0
+                  ]
+                }
+              },
+              {
+                "patchline": {
+                  "source": [
+                    "editor-key-select",
+                    1
+                  ],
+                  "destination": [
+                    "editor-key-cycle",
+                    0
+                  ]
+                }
+              },
+              {
+                "patchline": {
+                  "source": [
+                    "editor-key-select",
+                    2
+                  ],
+                  "destination": [
+                    "editor-key-probability",
+                    0
+                  ]
+                }
+              },
+              {
+                "patchline": {
+                  "source": [
+                    "editor-key-velocity",
+                    0
+                  ],
+                  "destination": [
+                    "editor-ui",
+                    0
+                  ]
+                }
+              },
+              {
+                "patchline": {
+                  "source": [
+                    "editor-key-cycle",
+                    0
+                  ],
+                  "destination": [
+                    "editor-ui",
+                    0
+                  ]
+                }
+              },
+              {
+                "patchline": {
+                  "source": [
+                    "editor-key-probability",
                     0
                   ],
                   "destination": [

@@ -60,6 +60,11 @@ ksh_shared.clamp = function (value, min, max) {
   return Math.max(min, Math.min(max, value));
 };
 
+ksh_shared.toggleValue = function (value) {
+  value = String(value).toLowerCase();
+  return value === "0" || value === "false" || value === "off" ? 0 : 1;
+};
+
 ksh_shared.patcherWindowPlacement = function (targetPatcher, wind) {
   var loc;
   var rect;
@@ -211,17 +216,18 @@ ksh_shared.fillPath = function (points, color) {
   mgraphics.fill();
 };
 
-// Gate-mode fill for enabled source cells: solid, horizontal split (random), or diagonal split (cycle).
-ksh_shared.sourceCellBackground = function (x, y, w, h, gateMode, baseColor, lightColor) {
+// Layer fill for enabled source cells: solid (velocity), horizontal split
+// (probability), or diagonal split (cycle).
+ksh_shared.sourceCellBackground = function (x, y, w, h, layerMode, baseColor, lightColor) {
   var halfH;
 
-  if (gateMode === "random") {
+  if (layerMode === "probability") {
     halfH = Math.floor(h / 2);
     ksh_shared.rect(x, y, w, halfH, baseColor);
     ksh_shared.rect(x, y + halfH, w, h - halfH, lightColor);
     return;
   }
-  if (gateMode === "cycle") {
+  if (layerMode === "cycle") {
     ksh_shared.fillPath(
       [
         [x, y],
@@ -342,12 +348,11 @@ ksh_shared.applyEngineState = function (state, engineState) {
   state.generationMode = engineState.generationMode === "per_channel" ? "per_channel" : "stack";
   state.rate = ksh_shared.constants.normalizeRate(engineState.rate);
   state.swing = ksh_shared.clamp(engineState.swing, 0, 100);
+  state.velocityHumanize = ksh_shared.clamp(engineState.velocityHumanize, 0, 100);
+  state.timingHumanize = ksh_shared.clamp(engineState.timingHumanize, 0, 100);
 
-  if (engineState.midiChannel !== undefined) {
-    state.midiChannel = ksh_shared.clamp(engineState.midiChannel, 1, 16);
-  }
-  if (engineState.noteDurationMs !== undefined) {
-    state.noteDurationMs = ksh_shared.clamp(engineState.noteDurationMs, 10, 5000);
+  if (engineState.deviceActive !== undefined) {
+    state.deviceActive = ksh_shared.toggleValue(engineState.deviceActive);
   }
 
   channels = engineState.channels;
@@ -388,10 +393,12 @@ ksh_shared.applyStatusMessage = function (state, name, args) {
     state.rate = ksh_shared.constants.normalizeRate(args[0]);
   } else if (name === "swing") {
     state.swing = ksh_shared.clamp(args[0], 0, 100);
-  } else if (name === "midi_channel") {
-    state.midiChannel = ksh_shared.clamp(args[0], 1, 16);
-  } else if (name === "duration_ms") {
-    state.noteDurationMs = ksh_shared.clamp(args[0], 10, 5000);
+  } else if (name === "velocity_humanize") {
+    state.velocityHumanize = ksh_shared.clamp(args[0], 0, 100);
+  } else if (name === "timing_humanize") {
+    state.timingHumanize = ksh_shared.clamp(args[0], 0, 100);
+  } else if (name === "device_active") {
+    state.deviceActive = ksh_shared.toggleValue(args[0]);
   } else if (name === "channel_label") {
     lane = ksh_shared.clamp(args[0] - 1, 0, ksh_shared.MAX_LANES - 1);
     args.shift();

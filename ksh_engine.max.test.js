@@ -121,12 +121,19 @@ function testMaxWrapperBootsEngineAndExposesHandlers() {
   var sb = makeMaxSandbox();
   assert.ok(sb.kshEngine, "kshEngine should be constructed by the Max wrapper");
   assert.strictEqual(typeof sb.cell, "function");
+  assert.strictEqual(typeof sb.cell_probability, "function");
+  assert.strictEqual(typeof sb.cell_cycle, "function");
   assert.strictEqual(typeof sb.transport_position, "function");
   assert.strictEqual(typeof sb.reset, "function");
   assert.strictEqual(typeof sb.sync_all, "function");
   assert.strictEqual(typeof sb.getvalueof, "function");
   assert.strictEqual(typeof sb.setvalueof, "function");
+  assert.strictEqual(typeof sb.midi_channel, "undefined");
+  assert.strictEqual(typeof sb.duration_ms, "undefined");
+  assert.strictEqual(typeof sb.velocity_humanize, "function");
+  assert.strictEqual(typeof sb.timing_humanize, "function");
   assert.strictEqual(typeof sb.phase_offset_beats, "function");
+  assert.strictEqual(typeof sb.device_active, "function");
   assert.strictEqual(typeof sb.editor_active, "function");
 }
 
@@ -139,6 +146,8 @@ function testStatusMessagesEmitUiSelectors() {
   sb._clear();
   sb.steps(8);
   sb.channel_lock(1, 2);
+  sb.velocity_humanize(12);
+  sb.timing_humanize(8);
   sb.phase_offset_beats(0.125);
 
   stepsEvent = lastEventOn(sb, "steps");
@@ -152,6 +161,8 @@ function testStatusMessagesEmitUiSelectors() {
     "channel_lock status should use Max/UI-facing 1-based source indices");
   assert.ok(phaseEvent, "phase_offset_beats should emit a direct UI selector");
   assert.deepStrictEqual(phaseEvent.args, ["phase_offset_beats", "0.125"]);
+  assert.deepStrictEqual(lastEventOn(sb, "velocity_humanize").args, ["velocity_humanize", "12"]);
+  assert.deepStrictEqual(lastEventOn(sb, "timing_humanize").args, ["timing_humanize", "8"]);
   assert.strictEqual(eventsOn(sb, "status").length, 0,
     "status updates should not be hidden behind a generic status selector");
 }
@@ -199,9 +210,9 @@ function testCellMessageWritesToEngineSourceAndCoalescesPreview() {
   sb._flush();
   sb._clear();
 
-  sb.cell(2, 1, 5, 1, 88, "always", 100);
-  sb.cell(2, 1, 5, 1, 99, "always", 100);
-  sb.cell(2, 1, 5, 1, 110, "always", 100);
+  sb.cell(2, 1, 5, 1, 88, 100, 1);
+  sb.cell(2, 1, 5, 1, 99, 80, 2);
+  sb.cell(2, 1, 5, 1, 110, 70, 3);
 
   // Three edits → at most one preview Task scheduled, no synchronous preview
   // emission yet because the schedule is deferred.
@@ -216,6 +227,8 @@ function testCellMessageWritesToEngineSourceAndCoalescesPreview() {
 
   assert.strictEqual(sb.kshEngine.sources[1][0][4].enabled, 1);
   assert.strictEqual(sb.kshEngine.sources[1][0][4].velocity, 110);
+  assert.strictEqual(sb.kshEngine.sources[1][0][4].probability, 70);
+  assert.strictEqual(sb.kshEngine.sources[1][0][4].cycle, 3);
 }
 
 function testChannelAuditionEmitsNoteToOutlet() {
@@ -224,12 +237,10 @@ function testChannelAuditionEmitsNoteToOutlet() {
   sb._clear();
   sb.channels(2);
   sb.channel_note(2, 50);
-  sb.midi_channel(7);
-  sb.duration_ms(250);
   sb.channel_audition(2);
 
   assert.strictEqual(sb._notes().length, 1);
-  assert.deepStrictEqual(sb._notes()[0].args, [50, 100, 250, 7, 0]);
+  assert.deepStrictEqual(sb._notes()[0].args, [50, 100, 100, 1, 0]);
 }
 
 function testTransportPositionEmitsNativeSchedulerEvent() {
@@ -239,9 +250,7 @@ function testTransportPositionEmitsNativeSchedulerEvent() {
   sb.channels(1);
   sb.rate("16n");
   sb.tempo(120);
-  sb.duration_ms(150);
-  sb.midi_channel(3);
-  sb.cell(1, 1, 1, 1, 90, "always", 100);
+  sb.cell(1, 1, 1, 1, 90, 100, 1);
   sb._flush();
   sb._clear();
 
@@ -251,7 +260,7 @@ function testTransportPositionEmitsNativeSchedulerEvent() {
   assert.strictEqual(emitted.length, 1, "should emit one raw note event");
   // safeOutlet(0, pitch, velocity, durationMs, channel, delayMs)
   assert.strictEqual(emitted[0].outlet, 0);
-  assert.deepStrictEqual(emitted[0].args, [36, 90, 150, 3, 0],
+  assert.deepStrictEqual(emitted[0].args, [36, 90, 100, 1, 0],
     "raw note event should be pitch velocity duration channel delay");
   assert.strictEqual(sb._scheduledCount(), 0,
     "note output should not allocate per-note Task objects");
@@ -262,7 +271,7 @@ function testResetClearsNativeScheduler() {
   sb._clear();
   sb.steps(4);
   sb.channels(1);
-  sb.cell(1, 1, 1, 1, 100, "always", 100);
+  sb.cell(1, 1, 1, 1, 100, 100, 1);
   sb._flush();
   sb._clear();
 
@@ -285,10 +294,11 @@ function testGetValueOfSetValueOfRoundtripsEngineState() {
   sb.steps(8);
   sb.channels(2);
   sb.swing(40);
-  sb.midi_channel(7);
-  sb.duration_ms(250);
+  sb.device_active(0);
+  sb.velocity_humanize(12);
+  sb.timing_humanize(8);
   sb.phase_offset_beats(0.5);
-  sb.cell(1, 1, 1, 1, 64, "random", 30);
+  sb.cell(1, 1, 1, 1, 64, 30, 1);
   sb.channel_label(1, "Sub");
   sb.channel_note(2, 50);
   sb._flush();
@@ -299,8 +309,11 @@ function testGetValueOfSetValueOfRoundtripsEngineState() {
   assert.strictEqual(parsed.stepCount, 8);
   assert.strictEqual(parsed.channelCount, 2);
   assert.strictEqual(parsed.swing, 40);
-  assert.strictEqual(parsed.midiChannel, 7);
-  assert.strictEqual(parsed.noteDurationMs, 250);
+  assert.strictEqual(Object.prototype.hasOwnProperty.call(parsed, "midiChannel"), false);
+  assert.strictEqual(Object.prototype.hasOwnProperty.call(parsed, "noteDurationMs"), false);
+  assert.strictEqual(parsed.deviceActive, 0);
+  assert.strictEqual(parsed.velocityHumanize, 12);
+  assert.strictEqual(parsed.timingHumanize, 8);
   assert.strictEqual(parsed.phaseOffsetBeats, 0.5);
   assert.strictEqual(parsed.channels[0].label, "Sub");
   assert.strictEqual(parsed.channels[1].note, 50);
@@ -313,14 +326,15 @@ function testGetValueOfSetValueOfRoundtripsEngineState() {
   assert.strictEqual(sb2.kshEngine.stepCount, 8);
   assert.strictEqual(sb2.kshEngine.channelCount, 2);
   assert.strictEqual(sb2.kshEngine.swing, 40);
-  assert.strictEqual(sb2.kshEngine.midiChannel, 7);
-  assert.strictEqual(sb2.kshEngine.noteDurationMs, 250);
+  assert.strictEqual(sb2.kshEngine.deviceActive, false);
+  assert.strictEqual(sb2.kshEngine.velocityHumanize, 12);
+  assert.strictEqual(sb2.kshEngine.timingHumanize, 8);
   assert.strictEqual(sb2.kshEngine.phaseOffsetBeats, 0.5);
   assert.strictEqual(sb2.kshEngine.channels[0].label, "Sub");
   assert.strictEqual(sb2.kshEngine.channels[1].note, 50);
   assert.strictEqual(sb2.kshEngine.sources[0][0][0].enabled, 1);
-  assert.strictEqual(sb2.kshEngine.sources[0][0][0].gateMode, "random");
-  assert.strictEqual(sb2.kshEngine.sources[0][0][0].random, 30);
+  assert.strictEqual(sb2.kshEngine.sources[0][0][0].probability, 30);
+  assert.strictEqual(sb2.kshEngine.sources[0][0][0].cycle, 1);
 
   // setvalueof should emit an engine_state event so the UIs resync.
   var engineStateEvents = eventsOn(sb2, "engine_state");
@@ -369,7 +383,7 @@ function testEditorActiveEnablesCurrentStepEmission() {
   sb.editor_active(0);
   sb.steps(4);
   sb.channels(1);
-  sb.cell(1, 1, 1, 1, 100, "always", 100);
+  sb.cell(1, 1, 1, 1, 100, 100, 1);
   sb._flush();
   sb._clear();
 
@@ -387,6 +401,34 @@ function testEditorActiveEnablesCurrentStepEmission() {
     "current_step should fire while the editor is active");
 }
 
+function testDeviceActiveSuppressesTransportOutputAndClearsScheduler() {
+  var sb = makeMaxSandbox();
+  sb._clear();
+  sb.steps(4);
+  sb.channels(1);
+  sb.cell(1, 1, 1, 1, 100, 100, 1);
+  sb._flush();
+  sb._clear();
+
+  sb.device_active(0);
+  sb.transport_position(0, 1);
+
+  assert.strictEqual(sb._notes().length, 0,
+    "inactive device should suppress transport note output");
+  assert.ok(eventsOn(sb, "device_active").length >= 1,
+    "device_active should emit a UI status selector");
+  assert.ok(sb._named().some(function (m) {
+    return m.bus === "ksh_scheduler_commands" && m.args[0] === "clear";
+  }), "turning the device off should clear pending scheduler output");
+
+  sb._clear();
+  sb.device_active(1);
+  sb.transport_position(0, 1);
+
+  assert.strictEqual(sb._notes().length, 1,
+    "active device should resume transport note output");
+}
+
 function testMessnamedFailuresAreSwallowed() {
   var sb = makeMaxSandbox();
   // Replace messnamed with one that throws to simulate a transient Max error
@@ -400,7 +442,7 @@ function testMessnamedFailuresAreSwallowed() {
   // These all route through safeMessnamed / safeOutlet and must not throw.
   assert.doesNotThrow(function () { sb.steps(4); });
   assert.doesNotThrow(function () { sb.channels(1); });
-  assert.doesNotThrow(function () { sb.cell(1, 1, 1, 1, 100, "always", 100); });
+  assert.doesNotThrow(function () { sb.cell(1, 1, 1, 1, 100, 100, 1); });
   assert.doesNotThrow(function () { sb._flush(); });
   assert.doesNotThrow(function () { sb.transport_position(0, 1); });
   assert.doesNotThrow(function () { sb._flush(); });
@@ -421,6 +463,7 @@ testGetValueOfSetValueOfRoundtripsEngineState();
 testSetValueOfRejectsMalformedJsonWithoutChangingState();
 testSetValueOfAppliesValidPartialState();
 testEditorActiveEnablesCurrentStepEmission();
+testDeviceActiveSuppressesTransportOutputAndClearsScheduler();
 testMessnamedFailuresAreSwallowed();
 
 console.log("ksh_engine max wrapper tests passed");

@@ -22,13 +22,13 @@ function editorDimensions(stepCount, laneCount) {
   const gridCellH = 22;
   const gridX0 = 12 + 158 + 84;
   const gridW = stepCount * gridCellW;
-  const editorX = gridX0 + gridW + 24;
-  const sourceGridY0 = 68 + 56;
+  const patternMinRightPad = 56;
+  const sourceGridY0 = 68 + 12 + 22 + 34;
   const sourceBlockH = laneCount * gridCellH;
   const generatedGridY0 = sourceGridY0 + sourceBlockH + 60;
-  const generatedBottom = generatedGridY0 + laneCount * gridCellH;
-  const footerY = Math.max(generatedBottom, 68 + 248) + 8;
-  const width = Math.max(868, editorX + 278 + 12);
+  const generatedBottom = generatedGridY0 + laneCount * gridCellH + 18;
+  const footerY = generatedBottom + 8;
+  const width = Math.max(1024, gridX0 + gridW + patternMinRightPad + 12);
 
   return {
     width,
@@ -117,6 +117,34 @@ function editorSubpatcher() {
         numoutlets: 1,
         outlettype: [""]
       }),
+      // jsui onkeydown does not reliably receive focus in Live. Use Max's
+      // global key object while the editor patcher is open to switch the
+      // Source Pattern edit layer with number keys 1/2/3.
+      box("editor-key", "newobj", "key", [560.0, 470.0, 36.0, 22.0], {
+        numinlets: 0,
+        numoutlets: 4,
+        outlettype: ["int", "int", "int", "int"]
+      }),
+      box("editor-key-select", "newobj", "sel 49 50 51", [560.0, 500.0, 100.0, 22.0], {
+        numinlets: 1,
+        numoutlets: 4,
+        outlettype: ["bang", "bang", "bang", ""]
+      }),
+      box("editor-key-velocity", "message", "source_layer_mode velocity", [560.0, 530.0, 150.0, 22.0], {
+        numinlets: 2,
+        numoutlets: 1,
+        outlettype: [""]
+      }),
+      box("editor-key-cycle", "message", "source_layer_mode cycle", [560.0, 560.0, 140.0, 22.0], {
+        numinlets: 2,
+        numoutlets: 1,
+        outlettype: [""]
+      }),
+      box("editor-key-probability", "message", "source_layer_mode probability", [560.0, 590.0, 176.0, 22.0], {
+        numinlets: 2,
+        numoutlets: 1,
+        outlettype: [""]
+      }),
       box("editor-pass", "newobj", "t a", [360.0, 430.0, 36.0, 22.0], {
         numinlets: 1,
         numoutlets: 1,
@@ -174,11 +202,19 @@ function editorSubpatcher() {
         numoutlets: 1,
         outlettype: [""]
       }),
+      // textedit's left outlet emits "text <buffer>" — see the textedit
+      // reference. Strip the documented "text" prefix before forwarding the
+      // committed value back to the jsui.
+      box("editor-done-route", "newobj", "route text", [180.0, 640.0, 80.0, 22.0], {
+        numinlets: 1,
+        numoutlets: 2,
+        outlettype: ["", ""]
+      }),
       box(
         "editor-done-prep",
         "newobj",
         "prepend label_edit_done",
-        [180.0, 660.0, 160.0, 22.0],
+        [180.0, 680.0, 160.0, 22.0],
         {
           numinlets: 1,
           numoutlets: 1,
@@ -201,11 +237,19 @@ function editorSubpatcher() {
       line("editor-select-msg", 0, "lane-textedit", 0),
       line("editor-hide-msg", 0, "lane-textedit", 0),
       line("editor-set-prep", 0, "lane-textedit", 0),
-      line("lane-textedit", 0, "editor-done-prep", 0),
+      line("lane-textedit", 0, "editor-done-route", 0),
+      line("editor-done-route", 0, "editor-done-prep", 0),
       line("editor-done-prep", 0, "editor-ui", 0),
       line("editor-pass", 0, "editor-out", 0),
       line("editor-cmds", 0, "editor-ui", 0),
-      line("editor-events", 0, "editor-ui", 0)
+      line("editor-events", 0, "editor-ui", 0),
+      line("editor-key", 0, "editor-key-select", 0),
+      line("editor-key-select", 0, "editor-key-velocity", 0),
+      line("editor-key-select", 1, "editor-key-cycle", 0),
+      line("editor-key-select", 2, "editor-key-probability", 0),
+      line("editor-key-velocity", 0, "editor-ui", 0),
+      line("editor-key-cycle", 0, "editor-ui", 0),
+      line("editor-key-probability", 0, "editor-ui", 0)
     ]
   };
 }

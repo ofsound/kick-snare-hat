@@ -11,20 +11,20 @@ mgraphics.autofill = 0;
 var MAX_STEPS = ksh_shared.MAX_STEPS;
 var MAX_LANES = ksh_shared.MAX_LANES;
 var SOURCE_COUNT = ksh_shared.SOURCE_COUNT;
-var GRID_CELL_W = 25;
-var GRID_CELL_H = 22;
+var BASE_GRID_CELL_W = 25;
+var BASE_GRID_CELL_H = 22;
 var EDITOR_LAYOUT = {
   MAIN_TOP: 68,
   FOOTER_H: 28,
   FOOTER_GAP: 8,
-  CELL_EDITOR_W: 278,
-  CELL_EDITOR_H: 248,
   RIGHT_MARGIN: 12,
-  EDITOR_GAP: 24,
+  PATTERN_MIN_RIGHT_PAD: 56,
   LANE_PANEL_X: 12,
   LANE_PANEL_W: 158,
   LABEL_COL_W: 84,
-  HEADER_MIN_WIDTH: 868
+  PATTERN_TOP_PAD: 12,
+  PATTERN_BOTTOM_PAD: 18,
+  HEADER_MIN_WIDTH: 1160
 };
 var WIDTH = 968;
 var HEIGHT = 352;
@@ -34,28 +34,27 @@ var windowResizeTaskImmediate = null;
 var windowResizeTaskSettle = null;
 
 function computeEditorDimensions() {
-  var gridX0 = EDITOR_LAYOUT.LANE_PANEL_X + EDITOR_LAYOUT.LANE_PANEL_W + EDITOR_LAYOUT.LABEL_COL_W;
-  var gridW = state.stepCount * GRID_CELL_W;
-  var editorX = gridX0 + gridW + EDITOR_LAYOUT.EDITOR_GAP;
-  var sourceGridY0 = EDITOR_LAYOUT.MAIN_TOP + 56;
-  var sourceBlockH = state.laneCount * GRID_CELL_H;
-  var generatedGridY0 = sourceGridY0 + sourceBlockH + 60;
-  var generatedBottom = generatedGridY0 + state.laneCount * GRID_CELL_H;
-  var mainContentBottom = Math.max(generatedBottom, EDITOR_LAYOUT.MAIN_TOP + EDITOR_LAYOUT.CELL_EDITOR_H);
-  var footerY = mainContentBottom + EDITOR_LAYOUT.FOOTER_GAP;
+  var scale = patternGridScale();
+  var cellH = gridCellH();
+  var minGridX0 = EDITOR_LAYOUT.LANE_PANEL_X + EDITOR_LAYOUT.LANE_PANEL_W + EDITOR_LAYOUT.LABEL_COL_W * scale;
+  var gridW = state.stepCount * gridCellW();
+  var minPatternRight = minGridX0 + gridW + EDITOR_LAYOUT.PATTERN_MIN_RIGHT_PAD * scale;
+  var sourceGridY0 = EDITOR_LAYOUT.MAIN_TOP + EDITOR_LAYOUT.PATTERN_TOP_PAD + 22 + 34 * scale;
+  var sourceBlockH = state.laneCount * cellH;
+  var generatedGridY0 = sourceGridY0 + sourceBlockH + 60 * scale;
+  var generatedBottom = generatedGridY0 + state.laneCount * cellH + EDITOR_LAYOUT.PATTERN_BOTTOM_PAD;
+  var footerY = generatedBottom + EDITOR_LAYOUT.FOOTER_GAP;
   var width = Math.max(
     EDITOR_LAYOUT.HEADER_MIN_WIDTH,
-    editorX + EDITOR_LAYOUT.CELL_EDITOR_W + EDITOR_LAYOUT.RIGHT_MARGIN
+    minPatternRight + EDITOR_LAYOUT.RIGHT_MARGIN
   );
 
   return {
     width: width,
     height: footerY + EDITOR_LAYOUT.FOOTER_H,
     footerY: footerY,
-    gridX0: gridX0,
-    gridW: gridW,
-    editorX: editorX,
-    editorW: EDITOR_LAYOUT.CELL_EDITOR_W
+    minGridX0: minGridX0,
+    gridW: gridW
   };
 }
 
@@ -109,23 +108,29 @@ function applyEditorSize() {
 
 function uiLayout() {
   var dims = computeEditorDimensions();
+  var scale = patternGridScale();
+  var cellH = gridCellH();
   var mainTop = EDITOR_LAYOUT.MAIN_TOP;
-  var sectionTitleY = mainTop + 22;
+  var sectionTitleY = mainTop + EDITOR_LAYOUT.PATTERN_TOP_PAD + 22;
   var sourceTitleY = sectionTitleY;
-  var sourceStepY = sourceTitleY + 18;
-  var sourceGridY0 = sourceStepY + 16;
-  var sourceBlockH = state.laneCount * GRID_CELL_H;
-  var generatedTitleY = sourceGridY0 + sourceBlockH + 28;
-  var generatedStepY = generatedTitleY + 18;
-  var generatedGridY0 = generatedStepY + 14;
+  var sourceStepY = sourceTitleY + 18 * scale;
+  var sourceGridY0 = sourceStepY + 16 * scale;
+  var sourceBlockH = state.laneCount * cellH;
+  var generatedTitleY = sourceGridY0 + sourceBlockH + 28 * scale;
+  var generatedStepY = generatedTitleY + 18 * scale;
+  var generatedGridY0 = generatedStepY + 14 * scale;
+  var availableLeft = EDITOR_LAYOUT.LANE_PANEL_X + EDITOR_LAYOUT.LANE_PANEL_W;
+  var availableRight = WIDTH - EDITOR_LAYOUT.RIGHT_MARGIN - EDITOR_LAYOUT.PATTERN_MIN_RIGHT_PAD * scale;
+  var centeredGridX0 = Math.floor(availableLeft + (availableRight - availableLeft - dims.gridW) / 2);
+  var gridX0 = Math.max(dims.minGridX0, centeredGridX0);
 
   return {
     lanePanelX: EDITOR_LAYOUT.LANE_PANEL_X,
     lanePanelW: EDITOR_LAYOUT.LANE_PANEL_W,
     lanePanelTop: mainTop,
     lanePanelH: dims.footerY - mainTop - EDITOR_LAYOUT.FOOTER_GAP,
-    labelRight: dims.gridX0 - 10,
-    gridX0: dims.gridX0,
+    labelRight: gridX0 - 10 * scale,
+    gridX0: gridX0,
     gridW: dims.gridW,
     sourceTitleY: sourceTitleY,
     sourceStepY: sourceStepY,
@@ -133,9 +138,6 @@ function uiLayout() {
     generatedTitleY: generatedTitleY,
     generatedStepY: generatedStepY,
     generatedGridY0: generatedGridY0,
-    editorX: dims.editorX,
-    editorY: mainTop,
-    editorW: dims.editorW,
     footerY: dims.footerY
   };
 }
@@ -157,12 +159,121 @@ var playingStep = 0;
 var selectedSource = 0;
 var selectedLane = 0;
 var selectedStep = 0;
+var patternZoom2x = 0;
+var dcColors = 0;
+var sourceLayerMode = "velocity";
+var hoverLayerMode = null;
 var hitZones = [];
 var editingLane = -1;
 var velocityDrag = null;
 var VELOCITY_DRAG_THRESHOLD = 4;
 var SOURCE_PAINT_DRAG_THRESHOLD = 4;
 var VELOCITY_DRAG_SCALE = 2;
+var PROBABILITY_DRAG_SCALE = 2;
+var CYCLE_DRAG_SCALE = 4;
+var DC_LANE_COLORS = [
+  [0.86, 0.25, 0.28, 1],
+  [0.93, 0.55, 0.36, 1],
+  [0.82, 0.66, 0.40, 1],
+  [0.25, 0.68, 0.82, 1],
+  [0.32, 0.72, 0.61, 1],
+  [0.55, 0.72, 0.32, 1],
+  [0.92, 0.68, 0.14, 1],
+  [0.65, 0.43, 0.23, 1]
+];
+var DC_LANE_COLORS_LIGHT = [
+  [0.96, 0.35, 0.38, 1],
+  [1.00, 0.65, 0.46, 1],
+  [0.92, 0.76, 0.50, 1],
+  [0.35, 0.78, 0.92, 1],
+  [0.42, 0.82, 0.71, 1],
+  [0.65, 0.82, 0.42, 1],
+  [1.00, 0.78, 0.24, 1],
+  [0.75, 0.53, 0.33, 1]
+];
+
+function patternGridScale() {
+  return patternZoom2x ? 2 : 1;
+}
+
+function gridCellW() {
+  return BASE_GRID_CELL_W * patternGridScale();
+}
+
+function gridCellH() {
+  return BASE_GRID_CELL_H * patternGridScale();
+}
+
+function sourceCellColor(lane, light) {
+  if (!dcColors) {
+    return light ? colors.editLight : colors.edit;
+  }
+  return (light ? DC_LANE_COLORS_LIGHT : DC_LANE_COLORS)[lane % DC_LANE_COLORS.length];
+}
+
+function normalizeSourceLayerMode(mode) {
+  mode = String(mode || "").toLowerCase();
+  if (mode === "cycle") {
+    return "cycle";
+  }
+  if (mode === "probability") {
+    return "probability";
+  }
+  return "velocity";
+}
+
+function modifierLayerMode(shift, option) {
+  if (option) {
+    return "probability";
+  }
+  if (shift) {
+    return "cycle";
+  }
+  return null;
+}
+
+function effectiveSourceLayerMode() {
+  if (velocityDrag && velocityDrag.layerMode) {
+    return velocityDrag.layerMode;
+  }
+  return hoverLayerMode || sourceLayerMode;
+}
+
+function setHoverLayerMode(mode) {
+  mode = mode ? normalizeSourceLayerMode(mode) : null;
+  if (hoverLayerMode !== mode) {
+    hoverLayerMode = mode;
+    mgraphics.redraw();
+  }
+}
+
+function setSourceLayerMode(mode) {
+  sourceLayerMode = normalizeSourceLayerMode(mode);
+  hoverLayerMode = null;
+  mgraphics.redraw();
+}
+
+function sourceLayerValue(cell, mode) {
+  mode = normalizeSourceLayerMode(mode);
+  if (mode === "cycle") {
+    return cell.cycle;
+  }
+  if (mode === "probability") {
+    return cell.probability;
+  }
+  return cell.velocity;
+}
+
+function sourceLayerLabel(mode) {
+  mode = normalizeSourceLayerMode(mode);
+  if (mode === "cycle") {
+    return "2 Cycle";
+  }
+  if (mode === "probability") {
+    return "3 Probability";
+  }
+  return "1 Velocity";
+}
 
 function makeSource() {
   var source = [];
@@ -203,8 +314,9 @@ function makeState() {
     generationMode: "stack",
     rate: "16n",
     swing: 0,
-    midiChannel: 1,
-    noteDurationMs: 100,
+    velocityHumanize: 0,
+    timingHumanize: 0,
+    deviceActive: 1,
     lanes: lanes,
     sources: sources
   };
@@ -217,7 +329,6 @@ function paint() {
   drawSourceGrid();
   drawGeneratedGrid();
   drawLaneControls();
-  drawCellEditor();
   drawFooter();
 }
 
@@ -227,8 +338,14 @@ function drawHeader() {
   var sourceBtnW = 26;
   var sourceBtnGap = 2;
   var modeX = sourceX + SOURCE_COUNT * (sourceBtnW + sourceBtnGap) - sourceBtnGap + 10;
-  var durationX = WIDTH - 12 - 104;
-  var midiX = durationX - 8 - 84;
+  var toggleW = 42;
+  var toggleGap = 6;
+  var onX = WIDTH - 12 - toggleW;
+  var zoomX = onX - toggleGap - toggleW;
+  var dcX = zoomX - toggleGap - toggleW;
+  var layerW = 132;
+  var layerX = dcX - 8 - layerW;
+  var layerMode = effectiveSourceLayerMode();
 
   ksh_shared.rect(0, 0, WIDTH, 58, colors.panel2);
 
@@ -254,8 +371,15 @@ function drawHeader() {
   ksh_shared.valueBox(hitZones, "refresh", "Refresh", state.refreshSteps, modeX + 276, 18, 84, 30, 13);
   ksh_shared.button(hitZones, "rate", state.rate, modeX + 374, 18, 62, 25, false);
   ksh_shared.valueBox(hitZones, "swing", "Swing", state.swing, modeX + 450, 18, 78, 30, 13);
-  ksh_shared.valueBox(hitZones, "midi", "MIDI Channel", state.midiChannel, midiX, 18, 84, 30, 13);
-  ksh_shared.valueBox(hitZones, "duration", "Duration (ms)", state.noteDurationMs, durationX, 18, 104, 30, 13);
+  ksh_shared.valueBox(hitZones, "velocity_humanize", "Vel Hum", state.velocityHumanize, modeX + 542, 18, 82, 30, 13);
+  ksh_shared.valueBox(hitZones, "timing_humanize", "Time Hum", state.timingHumanize, modeX + 638, 18, 88, 30, 13);
+  ksh_shared.text("Layer", layerX, 12, 10, colors.muted);
+  ksh_shared.rect(layerX, 18, layerW, 25, colors.panel2);
+  ksh_shared.strokeRect(layerX, 18, layerW, 25, hoverLayerMode ? colors.amber : colors.strokeSoft, 1);
+  ksh_shared.text(sourceLayerLabel(layerMode), layerX + layerW / 2, 18 + 16, 12, hoverLayerMode ? colors.amber : colors.text, "center");
+  ksh_shared.button(hitZones, "dc_colors", "DC", dcX, 18, toggleW, 25, dcColors);
+  ksh_shared.button(hitZones, "pattern_zoom", "2x", zoomX, 18, toggleW, 25, patternZoom2x);
+  ksh_shared.button(hitZones, "device_active", "ON", onX, 18, toggleW, 25, state.deviceActive);
 }
 
 function drawLaneControls() {
@@ -308,9 +432,10 @@ function stepLabelColor(stepIndex) {
 
 function drawStepNumberLabels(x0, cellW, y) {
   var step;
+  var scale = patternGridScale();
 
   for (step = 0; step < state.stepCount; step += 1) {
-    ksh_shared.text(String(step + 1), x0 + step * cellW + cellW / 2, y, 10, stepLabelColor(step), "center");
+    ksh_shared.text(String(step + 1), x0 + step * cellW + cellW / 2, y, 10 * scale, stepLabelColor(step), "center");
   }
 }
 
@@ -318,8 +443,11 @@ function drawSourceGrid() {
   var layout = uiLayout();
   var x0 = layout.gridX0;
   var y0 = layout.sourceGridY0;
-  var cellW = GRID_CELL_W;
-  var cellH = GRID_CELL_H;
+  var layerMode = effectiveSourceLayerMode();
+  var scale = patternGridScale();
+  var cellW = gridCellW();
+  var cellH = gridCellH();
+  var cellPad = 2 * scale;
   var lane;
   var step;
   var x;
@@ -330,27 +458,27 @@ function drawSourceGrid() {
   drawStepNumberLabels(x0, cellW, layout.sourceStepY);
 
   for (lane = 0; lane < state.laneCount; lane += 1) {
-    ksh_shared.text(state.lanes[lane].label, layout.labelRight, y0 + lane * cellH + 16, 10, colors.muted, "right");
+    ksh_shared.text(state.lanes[lane].label, layout.labelRight, y0 + lane * cellH + 16 * scale, 10 * scale, colors.muted, "right");
     for (step = 0; step < state.stepCount; step += 1) {
       x = x0 + step * cellW;
       y = y0 + lane * cellH;
       cell = state.sources[selectedSource][lane][step];
       if (cell.enabled) {
         ksh_shared.sourceCellBackground(
-          x + 2,
-          y + 2,
-          cellW - 4,
-          cellH - 4,
-          cell.gateMode,
-          colors.edit,
-          colors.editLight
+          x + cellPad,
+          y + cellPad,
+          cellW - cellPad * 2,
+          cellH - cellPad * 2,
+          layerMode,
+          sourceCellColor(lane, 0),
+          sourceCellColor(lane, 1)
         );
-        ksh_shared.text(String(cell.velocity), x + cellW / 2, y + 14, 9, colors.off, "center");
+        ksh_shared.text(String(sourceLayerValue(cell, layerMode)), x + cellW / 2, y + 14 * scale, 9 * scale, colors.off, "center");
       } else {
-        ksh_shared.rect(x + 2, y + 2, cellW - 4, cellH - 4, colors.off);
+        ksh_shared.rect(x + cellPad, y + cellPad, cellW - cellPad * 2, cellH - cellPad * 2, colors.off);
       }
-      ksh_shared.strokeRect(x + 2, y + 2, cellW - 4, cellH - 4, selectedLane === lane && selectedStep === step ? colors.text : colors.strokeSoft, 1);
-      ksh_shared.zone(hitZones, "source_cell", x + 2, y + 2, cellW - 4, cellH - 4, { lane: lane, step: step });
+      ksh_shared.strokeRect(x + cellPad, y + cellPad, cellW - cellPad * 2, cellH - cellPad * 2, selectedLane === lane && selectedStep === step ? colors.text : colors.strokeSoft, 1);
+      ksh_shared.zone(hitZones, "source_cell", x + cellPad, y + cellPad, cellW - cellPad * 2, cellH - cellPad * 2, { lane: lane, step: step });
     }
   }
 }
@@ -359,8 +487,10 @@ function drawGeneratedGrid() {
   var layout = uiLayout();
   var x0 = layout.gridX0;
   var y0 = layout.generatedGridY0;
-  var cellW = GRID_CELL_W;
-  var cellH = GRID_CELL_H;
+  var scale = patternGridScale();
+  var cellW = gridCellW();
+  var cellH = gridCellH();
+  var cellPad = 2 * scale;
   var lane;
   var step;
   var x;
@@ -371,43 +501,25 @@ function drawGeneratedGrid() {
   drawStepNumberLabels(x0, cellW, layout.generatedStepY);
 
   for (lane = 0; lane < state.laneCount; lane += 1) {
-    ksh_shared.text(state.lanes[lane].label, layout.labelRight, y0 + lane * cellH + 16, 10, colors.muted, "right");
+    ksh_shared.text(state.lanes[lane].label, layout.labelRight, y0 + lane * cellH + 16 * scale, 10 * scale, colors.muted, "right");
     for (step = 0; step < state.stepCount; step += 1) {
       x = x0 + step * cellW;
       y = y0 + lane * cellH;
       cell = previewData && previewData.generated && previewData.generated[lane] ? previewData.generated[lane][step] : null;
-      ksh_shared.rect(x + 2, y + 2, cellW - 4, cellH - 4, cell && cell.enabled ? colors.generated : colors.off);
-      ksh_shared.strokeRect(x + 2, y + 2, cellW - 4, cellH - 4, colors.strokeSoft, 1);
+      ksh_shared.rect(x + cellPad, y + cellPad, cellW - cellPad * 2, cellH - cellPad * 2, cell && cell.enabled ? colors.generated : colors.off);
+      ksh_shared.strokeRect(x + cellPad, y + cellPad, cellW - cellPad * 2, cellH - cellPad * 2, colors.strokeSoft, 1);
       if (cell && cell.enabled) {
-        ksh_shared.text(String(cell.velocity), x + cellW / 2, y + 14, 9, colors.off, "center");
+        ksh_shared.text(String(cell.velocity), x + cellW / 2, y + 14 * scale, 9 * scale, colors.off, "center");
       }
     }
   }
-}
-
-function drawCellEditor() {
-  var layout = uiLayout();
-  var x = layout.editorX;
-  var y = layout.editorY;
-  var cell = state.sources[selectedSource][selectedLane][selectedStep];
-
-  ksh_shared.rect(x, y, layout.editorW, 248, colors.panel);
-  ksh_shared.text("Cell Editor", x + 14, y + 22, 13, colors.text);
-
-  ksh_shared.button(hitZones, "cell_enabled", cell.enabled ? "On" : "Off", x + 14, y + 44, 62, 28, cell.enabled);
-  ksh_shared.button(hitZones, "gate", "Always", x + 14, y + 86, 72, 26, cell.gateMode === "always", { gate: "always" });
-  ksh_shared.button(hitZones, "gate", "Probability", x + 94, y + 86, 96, 26, cell.gateMode === "random", { gate: "random" });
-  ksh_shared.button(hitZones, "gate", "Cycle", x + 198, y + 86, 70, 26, cell.gateMode === "cycle", { gate: "cycle" });
-  ksh_shared.valueBox(hitZones, "velocity", "Velocity", cell.velocity, x + 14, y + 138, 104, 30, 13);
-  ksh_shared.valueBox(hitZones, "random", "Probability %", cell.random, x + 14, y + 194, 112, 30, 13);
-  ksh_shared.valueBox(hitZones, "cycle", "Every N", cell.cycle, x + 146, y + 194, 104, 30, 13);
 }
 
 function drawFooter() {
   var layout = uiLayout();
 
   ksh_shared.rect(0, layout.footerY, WIDTH, 28, colors.panel2);
-  ksh_shared.text("Click a lane row or label to preview its note; edit note, lock, and cells elsewhere.", 18, layout.footerY + 16, 10, colors.muted);
+  ksh_shared.text("Click cells to toggle; drag horizontally to paint; drag vertically to edit the active layer.", 18, layout.footerY + 16, 10, colors.muted);
 }
 
 // Messages handled inside the editor subpatcher (lane rename overlay).
@@ -440,8 +552,7 @@ function sendLane(lane) {
 
 function sendCell(source, lane, step) {
   var cell = state.sources[source][lane][step];
-  var value = cell.gateMode === "cycle" ? cell.cycle : cell.random;
-  send("cell", source + 1, lane + 1, step + 1, cell.enabled, cell.velocity, cell.gateMode, value);
+  send("cell", source + 1, lane + 1, step + 1, cell.enabled, cell.velocity, cell.probability, cell.cycle);
 }
 
 function sync_all() {
@@ -479,7 +590,7 @@ function sourceStepFromX(x) {
   var layout = uiLayout();
 
   return ksh_shared.clamp(
-    Math.floor((x - layout.gridX0) / GRID_CELL_W),
+    Math.floor((x - layout.gridX0) / gridCellW()),
     0,
     state.stepCount - 1
   );
@@ -515,22 +626,25 @@ function applySourcePaintRange(fromStep, toStep) {
   }
 }
 
-function beginSourceCellInteraction(z, x, y, selectOnly) {
+function beginSourceCellInteraction(z, x, y, layerMode) {
   var cell;
 
   selectedLane = z.data.lane;
   selectedStep = z.data.step;
   cell = state.sources[selectedSource][selectedLane][selectedStep];
+  layerMode = layerMode || effectiveSourceLayerMode();
   velocityDrag = {
     lane: selectedLane,
     step: selectedStep,
     startX: x,
     startY: y,
     startVelocity: cell.velocity,
+    startProbability: cell.probability,
+    startCycle: cell.cycle,
+    layerMode: layerMode,
     paintEnabled: cell.enabled ? 0 : 1,
     mode: null,
-    moved: false,
-    selectOnly: selectOnly ? 1 : 0
+    moved: false
   };
 }
 
@@ -548,7 +662,6 @@ function applySourceCellDrag(x, y) {
 
   if (!velocityDrag.mode) {
     if (
-      !velocityDrag.selectOnly &&
       Math.abs(dx) >= SOURCE_PAINT_DRAG_THRESHOLD &&
       Math.abs(dx) > Math.abs(dy)
     ) {
@@ -556,8 +669,8 @@ function applySourceCellDrag(x, y) {
       velocityDrag.moved = true;
       applySourcePaintRange(velocityDrag.step, sourceStepFromX(x));
     } else if (Math.abs(dy) >= VELOCITY_DRAG_THRESHOLD) {
-      velocityDrag.mode = "velocity";
-      applyVelocityDrag(y);
+      velocityDrag.mode = "value";
+      applySourceValueDrag(y);
     }
     return;
   }
@@ -566,21 +679,26 @@ function applySourceCellDrag(x, y) {
     step = sourceStepFromX(x);
     applySourcePaintRange(velocityDrag.step, step);
   } else {
-    applyVelocityDrag(y);
+    applySourceValueDrag(y);
   }
 }
 
-function applyVelocityDrag(y) {
+function applySourceValueDrag(y) {
   var cell;
   var delta;
-  var nextVelocity;
+  var nextValue;
+  var layerMode;
+  var scale;
+  var minValue;
+  var maxValue;
+  var startValue;
 
   if (!velocityDrag || velocityDrag.mode === "paint") {
     return;
   }
 
   if (!velocityDrag.mode) {
-    velocityDrag.mode = "velocity";
+    velocityDrag.mode = "value";
   }
 
   delta = velocityDrag.startY - y;
@@ -590,21 +708,39 @@ function applyVelocityDrag(y) {
 
   velocityDrag.moved = true;
   cell = state.sources[selectedSource][velocityDrag.lane][velocityDrag.step];
-  if (cell.gateMode !== "always") {
-    return;
-  }
-
   if (!cell.enabled) {
     cell.enabled = 1;
   }
 
-  nextVelocity = ksh_shared.clamp(
-    velocityDrag.startVelocity + Math.round(delta / VELOCITY_DRAG_SCALE),
-    1,
-    127
-  );
-  if (cell.velocity !== nextVelocity) {
-    cell.velocity = nextVelocity;
+  layerMode = normalizeSourceLayerMode(velocityDrag.layerMode);
+  if (layerMode === "probability") {
+    startValue = velocityDrag.startProbability;
+    scale = PROBABILITY_DRAG_SCALE;
+    minValue = 0;
+    maxValue = 100;
+  } else if (layerMode === "cycle") {
+    startValue = velocityDrag.startCycle;
+    scale = CYCLE_DRAG_SCALE;
+    minValue = 1;
+    maxValue = 64;
+  } else {
+    startValue = velocityDrag.startVelocity;
+    scale = VELOCITY_DRAG_SCALE;
+    minValue = 1;
+    maxValue = 127;
+  }
+
+  nextValue = ksh_shared.clamp(startValue + Math.round(delta / scale), minValue, maxValue);
+  if (layerMode === "probability" && cell.probability !== nextValue) {
+    cell.probability = nextValue;
+    sendCell(selectedSource, velocityDrag.lane, velocityDrag.step);
+    mgraphics.redraw();
+  } else if (layerMode === "cycle" && cell.cycle !== nextValue) {
+    cell.cycle = nextValue;
+    sendCell(selectedSource, velocityDrag.lane, velocityDrag.step);
+    mgraphics.redraw();
+  } else if (layerMode === "velocity" && cell.velocity !== nextValue) {
+    cell.velocity = nextValue;
     sendCell(selectedSource, velocityDrag.lane, velocityDrag.step);
     mgraphics.redraw();
   }
@@ -618,7 +754,7 @@ function endSourceCellInteraction() {
   }
 
   cell = state.sources[selectedSource][velocityDrag.lane][velocityDrag.step];
-  if (!velocityDrag.moved && !velocityDrag.selectOnly) {
+  if (!velocityDrag.moved) {
     cell.enabled = cell.enabled ? 0 : 1;
     sendCell(selectedSource, velocityDrag.lane, velocityDrag.step);
   }
@@ -648,7 +784,6 @@ function engine_state(json) {
 
 function onclick(x, y, button, cmd, shift, capslock, option, ctrl) {
   var z = ksh_shared.findZone(hitZones, x, y);
-  var cell;
 
   rememberUiContext.call(this);
 
@@ -672,11 +807,19 @@ function onclick(x, y, button, cmd, shift, capslock, option, ctrl) {
   } else if (z.id === "rate") {
     ksh_shared.cycleRate(state, shift ? -1 : 1);
     send("rate", state.rate);
+  } else if (z.id === "pattern_zoom") {
+    patternZoom2x = patternZoom2x ? 0 : 1;
+    applyEditorSize();
+  } else if (z.id === "dc_colors") {
+    dcColors = dcColors ? 0 : 1;
+  } else if (z.id === "device_active") {
+    state.deviceActive = state.deviceActive ? 0 : 1;
+    send("device_active", state.deviceActive);
   } else if (z.id === "source_cell") {
     if (button === 0) {
       endSourceCellInteraction();
     } else {
-      beginSourceCellInteraction(z, x, y, shift);
+      beginSourceCellInteraction(z, x, y, modifierLayerMode(shift, option));
     }
   } else if (z.id === "lane_select" || z.id === "lane_label") {
     send("channel_audition", z.data.lane + 1);
@@ -691,14 +834,6 @@ function onclick(x, y, button, cmd, shift, capslock, option, ctrl) {
       state.lanes[selectedLane].lock = -1;
     }
     sendLane(selectedLane);
-  } else if (z.id === "cell_enabled") {
-    cell = state.sources[selectedSource][selectedLane][selectedStep];
-    cell.enabled = cell.enabled ? 0 : 1;
-    sendCell(selectedSource, selectedLane, selectedStep);
-  } else if (z.id === "gate") {
-    cell = state.sources[selectedSource][selectedLane][selectedStep];
-    cell.gateMode = z.data.gate;
-    sendCell(selectedSource, selectedLane, selectedStep);
   } else {
     handleStepper(z.id);
   }
@@ -717,6 +852,41 @@ function ondrag(x, y, button) {
   }
 
   applySourceCellDrag(x, y);
+}
+
+function onidle(x, y, button, cmd, shift, capslock, option, ctrl) {
+  setHoverLayerMode(modifierLayerMode(shift, option));
+}
+
+function onidleout(x, y, button, cmd, shift, capslock, option, ctrl) {
+  setHoverLayerMode(null);
+}
+
+function onkeydown(keycode, textcharacter, updown, cmd, shift, capslock, option, ctrl) {
+  var key = textcharacter || keycode;
+
+  if (updown === 0) {
+    return 0;
+  }
+
+  if (key === 49 || key === "1") {
+    setSourceLayerMode("velocity");
+    return 1;
+  }
+  if (key === 50 || key === "2") {
+    setSourceLayerMode("cycle");
+    return 1;
+  }
+  if (key === 51 || key === "3") {
+    setSourceLayerMode("probability");
+    return 1;
+  }
+
+  return 0;
+}
+
+function source_layer_mode(mode) {
+  setSourceLayerMode(mode);
 }
 
 // Double-click a lane label to open the inline rename overlay (a real Max
@@ -767,9 +937,6 @@ function label_edit_done() {
 }
 
 function handleStepper(id) {
-  var cell = state.sources[selectedSource][selectedLane][selectedStep];
-  var delta;
-
   if (id === "steps_inc" || id === "steps_dec") {
     state.stepCount = ksh_shared.clamp(state.stepCount + (id === "steps_inc" ? 1 : -1), 1, MAX_STEPS);
     state.refreshSteps = ksh_shared.clamp(state.refreshSteps, 1, state.stepCount);
@@ -787,22 +954,12 @@ function handleStepper(id) {
   } else if (id === "swing_inc" || id === "swing_dec") {
     state.swing = ksh_shared.clamp(state.swing + (id === "swing_inc" ? 1 : -1), 0, 100);
     send("swing", state.swing);
-  } else if (id === "midi_inc" || id === "midi_dec") {
-    state.midiChannel = ksh_shared.clamp(state.midiChannel + (id === "midi_inc" ? 1 : -1), 1, 16);
-    send("midi_channel", state.midiChannel);
-  } else if (id === "duration_inc" || id === "duration_dec") {
-    delta = id === "duration_inc" ? 10 : -10;
-    state.noteDurationMs = ksh_shared.clamp(state.noteDurationMs + delta, 10, 5000);
-    send("duration_ms", state.noteDurationMs);
-  } else if (id === "velocity_inc" || id === "velocity_dec") {
-    cell.velocity = ksh_shared.clamp(cell.velocity + (id === "velocity_inc" ? 1 : -1), 1, 127);
-    sendCell(selectedSource, selectedLane, selectedStep);
-  } else if (id === "random_inc" || id === "random_dec") {
-    cell.random = ksh_shared.clamp(cell.random + (id === "random_inc" ? 1 : -1), 0, 100);
-    sendCell(selectedSource, selectedLane, selectedStep);
-  } else if (id === "cycle_inc" || id === "cycle_dec") {
-    cell.cycle = ksh_shared.clamp(cell.cycle + (id === "cycle_inc" ? 1 : -1), 1, 64);
-    sendCell(selectedSource, selectedLane, selectedStep);
+  } else if (id === "velocity_humanize_inc" || id === "velocity_humanize_dec") {
+    state.velocityHumanize = ksh_shared.clamp(state.velocityHumanize + (id === "velocity_humanize_inc" ? 1 : -1), 0, 100);
+    send("velocity_humanize", state.velocityHumanize);
+  } else if (id === "timing_humanize_inc" || id === "timing_humanize_dec") {
+    state.timingHumanize = ksh_shared.clamp(state.timingHumanize + (id === "timing_humanize_inc" ? 1 : -1), 0, 100);
+    send("timing_humanize", state.timingHumanize);
   }
 }
 

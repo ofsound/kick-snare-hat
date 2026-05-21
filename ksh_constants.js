@@ -21,13 +21,14 @@ var ksh_constants = {
   SOURCE_COUNT: 4,
   DEFAULT_CHANNEL_LABELS: ["1", "2", "3", "4", "5", "6", "7", "8"],
   DEFAULT_CHANNEL_NOTES: [36, 37, 38, 39, 40, 41, 42, 43],
+  DEFAULT_MIDI_CHANNEL: 1,
+  DEFAULT_NOTE_DURATION_MS: 100,
   RATES: ["4n", "4nt", "8n", "8nt", "16n", "16nt", "32n", "32nt"],
   DEFAULT_RATE: "16n",
   DEFAULT_CELL: {
     enabled: 0,
     velocity: 100,
-    gateMode: "always",
-    random: 100,
+    probability: 100,
     cycle: 1,
     source: -1
   },
@@ -35,13 +36,22 @@ var ksh_constants = {
     return this.cloneCell(this.DEFAULT_CELL);
   },
   cloneCell: function (cell) {
+    var hasProbability;
+    var hasCycle;
+    var probability;
+    var cycle;
+
     cell = cell || this.DEFAULT_CELL;
+    hasProbability = cell.probability !== undefined;
+    hasCycle = cell.cycle !== undefined;
+    probability = hasProbability ? cell.probability : this.DEFAULT_CELL.probability;
+    cycle = hasCycle ? cell.cycle : this.DEFAULT_CELL.cycle;
+
     return {
       enabled: cell.enabled ? 1 : 0,
       velocity: kshClamp(cell.velocity, 1, 127),
-      gateMode: this.normalizeGateMode(cell.gateMode),
-      random: kshClamp(cell.random, 0, 100),
-      cycle: kshClamp(cell.cycle, 1, 64),
+      probability: kshClamp(probability, 0, 100),
+      cycle: kshClamp(cycle, 1, 64),
       source: typeof cell.source === "number" ? cell.source : -1
     };
   },
@@ -56,16 +66,6 @@ var ksh_constants = {
     }
 
     return this.DEFAULT_RATE;
-  },
-  normalizeGateMode: function (gateMode) {
-    gateMode = String(gateMode || "always").toLowerCase();
-    if (gateMode === "random" || gateMode === "probability") {
-      return "random";
-    }
-    if (gateMode === "cycle" || gateMode === "every") {
-      return "cycle";
-    }
-    return "always";
   },
   debugPost: function (context, error) {
     var message;

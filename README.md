@@ -10,22 +10,27 @@ of using unconstrained randomness.
 - 1-8 monophonic drum lanes.
 - Four source patterns, each containing every active lane.
 - Per-lane label, MIDI note, and source lock.
-- Device-wide MIDI channel.
+- Fixed output on MIDI channel 1.
 - Two generation modes:
   - `stack`: each refresh window chooses one source pattern for all lanes and steps in that window.
   - `per_channel`: each generated step/lane chooses its own source pattern.
 - Refresh interval is measured in sequencer steps.
 - Live transport-position timing: host beat position drives the current step, with reset on Live transport stop.
 - Internal swing delay measured against the incoming tempo-synced step interval.
+- Device-wide velocity and timing humanize percentages. Velocity humanize offsets
+  each hit up or down from its cell velocity; timing humanize uses lookahead so
+  hits after playback starts can land early or late.
+- Timing humanize at `100%` spans `±50%` of the current step interval.
 - Live tempo from `live_set` drives swing timing via `live.observer tempo`.
 - Compact Presentation UI for the Live device strip with mode, steps, lanes, refresh, rate, swing, generated preview, and editor launch controls.
 - Floating editor subpatcher opened from the compact UI, with source dropdown, all-lane source grid editor, generated grid preview, lane labels, lane note/lock controls, and per-cell velocity/probability/cycle controls.
+- Source Pattern layer modes for velocity, cycle, and probability via buttons, number keys `1`/`2`/`3`, Shift hover for cycle, and Option hover for probability.
 - `autopattr` plus `pattrstorage` persist engine pattern state only; UIs mirror via `engine_state` / `preview` events.
 - Per-source cell values:
   - enabled
   - velocity
-  - gate mode: `always`, `random`, or `cycle`
-  - random percentage or every-N-cycles value
+  - probability percentage
+  - every-N-cycles value
 
 ## Files
 
@@ -55,8 +60,9 @@ mode per_channel
 rate 16n
 tempo 120
 swing 0
-midi_channel 1
-duration_ms 100
+velocity_humanize 0
+timing_humanize 0
+device_active 1
 phase_offset_beats 0
 
 channel_label 1 1
@@ -65,12 +71,13 @@ channel_audition 1
 channel_lock 1 random
 channel_lock 1 2
 
-cell 1 1 1 1 100 always 100
-cell 1 1 5 1 90 random 60
-cell 1 2 9 1 110 cycle 3
+cell 1 1 1 1 100 100 1
+cell 1 1 5 1 90 60 1
+cell 1 2 9 1 110 75 3
 cell_enabled 1 1 1 0
 cell_velocity 1 1 1 96
-cell_gate 1 1 1 random 75
+cell_probability 1 1 1 75
+cell_cycle 1 1 1 3
 
 transport_position 0.0 1
 reset

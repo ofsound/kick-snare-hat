@@ -71,6 +71,19 @@ var KSH_EngineClass = null;
     return KSH_CONSTANTS.normalizeRate(rate);
   }
 
+  function normalizeToggle(value) {
+    value = String(value).toLowerCase();
+    return !(value === "0" || value === "false" || value === "off");
+  }
+
+  function clampFloat(value, min, max) {
+    value = parseFloat(value);
+    if (isNaN(value)) {
+      return min;
+    }
+    return Math.max(min, Math.min(max, value));
+  }
+
   function normalizeIncomingState(state) {
     var normalized;
 
@@ -140,10 +153,12 @@ var KSH_EngineClass = null;
     this.tempo = 120;
     this.stepIntervalMs = 125;
     this.swing = 0;
-    this.midiChannel = 1;
-    this.noteDurationMs = 100;
+    this.velocityHumanize = 0;
+    this.timingHumanize = 0;
+    this.deviceActive = true;
     this.currentStep = 0;
     this.lastFiredGlobalStep = null;
+    this.lastScheduledGlobalStep = null;
     this.phaseOffsetBeats = 0;
     this.transportPlaying = 0;
     this.editorActive = false;
@@ -258,14 +273,35 @@ var KSH_EngineClass = null;
     this.status("swing " + this.swing);
   };
 
-  KickSnareHatEngine.prototype.setMidiChannel = function (channel) {
-    this.midiChannel = clamp(channel, 1, 16);
-    this.status("midi_channel " + this.midiChannel);
+  KickSnareHatEngine.prototype.setVelocityHumanize = function (amount) {
+    this.velocityHumanize = clamp(amount, 0, 100);
+    this.status("velocity_humanize " + this.velocityHumanize);
   };
 
-  KickSnareHatEngine.prototype.setNoteDurationMs = function (duration) {
-    this.noteDurationMs = clamp(duration, 10, 5000);
-    this.status("duration_ms " + this.noteDurationMs);
+  KickSnareHatEngine.prototype.setTimingHumanize = function (amount) {
+    this.timingHumanize = clamp(amount, 0, 100);
+    this.status("timing_humanize " + this.timingHumanize);
+  };
+
+  KickSnareHatEngine.prototype.setDeviceActive = function (active) {
+    active = normalizeToggle(active);
+    if (this.deviceActive === active) {
+      this.status("device_active " + (this.deviceActive ? 1 : 0));
+      return;
+    }
+
+    this.deviceActive = active;
+    this.lastFiredGlobalStep = null;
+    this.lastScheduledGlobalStep = null;
+    if (!this.deviceActive) {
+      if (typeof cancelPendingNoteTasks === "function") {
+        cancelPendingNoteTasks();
+      }
+      this.transportPlaying = 0;
+      this.playingStepOneBased = 0;
+      this.reportPlayingStep();
+    }
+    this.status("device_active " + (this.deviceActive ? 1 : 0));
   };
 
   KickSnareHatEngine.prototype.setPhaseOffsetBeats = function (offset) {
@@ -275,6 +311,7 @@ var KSH_EngineClass = null;
     }
     this.phaseOffsetBeats = offset;
     this.lastFiredGlobalStep = null;
+    this.lastScheduledGlobalStep = null;
     this.status("phase_offset_beats " + this.phaseOffsetBeats);
   };
 
@@ -305,12 +342,16 @@ var KSH_EngineClass = null;
   KickSnareHatEngine.prototype.auditionChannel = function (channel) {
     var note;
 
+    if (!this.deviceActive) {
+      return null;
+    }
+
     channel = clamp(channel, 0, this.channelCount - 1);
     note = {
       pitch: this.channels[channel].note,
       velocity: KSH_CONSTANTS.DEFAULT_CELL.velocity,
-      channel: this.midiChannel,
-      durationMs: this.noteDurationMs,
+      channel: KSH_CONSTANTS.DEFAULT_MIDI_CHANNEL,
+      durationMs: KSH_CONSTANTS.DEFAULT_NOTE_DURATION_MS,
       delayMs: 0
     };
     this.emitNote(note);
@@ -326,6 +367,21 @@ var KSH_EngineClass = null;
   function clampSource(source) { return clamp(source, 0, SOURCE_COUNT - 1); }
   function clampChannel(channel) { return clamp(channel, 0, MAX_LANES - 1); }
   function clampStep(step) { return clamp(step, 0, MAX_STEPS - 1); }
+
+  function normalizeCellParams(probability, cycle, currentCell) {
+    var params;
+
+    currentCell = currentCell || KSH_CONSTANTS.DEFAULT_CELL;
+    params = {
+      probability: probability === undefined ? currentCell.probability : probability,
+      cycle: cycle === undefined ? currentCell.cycle : cycle
+    };
+
+    return {
+      probability: clamp(params.probability, 0, 100),
+      cycle: clamp(params.cycle, 1, 64)
+    };
+  }
 
   KickSnareHatEngine.prototype.generatedCellForSourceEdit = function (source, channel, step) {
     var generatedRow;
@@ -352,31 +408,27 @@ var KSH_EngineClass = null;
     return generatedCell.source === source ? generatedCell : null;
   };
 
-  KickSnareHatEngine.prototype.setCell = function (source, channel, step, enabled, velocity, gateMode, value) {
+  KickSnareHatEngine.prototype.setCell = function (source, channel, step, enabled, velocity, probability, cycle) {
     var cell;
     var generatedCell;
+    var params;
 
     source = clampSource(source);
     channel = clampChannel(channel);
     step = clampStep(step);
 
     cell = this.sources[source][channel][step];
+    params = normalizeCellParams(probability, cycle, cell);
     cell.enabled = enabled ? 1 : 0;
     cell.velocity = clamp(velocity, 1, 127);
-    cell.gateMode = this.normalizeGateMode(gateMode);
-
-    if (cell.gateMode === "random") {
-      cell.random = clamp(value, 0, 100);
-    } else if (cell.gateMode === "cycle") {
-      cell.cycle = clamp(value, 1, 64);
-    }
+    cell.probability = params.probability;
+    cell.cycle = params.cycle;
 
     generatedCell = this.generatedCellForSourceEdit(source, channel, step);
     if (generatedCell) {
       generatedCell.enabled = cell.enabled;
       generatedCell.velocity = cell.velocity;
-      generatedCell.gateMode = cell.gateMode;
-      generatedCell.random = cell.random;
+      generatedCell.probability = cell.probability;
       generatedCell.cycle = cell.cycle;
       this.markPreviewDirty(false);
     }
@@ -414,33 +466,36 @@ var KSH_EngineClass = null;
     }
   };
 
-  KickSnareHatEngine.prototype.setCellGate = function (source, channel, step, gateMode, value) {
-    var cell;
+  KickSnareHatEngine.prototype.setCellProbability = function (source, channel, step, probability) {
     var generatedCell;
 
     source = clampSource(source);
     channel = clampChannel(channel);
     step = clampStep(step);
-    cell = this.sources[source][channel][step];
-    cell.gateMode = this.normalizeGateMode(gateMode);
-
-    if (cell.gateMode === "random") {
-      cell.random = clamp(value, 0, 100);
-    } else if (cell.gateMode === "cycle") {
-      cell.cycle = clamp(value, 1, 64);
-    }
+    probability = clamp(probability, 0, 100);
+    this.sources[source][channel][step].probability = probability;
 
     generatedCell = this.generatedCellForSourceEdit(source, channel, step);
     if (generatedCell) {
-      generatedCell.gateMode = cell.gateMode;
-      generatedCell.random = cell.random;
-      generatedCell.cycle = cell.cycle;
+      generatedCell.probability = probability;
       this.markPreviewDirty(false);
     }
   };
 
-  KickSnareHatEngine.prototype.normalizeGateMode = function (gateMode) {
-    return KSH_CONSTANTS.normalizeGateMode(gateMode);
+  KickSnareHatEngine.prototype.setCellCycle = function (source, channel, step, cycle) {
+    var generatedCell;
+
+    source = clampSource(source);
+    channel = clampChannel(channel);
+    step = clampStep(step);
+    cycle = clamp(cycle, 1, 64);
+    this.sources[source][channel][step].cycle = cycle;
+
+    generatedCell = this.generatedCellForSourceEdit(source, channel, step);
+    if (generatedCell) {
+      generatedCell.cycle = cycle;
+      this.markPreviewDirty(false);
+    }
   };
 
   KickSnareHatEngine.prototype.resetPlayback = function (emitStatus) {
@@ -451,6 +506,7 @@ var KSH_EngineClass = null;
     this.playingStepOneBased = 0;
     this.cycleCounters = {};
     this.lastFiredGlobalStep = null;
+    this.lastScheduledGlobalStep = null;
     this.transportPlaying = 0;
     this.generateWindow(0, this.stepCount, true);
     this.reportPlayingStep();
@@ -629,35 +685,105 @@ var KSH_EngineClass = null;
   KickSnareHatEngine.prototype.shouldFire = function (cell, channel, step) {
     var key;
     var count;
+    var probability;
 
     if (!cell.enabled) {
       return false;
     }
 
-    if (cell.gateMode === "random") {
-      return this.rng() * 100 < cell.random;
-    }
-
-    if (cell.gateMode === "cycle") {
+    if (clamp(cell.cycle, 1, 64) > 1) {
       key = this.cycleKey(cell.source, channel, step);
       count = this.cycleCounters[key] || 0;
       this.cycleCounters[key] = count + 1;
-      return count % clamp(cell.cycle, 1, 64) === 0;
+      if (count % clamp(cell.cycle, 1, 64) !== 0) {
+        return false;
+      }
     }
 
-    return true;
+    probability = clamp(cell.probability, 0, 100);
+    if (probability >= 100) {
+      return true;
+    }
+    if (probability <= 0) {
+      return false;
+    }
+
+    return this.rng() * 100 < probability;
   };
 
-  KickSnareHatEngine.prototype.fireStep = function (step, globalStep) {
+  KickSnareHatEngine.prototype.swingDelayMsForStep = function (step) {
+    return step % 2 === 1 ? this.stepIntervalMs * 0.5 * (this.swing / 100) : 0;
+  };
+
+  KickSnareHatEngine.prototype.timingHumanizeRangeMs = function () {
+    return this.stepIntervalMs * 0.5 * (this.timingHumanize / 100);
+  };
+
+  KickSnareHatEngine.prototype.lookaheadMs = function () {
+    var range = this.timingHumanizeRangeMs();
+
+    if (range <= 0) {
+      return 0;
+    }
+
+    return range + Math.min(20, this.stepIntervalMs * 0.25);
+  };
+
+  KickSnareHatEngine.prototype.humanizeTimingOffsetMs = function () {
+    var range = this.timingHumanizeRangeMs();
+
+    if (range <= 0) {
+      return 0;
+    }
+
+    return (this.rng() * 2 - 1) * range;
+  };
+
+  KickSnareHatEngine.prototype.humanizeVelocity = function (velocity) {
+    var range;
+    var humanized;
+
+    velocity = clamp(velocity, 1, 127);
+    if (this.velocityHumanize <= 0) {
+      return velocity;
+    }
+
+    range = velocity * (this.velocityHumanize / 100);
+    humanized = velocity + (this.rng() * 2 - 1) * range;
+    return clamp(Math.round(humanized), 1, 127);
+  };
+
+  KickSnareHatEngine.prototype.delayMsForScheduledStep = function (step, baseDelayMs) {
+    var delayMs;
+
+    delayMs = clampFloat(baseDelayMs, 0, 600000);
+    delayMs += this.swingDelayMsForStep(step);
+    delayMs += this.humanizeTimingOffsetMs();
+    return Math.max(0, delayMs);
+  };
+
+  KickSnareHatEngine.prototype.fireStep = function (step, globalStep, options) {
     var channel;
     var cell;
     var notes = [];
     var note;
+    var baseDelayMs;
+    var reportStep;
+
+    if (!this.deviceActive) {
+      return notes;
+    }
+
+    options = options || {};
+    baseDelayMs = options.baseDelayMs === undefined ? 0 : options.baseDelayMs;
+    reportStep = options.reportStep !== false;
 
     step = mod(step, this.stepCount);
-    this.currentStep = step;
-    this.playingStepOneBased = step + 1;
-    this.reportPlayingStep();
+    if (reportStep) {
+      this.currentStep = step;
+      this.playingStepOneBased = step + 1;
+      this.reportPlayingStep();
+    }
 
     if (step % this.refreshSteps === 0) {
       this.generateWindow(step, this.refreshSteps, true);
@@ -671,10 +797,10 @@ var KSH_EngineClass = null;
           step: step + 1,
           globalStep: typeof globalStep === "number" ? globalStep : null,
           pitch: this.channels[channel].note,
-          velocity: cell.velocity,
-          channel: this.midiChannel,
-          durationMs: this.noteDurationMs,
-          delayMs: step % 2 === 1 ? this.stepIntervalMs * 0.5 * (this.swing / 100) : 0,
+          velocity: this.humanizeVelocity(cell.velocity),
+          channel: KSH_CONSTANTS.DEFAULT_MIDI_CHANNEL,
+          durationMs: KSH_CONSTANTS.DEFAULT_NOTE_DURATION_MS,
+          delayMs: this.delayMsForScheduledStep(step, baseDelayMs),
           label: this.channels[channel].label,
           source: cell.source + 1
         };
@@ -697,9 +823,20 @@ var KSH_EngineClass = null;
     return Math.floor((songBeats - this.phaseOffsetBeats + 0.000000001) / beatsPerStep);
   };
 
+  KickSnareHatEngine.prototype.beatForGlobalStep = function (globalStep) {
+    return globalStep * this.beatsPerStep() + this.phaseOffsetBeats;
+  };
+
   KickSnareHatEngine.prototype.transportPosition = function (songBeats, isPlaying) {
     var globalStep;
+    var endGlobalStep;
+    var scheduleStep;
     var step;
+    var notes = [];
+    var scheduledNotes;
+    var lookaheadBeats;
+    var quarterMs;
+    var baseDelayMs;
     var discontinuity;
 
     songBeats = parseFloat(songBeats);
@@ -708,27 +845,67 @@ var KSH_EngineClass = null;
     }
 
     isPlaying = parseInt(isPlaying, 10) ? 1 : 0;
+
+    if (!this.deviceActive) {
+      this.transportPlaying = 0;
+      this.lastFiredGlobalStep = null;
+      this.lastScheduledGlobalStep = null;
+      if (this.playingStepOneBased !== 0) {
+        this.playingStepOneBased = 0;
+        this.reportPlayingStep();
+      }
+      return [];
+    }
+
     this.transportPlaying = isPlaying;
 
     if (!isPlaying) {
+      if (typeof cancelPendingNoteTasks === "function") {
+        cancelPendingNoteTasks();
+      }
       this.lastFiredGlobalStep = null;
+      this.lastScheduledGlobalStep = null;
       return [];
     }
 
     globalStep = this.globalStepForBeats(songBeats);
     step = mod(globalStep, this.stepCount);
 
-    if (this.lastFiredGlobalStep === globalStep) {
-      return [];
+    if (this.lastFiredGlobalStep !== globalStep) {
+      discontinuity = this.lastFiredGlobalStep !== null && globalStep !== this.lastFiredGlobalStep + 1;
+      this.lastFiredGlobalStep = globalStep;
+      this.currentStep = step;
+      this.playingStepOneBased = step + 1;
+      this.reportPlayingStep();
+      if (discontinuity) {
+        if (typeof cancelPendingNoteTasks === "function") {
+          cancelPendingNoteTasks();
+        }
+        this.lastScheduledGlobalStep = null;
+        this.status("transport_jump " + songBeats + " step " + (step + 1));
+      }
     }
 
-    discontinuity = this.lastFiredGlobalStep !== null && globalStep !== this.lastFiredGlobalStep + 1;
-    this.lastFiredGlobalStep = globalStep;
-    if (discontinuity) {
-      this.status("transport_jump " + songBeats + " step " + (step + 1));
+    quarterMs = 60000 / this.tempo;
+    lookaheadBeats = this.lookaheadMs() / quarterMs;
+    endGlobalStep = this.globalStepForBeats(songBeats + lookaheadBeats);
+    scheduleStep = this.lastScheduledGlobalStep === null
+      ? globalStep
+      : Math.max(globalStep, this.lastScheduledGlobalStep + 1);
+
+    while (scheduleStep <= endGlobalStep) {
+      step = mod(scheduleStep, this.stepCount);
+      baseDelayMs = (this.beatForGlobalStep(scheduleStep) - songBeats) * quarterMs;
+      scheduledNotes = this.fireStep(step, scheduleStep, {
+        baseDelayMs: baseDelayMs,
+        reportStep: false
+      });
+      notes = notes.concat(scheduledNotes);
+      this.lastScheduledGlobalStep = scheduleStep;
+      scheduleStep += 1;
     }
 
-    return this.fireStep(step, globalStep);
+    return notes;
   };
 
   KickSnareHatEngine.prototype.snapshot = function () {
@@ -750,8 +927,7 @@ var KSH_EngineClass = null;
         generated[ch][st] = {
           enabled: cell.enabled,
           velocity: cell.velocity,
-          gateMode: cell.gateMode,
-          random: cell.random,
+          probability: cell.probability,
           cycle: cell.cycle,
           source: cell.source + 1
         };
@@ -766,7 +942,8 @@ var KSH_EngineClass = null;
       rate: this.rate,
       tempo: this.tempo,
       swing: this.swing,
-      midiChannel: this.midiChannel,
+      velocityHumanize: this.velocityHumanize,
+      timingHumanize: this.timingHumanize,
       phaseOffsetBeats: this.phaseOffsetBeats,
       currentStep: this.currentStep + 1,
       channels: channels,
@@ -783,8 +960,9 @@ var KSH_EngineClass = null;
       rate: this.rate,
       tempo: this.tempo,
       swing: this.swing,
-      midiChannel: this.midiChannel,
-      noteDurationMs: this.noteDurationMs,
+      velocityHumanize: this.velocityHumanize,
+      timingHumanize: this.timingHumanize,
+      deviceActive: this.deviceActive ? 1 : 0,
       phaseOffsetBeats: this.phaseOffsetBeats,
       channels: this.channels,
       sources: this.sources
@@ -829,11 +1007,14 @@ var KSH_EngineClass = null;
     if (state.swing !== undefined) {
       this.swing = clamp(state.swing, 0, 100);
     }
-    if (state.midiChannel !== undefined) {
-      this.midiChannel = clamp(state.midiChannel, 1, 16);
+    if (state.velocityHumanize !== undefined) {
+      this.velocityHumanize = clamp(state.velocityHumanize, 0, 100);
     }
-    if (state.noteDurationMs !== undefined) {
-      this.noteDurationMs = clamp(state.noteDurationMs, 10, 5000);
+    if (state.timingHumanize !== undefined) {
+      this.timingHumanize = clamp(state.timingHumanize, 0, 100);
+    }
+    if (state.deviceActive !== undefined) {
+      this.deviceActive = normalizeToggle(state.deviceActive);
     }
     this.phaseOffsetBeats = parseFloat(state.phaseOffsetBeats) || 0;
 
@@ -1039,12 +1220,16 @@ function swing(value) {
   ensureEngine().setSwing(value);
 }
 
-function midi_channel(value) {
-  ensureEngine().setMidiChannel(value);
+function velocity_humanize(value) {
+  ensureEngine().setVelocityHumanize(value);
 }
 
-function duration_ms(value) {
-  ensureEngine().setNoteDurationMs(value);
+function timing_humanize(value) {
+  ensureEngine().setTimingHumanize(value);
+}
+
+function device_active(value) {
+  ensureEngine().setDeviceActive(value);
 }
 
 function phase_offset_beats(value) {
@@ -1070,15 +1255,15 @@ function channel_lock(channel, lock) {
   ensureEngine().setChannelLock(zeroBased(channel), normalized);
 }
 
-function cell(source, channel, stepIndex, enabled, velocity, gateMode, value) {
+function cell(source, channel, stepIndex, enabled, velocity, probability, cycle) {
   ensureEngine().setCell(
     zeroBased(source),
     zeroBased(channel),
     zeroBased(stepIndex),
     parseInt(enabled, 10) !== 0,
     velocity,
-    gateMode,
-    value
+    probability,
+    cycle
   );
 }
 
@@ -1095,8 +1280,12 @@ function cell_velocity(source, channel, stepIndex, velocity) {
   ensureEngine().setCellVelocity(zeroBased(source), zeroBased(channel), zeroBased(stepIndex), velocity);
 }
 
-function cell_gate(source, channel, stepIndex, gateMode, value) {
-  ensureEngine().setCellGate(zeroBased(source), zeroBased(channel), zeroBased(stepIndex), gateMode, value);
+function cell_probability(source, channel, stepIndex, probability) {
+  ensureEngine().setCellProbability(zeroBased(source), zeroBased(channel), zeroBased(stepIndex), probability);
+}
+
+function cell_cycle(source, channel, stepIndex, cycleValue) {
+  ensureEngine().setCellCycle(zeroBased(source), zeroBased(channel), zeroBased(stepIndex), cycleValue);
 }
 
 function snapshot() {
