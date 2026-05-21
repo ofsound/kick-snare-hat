@@ -34,7 +34,7 @@ Patch shell: `kick-snare-hat.maxpat` (generated/edited via `scripts/build-device
 ## Naming
 
 - Prefer **channel** in engine/API; UI code may still say **lane** in labels—keep schema compatibility (`normalizeIncomingState` handles legacy `lane` keys).
-- Generation modes: `stack` | `per_channel`
+- Generation modes: `stack` | `per_channel` | `static`
 - Gate modes: `always` | `random` | `cycle`
 
 ## Editing discipline

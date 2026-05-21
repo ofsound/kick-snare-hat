@@ -96,6 +96,27 @@ function testPerChannelModeCanChooseDifferentSources() {
   assert.strictEqual(engine._notes[1].source, 4);
 }
 
+function testStaticModeUsesSelectedSource() {
+  var engine = makeEngine([0.99]);
+  clearAll(engine);
+  engine.setChannelCount(2);
+  engine.setGenerationMode("static");
+  engine.setStaticSource(2);
+  engine.setChannelLock(0, 0);
+  engine.setCell(0, 0, 0, 1, 40, 100, 1);
+  engine.setCell(2, 0, 0, 1, 70, 100, 1);
+  engine.setCell(2, 1, 0, 1, 90, 100, 1);
+  engine._notes.length = 0;
+  engine._setRandomValues([0.99]);
+  engine.transportPosition(0, 1);
+
+  assert.strictEqual(engine._notes.length, 2);
+  assert.strictEqual(engine._notes[0].source, 3);
+  assert.strictEqual(engine._notes[0].velocity, 70);
+  assert.strictEqual(engine._notes[1].source, 3);
+  assert.strictEqual(engine._notes[1].velocity, 90);
+}
+
 function testRandomSourceIgnoresEmptySources() {
   var engine = makeEngine([0]);
   clearAll(engine);
@@ -140,6 +161,57 @@ function testRandomSourceUsesOnlyPopulatedSourceWhenOthersEmpty() {
   assert.strictEqual(engine._notes.length, 1);
   assert.strictEqual(engine._notes[0].source, 3);
   assert.strictEqual(engine._notes[0].velocity, 66);
+}
+
+function testSourceChannelMuteSuppressesGeneratedOutput() {
+  var engine = makeEngine([0]);
+  clearAll(engine);
+  engine.setChannelCount(1);
+  engine.setGenerationMode("per_channel");
+  engine.setCell(0, 0, 0, 1, 77, 100, 1);
+  engine.setSourceChannelMute(0, 0, 1);
+  engine._notes.length = 0;
+  engine._setRandomValues([0]);
+  engine.transportPosition(0, 1);
+
+  assert.strictEqual(engine.generated[0][0].source, 0);
+  assert.strictEqual(engine.generated[0][0].enabled, 0);
+  assert.strictEqual(engine.generated[0][0].velocity, 100);
+  assert.strictEqual(engine._notes.length, 0);
+}
+
+function testMutedSourceChannelDoesNotMakeSourceActive() {
+  var engine = makeEngine([0.99]);
+  clearAll(engine);
+  engine.setChannelCount(1);
+  engine.setGenerationMode("stack");
+  engine.setCell(0, 0, 0, 1, 55, 100, 1);
+  engine.setCell(1, 0, 0, 1, 88, 100, 1);
+  engine.setSourceChannelMute(1, 0, 1);
+  engine._notes.length = 0;
+  engine._setRandomValues([0.99]);
+  engine.transportPosition(0, 1);
+
+  assert.strictEqual(engine._notes.length, 1);
+  assert.strictEqual(engine._notes[0].source, 1);
+  assert.strictEqual(engine._notes[0].velocity, 55);
+}
+
+function testSourceChannelResetClearsCellsAndMute() {
+  var engine = makeEngine([0]);
+  clearAll(engine);
+  engine.setChannelCount(1);
+  engine.setCell(0, 0, 0, 1, 44, 30, 3);
+  engine.setCell(0, 0, 1, 1, 45, 40, 4);
+  engine.setSourceChannelMute(0, 0, 1);
+  engine.resetSourceChannel(0, 0);
+
+  assert.strictEqual(engine.sourceChannelMutes[0][0], 0);
+  assert.strictEqual(engine.sources[0][0][0].enabled, 0);
+  assert.strictEqual(engine.sources[0][0][0].velocity, 100);
+  assert.strictEqual(engine.sources[0][0][0].probability, 100);
+  assert.strictEqual(engine.sources[0][0][0].cycle, 1);
+  assert.strictEqual(engine.sources[0][0][1].enabled, 0);
 }
 
 function testChannelLockOverridesRandomSource() {
@@ -628,7 +700,10 @@ function testSerializeDeserializeRestoresSourceData() {
   engine.setDeviceActive(0);
   engine.setVelocityHumanize(12);
   engine.setTimingHumanize(8);
+  engine.setGenerationMode("static");
+  engine.setStaticSource(2);
   engine.setCell(1, 0, 2, 1, 77, 25, 1);
+  engine.setSourceChannelMute(1, 0, 1);
   state = engine.serialize();
 
   restored.deserialize(JSON.parse(JSON.stringify(state)));
@@ -641,12 +716,15 @@ function testSerializeDeserializeRestoresSourceData() {
   assert.strictEqual(restored.deviceActive, false);
   assert.strictEqual(restored.velocityHumanize, 12);
   assert.strictEqual(restored.timingHumanize, 8);
+  assert.strictEqual(restored.generationMode, "static");
+  assert.strictEqual(restored.staticSource, 2);
   assert.strictEqual(restored.sources[1][0][2].enabled, 1);
   assert.strictEqual(restored.sources[1][0][2].velocity, 77);
   assert.strictEqual(restored.sources[1][0][2].probability, 25);
   assert.strictEqual(restored.sources[1][0][2].cycle, 1);
   assert.strictEqual(Object.prototype.hasOwnProperty.call(state.sources[1][0][2], "gateMode"), false);
   assert.strictEqual(Object.prototype.hasOwnProperty.call(state.sources[1][0][2], "random"), false);
+  assert.strictEqual(restored.sourceChannelMutes[1][0], 1);
 }
 
 function testGenerateWindowScansActiveSourcesOnce() {
@@ -746,9 +824,13 @@ function testDeserializeDoesNotEmitIntermediateStatuses() {
 testStackModeMatchesOneSourceAcrossWindow();
 testStackModeUsesOneSourceForAllLanesOnStep();
 testPerChannelModeCanChooseDifferentSources();
+testStaticModeUsesSelectedSource();
 testRandomSourceIgnoresEmptySources();
 testInactiveChannelContentDoesNotMakeSourceActive();
 testRandomSourceUsesOnlyPopulatedSourceWhenOthersEmpty();
+testSourceChannelMuteSuppressesGeneratedOutput();
+testMutedSourceChannelDoesNotMakeSourceActive();
+testSourceChannelResetClearsCellsAndMute();
 testChannelLockOverridesRandomSource();
 testCycleGateFiresEveryNthEncounter();
 testRandomGateUsesPercentage();

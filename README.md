@@ -11,9 +11,11 @@ of using unconstrained randomness.
 - Four source patterns, each containing every active lane.
 - Per-lane label, MIDI note, and source lock.
 - Fixed output on MIDI channel 1.
-- Two generation modes:
+- Three generation modes:
   - `stack`: each refresh window chooses one source pattern for all lanes and steps in that window.
   - `per_channel`: each generated step/lane chooses its own source pattern.
+  - `static`: every lane plays the selected source pattern.
+- MIDI input notes 0, 1, 2, and 3 select source patterns 1-4.
 - Refresh interval is measured in sequencer steps.
 - Live transport-position timing: host beat position drives the current step, with reset on Live transport stop.
 - Internal swing delay measured against the incoming tempo-synced step interval.
@@ -25,6 +27,7 @@ of using unconstrained randomness.
 - Compact Presentation UI for the Live device strip with mode, steps, lanes, refresh, rate, swing, generated preview, and editor launch controls.
 - Floating editor subpatcher opened from the compact UI, with source dropdown, all-lane source grid editor, generated grid preview, lane labels, lane note/lock controls, and per-cell velocity/probability/cycle controls.
 - Source Pattern layer modes for velocity, cycle, and probability via buttons, number keys `1`/`2`/`3`, Shift hover for cycle, and Option hover for probability.
+- Source Pattern row labels can mute a source/channel row or reset it to blank defaults.
 - `autopattr` plus `pattrstorage` persist engine pattern state only; UIs mirror via `engine_state` / `preview` events.
 - Per-source cell values:
   - enabled
@@ -57,6 +60,8 @@ channels 3
 refresh_steps 4
 mode stack
 mode per_channel
+mode static
+static_source 1
 rate 16n
 tempo 120
 swing 0
@@ -78,6 +83,8 @@ cell_enabled 1 1 1 0
 cell_velocity 1 1 1 96
 cell_probability 1 1 1 75
 cell_cycle 1 1 1 3
+source_channel_mute 1 1 1
+source_channel_reset 1 1
 
 transport_position 0.0 1
 reset

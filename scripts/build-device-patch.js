@@ -404,6 +404,41 @@ const patch = {
         numoutlets: 1,
         outlettype: [""]
       }),
+      box("midi-notein", "newobj", "notein", [180.0, 700.0, 50.0, 22.0], {
+        numinlets: 1,
+        numoutlets: 3,
+        outlettype: ["int", "int", "int"]
+      }),
+      box("midi-stripnote", "newobj", "stripnote", [180.0, 740.0, 64.0, 22.0], {
+        numinlets: 2,
+        numoutlets: 2,
+        outlettype: ["int", "int"]
+      }),
+      box("midi-source-select", "newobj", "sel 0 1 2 3", [180.0, 780.0, 110.0, 22.0], {
+        numinlets: 2,
+        numoutlets: 5,
+        outlettype: ["bang", "bang", "bang", "bang", ""]
+      }),
+      box("midi-source-1", "message", "static_source 1", [300.0, 700.0, 100.0, 22.0], {
+        numinlets: 2,
+        numoutlets: 1,
+        outlettype: [""]
+      }),
+      box("midi-source-2", "message", "static_source 2", [300.0, 730.0, 100.0, 22.0], {
+        numinlets: 2,
+        numoutlets: 1,
+        outlettype: [""]
+      }),
+      box("midi-source-3", "message", "static_source 3", [300.0, 760.0, 100.0, 22.0], {
+        numinlets: 2,
+        numoutlets: 1,
+        outlettype: [""]
+      }),
+      box("midi-source-4", "message", "static_source 4", [300.0, 790.0, 100.0, 22.0], {
+        numinlets: 2,
+        numoutlets: 1,
+        outlettype: [""]
+      }),
       box("loadbang", "newobj", "loadbang", [40.0, 760.0, 60.0, 22.0], {
         numinlets: 1,
         numoutlets: 1,
@@ -473,6 +508,17 @@ const patch = {
       line("recvcmd", 0, "ui", 0),
       line("recvevents", 0, "ui", 0),
       line("enginecmds", 0, "engine", 0),
+      line("midi-notein", 0, "midi-stripnote", 0),
+      line("midi-notein", 1, "midi-stripnote", 1),
+      line("midi-stripnote", 0, "midi-source-select", 0),
+      line("midi-source-select", 0, "midi-source-1", 0),
+      line("midi-source-select", 1, "midi-source-2", 0),
+      line("midi-source-select", 2, "midi-source-3", 0),
+      line("midi-source-select", 3, "midi-source-4", 0),
+      line("midi-source-1", 0, "engine", 0),
+      line("midi-source-2", 0, "engine", 0),
+      line("midi-source-3", 0, "engine", 0),
+      line("midi-source-4", 0, "engine", 0),
       line("engine", 0, "note-unpack", 0),
       line("note-unpack", 4, "note-delay", 4),
       line("note-unpack", 3, "note-delay", 3),

@@ -64,6 +64,9 @@ var KSH_EngineClass = null;
     if (mode === "perchannel" || mode === "per_channel" || mode === "per-channel") {
       return "per_channel";
     }
+    if (mode === "static") {
+      return "static";
+    }
     return "stack";
   }
 
@@ -127,6 +130,21 @@ var KSH_EngineClass = null;
     return channels;
   }
 
+  function makeSourceChannelMutes() {
+    var mutes = [];
+    var source;
+    var channel;
+
+    for (source = 0; source < SOURCE_COUNT; source += 1) {
+      mutes[source] = [];
+      for (channel = 0; channel < MAX_LANES; channel += 1) {
+        mutes[source][channel] = 0;
+      }
+    }
+
+    return mutes;
+  }
+
   function KickSnareHatEngine(options) {
     options = options || {};
 
@@ -149,6 +167,7 @@ var KSH_EngineClass = null;
     this.channelCount = 3;
     this.refreshSteps = 1;
     this.generationMode = "stack";
+    this.staticSource = 0;
     this.rate = "16n";
     this.tempo = 120;
     this.stepIntervalMs = 125;
@@ -165,6 +184,7 @@ var KSH_EngineClass = null;
 
     this.channels = [];
     this.sources = [];
+    this.sourceChannelMutes = makeSourceChannelMutes();
     this.generated = makePattern();
     this.cycleCounters = {};
 
@@ -192,6 +212,7 @@ var KSH_EngineClass = null;
     var s;
 
     this.sources = [];
+    this.sourceChannelMutes = makeSourceChannelMutes();
     for (s = 0; s < SOURCE_COUNT; s += 1) {
       this.sources[s] = makePattern();
     }
@@ -230,6 +251,15 @@ var KSH_EngineClass = null;
     this.generationMode = normalizeGenerationMode(mode);
     this.recomposeWindow(0, this.stepCount, true);
     this.status("mode " + this.generationMode);
+  };
+
+  KickSnareHatEngine.prototype.setStaticSource = function (source) {
+    source = clampSource(source);
+    this.staticSource = source;
+    if (this.generationMode === "static") {
+      this.recomposeWindow(0, this.stepCount, true);
+    }
+    this.status("static_source " + (this.staticSource + 1));
   };
 
   KickSnareHatEngine.prototype.setRate = function (rate) {
@@ -401,11 +431,55 @@ var KSH_EngineClass = null;
       return null;
     }
 
+    if (this.generationMode === "static") {
+      return this.staticSource === source ? generatedCell : null;
+    }
+
     if (this.channels[channel].lock >= 0) {
       return this.channels[channel].lock === source ? generatedCell : null;
     }
 
     return generatedCell.source === source ? generatedCell : null;
+  };
+
+  KickSnareHatEngine.prototype.isSourceChannelMuted = function (source, channel) {
+    source = clampSource(source);
+    channel = clampChannel(channel);
+    return this.sourceChannelMutes[source] && this.sourceChannelMutes[source][channel] ? 1 : 0;
+  };
+
+  KickSnareHatEngine.prototype.generatedCellFromSource = function (source, channel, step) {
+    var cell;
+
+    if (this.isSourceChannelMuted(source, channel)) {
+      cell = defaultCell();
+    } else {
+      cell = cloneCell(this.sources[source][channel][step]);
+    }
+    cell.source = source;
+    return cell;
+  };
+
+  KickSnareHatEngine.prototype.setSourceChannelMute = function (source, channel, muted) {
+    source = clampSource(source);
+    channel = clampChannel(channel);
+    muted = muted ? 1 : 0;
+    this.sourceChannelMutes[source][channel] = muted;
+    this.recomposeWindow(0, this.stepCount, true);
+    this.status("source_channel_mute " + (source + 1) + " " + (channel + 1) + " " + muted);
+  };
+
+  KickSnareHatEngine.prototype.resetSourceChannel = function (source, channel) {
+    var step;
+
+    source = clampSource(source);
+    channel = clampChannel(channel);
+    this.sourceChannelMutes[source][channel] = 0;
+    for (step = 0; step < MAX_STEPS; step += 1) {
+      this.sources[source][channel][step] = defaultCell();
+    }
+    this.recomposeWindow(0, this.stepCount, true);
+    this.status("source_channel_reset " + (source + 1) + " " + (channel + 1));
   };
 
   KickSnareHatEngine.prototype.setCell = function (source, channel, step, enabled, velocity, probability, cycle) {
@@ -426,10 +500,7 @@ var KSH_EngineClass = null;
 
     generatedCell = this.generatedCellForSourceEdit(source, channel, step);
     if (generatedCell) {
-      generatedCell.enabled = cell.enabled;
-      generatedCell.velocity = cell.velocity;
-      generatedCell.probability = cell.probability;
-      generatedCell.cycle = cell.cycle;
+      this.generated[channel][step] = this.generatedCellFromSource(source, channel, step);
       this.markPreviewDirty(false);
     }
   };
@@ -445,7 +516,7 @@ var KSH_EngineClass = null;
 
     generatedCell = this.generatedCellForSourceEdit(source, channel, step);
     if (generatedCell) {
-      generatedCell.enabled = enabled;
+      this.generated[channel][step] = this.generatedCellFromSource(source, channel, step);
       this.markPreviewDirty(false);
     }
   };
@@ -461,7 +532,7 @@ var KSH_EngineClass = null;
 
     generatedCell = this.generatedCellForSourceEdit(source, channel, step);
     if (generatedCell) {
-      generatedCell.velocity = velocity;
+      this.generated[channel][step] = this.generatedCellFromSource(source, channel, step);
       this.markPreviewDirty(false);
     }
   };
@@ -477,7 +548,7 @@ var KSH_EngineClass = null;
 
     generatedCell = this.generatedCellForSourceEdit(source, channel, step);
     if (generatedCell) {
-      generatedCell.probability = probability;
+      this.generated[channel][step] = this.generatedCellFromSource(source, channel, step);
       this.markPreviewDirty(false);
     }
   };
@@ -493,7 +564,7 @@ var KSH_EngineClass = null;
 
     generatedCell = this.generatedCellForSourceEdit(source, channel, step);
     if (generatedCell) {
-      generatedCell.cycle = cycle;
+      this.generated[channel][step] = this.generatedCellFromSource(source, channel, step);
       this.markPreviewDirty(false);
     }
   };
@@ -526,6 +597,9 @@ var KSH_EngineClass = null;
 
     sourceIndex = clampSource(sourceIndex);
     for (channel = 0; channel < this.channelCount; channel += 1) {
+      if (this.isSourceChannelMuted(sourceIndex, channel)) {
+        continue;
+      }
       for (step = 0; step < this.stepCount; step += 1) {
         cell = this.sources[sourceIndex][channel][step];
         if (cell.enabled) {
@@ -569,7 +643,6 @@ var KSH_EngineClass = null;
     var channel;
     var source;
     var stackSource;
-    var cell;
     var activeSources;
 
     if (forceEmit === undefined) {
@@ -579,9 +652,12 @@ var KSH_EngineClass = null;
     startStep = clamp(startStep, 0, this.stepCount - 1);
     length = clamp(length, 1, this.stepCount);
 
-    activeSources = this.activeSourceIndices();
+    activeSources = null;
     stackSource = -1;
-    if (this.generationMode !== "per_channel") {
+    if (this.generationMode === "per_channel") {
+      activeSources = this.activeSourceIndices();
+    } else if (this.generationMode === "stack") {
+      activeSources = this.activeSourceIndices();
       stackSource = this.pickRandomSource(activeSources);
     }
 
@@ -589,7 +665,9 @@ var KSH_EngineClass = null;
       step = (startStep + offset) % this.stepCount;
 
       for (channel = 0; channel < this.channelCount; channel += 1) {
-        if (this.channels[channel].lock >= 0) {
+        if (this.generationMode === "static") {
+          source = this.staticSource;
+        } else if (this.channels[channel].lock >= 0) {
           source = this.channels[channel].lock;
         } else if (this.generationMode === "per_channel") {
           source = this.pickRandomSource(activeSources);
@@ -597,9 +675,7 @@ var KSH_EngineClass = null;
           source = stackSource;
         }
 
-        cell = cloneCell(this.sources[source][channel][step]);
-        cell.source = source;
-        this.generated[channel][step] = cell;
+        this.generated[channel][step] = this.generatedCellFromSource(source, channel, step);
       }
     }
 
@@ -617,7 +693,6 @@ var KSH_EngineClass = null;
     var channel;
     var source;
     var existing;
-    var cell;
     var fallbackStack = -1;
     var activeSources;
 
@@ -628,13 +703,15 @@ var KSH_EngineClass = null;
     startStep = clamp(startStep, 0, this.stepCount - 1);
     length = clamp(length, 1, this.stepCount);
 
-    activeSources = this.activeSourceIndices();
+    activeSources = this.generationMode === "static" ? null : this.activeSourceIndices();
 
     for (offset = 0; offset < length; offset += 1) {
       step = (startStep + offset) % this.stepCount;
 
       for (channel = 0; channel < this.channelCount; channel += 1) {
-        if (this.channels[channel].lock >= 0) {
+        if (this.generationMode === "static") {
+          source = this.staticSource;
+        } else if (this.channels[channel].lock >= 0) {
           source = this.channels[channel].lock;
         } else {
           existing = this.generated[channel] && this.generated[channel][step]
@@ -652,9 +729,7 @@ var KSH_EngineClass = null;
           }
         }
 
-        cell = cloneCell(this.sources[source][channel][step]);
-        cell.source = source;
-        this.generated[channel][step] = cell;
+        this.generated[channel][step] = this.generatedCellFromSource(source, channel, step);
       }
     }
 
@@ -939,6 +1014,7 @@ var KSH_EngineClass = null;
       channelCount: this.channelCount,
       refreshSteps: this.refreshSteps,
       generationMode: this.generationMode,
+      staticSource: this.staticSource,
       rate: this.rate,
       tempo: this.tempo,
       swing: this.swing,
@@ -947,6 +1023,7 @@ var KSH_EngineClass = null;
       phaseOffsetBeats: this.phaseOffsetBeats,
       currentStep: this.currentStep + 1,
       channels: channels,
+      sourceChannelMutes: this.sourceChannelMutes,
       generated: generated
     };
   };
@@ -957,6 +1034,7 @@ var KSH_EngineClass = null;
       channelCount: this.channelCount,
       refreshSteps: this.refreshSteps,
       generationMode: this.generationMode,
+      staticSource: this.staticSource,
       rate: this.rate,
       tempo: this.tempo,
       swing: this.swing,
@@ -965,6 +1043,7 @@ var KSH_EngineClass = null;
       deviceActive: this.deviceActive ? 1 : 0,
       phaseOffsetBeats: this.phaseOffsetBeats,
       channels: this.channels,
+      sourceChannelMutes: this.sourceChannelMutes,
       sources: this.sources
     };
   };
@@ -976,6 +1055,7 @@ var KSH_EngineClass = null;
     var incomingChannel;
     var incomingSource;
     var incomingRow;
+    var incomingMuteRow;
 
     state = normalizeIncomingState(state);
     if (!state) {
@@ -994,6 +1074,9 @@ var KSH_EngineClass = null;
     this.refreshSteps = clamp(this.refreshSteps, 1, this.stepCount);
     if (state.generationMode !== undefined) {
       this.generationMode = normalizeGenerationMode(state.generationMode);
+    }
+    if (state.staticSource !== undefined) {
+      this.staticSource = clamp(state.staticSource, 0, SOURCE_COUNT - 1);
     }
     if (state.rate !== undefined) {
       this.rate = normalizeRate(state.rate);
@@ -1041,6 +1124,15 @@ var KSH_EngineClass = null;
           for (step = 0; step < Math.min(MAX_STEPS, incomingRow.length); step += 1) {
             this.sources[source][channel][step] = cloneCell(incomingRow[step]);
           }
+        }
+      }
+    }
+
+    if (state.sourceChannelMutes) {
+      for (source = 0; source < Math.min(SOURCE_COUNT, state.sourceChannelMutes.length); source += 1) {
+        incomingMuteRow = state.sourceChannelMutes[source] || [];
+        for (channel = 0; channel < Math.min(MAX_LANES, incomingMuteRow.length); channel += 1) {
+          this.sourceChannelMutes[source][channel] = incomingMuteRow[channel] ? 1 : 0;
         }
       }
     }
@@ -1208,6 +1300,10 @@ function mode(value) {
   ensureEngine().setGenerationMode(value);
 }
 
+function static_source(source) {
+  ensureEngine().setStaticSource(zeroBased(source));
+}
+
 function rate(value) {
   ensureEngine().setRate(value);
 }
@@ -1253,6 +1349,15 @@ function channel_audition(channel) {
 function channel_lock(channel, lock) {
   var normalized = String(lock).toLowerCase() === "random" ? -1 : zeroBased(lock);
   ensureEngine().setChannelLock(zeroBased(channel), normalized);
+}
+
+function source_channel_mute(source, channel, muted) {
+  ensureEngine().setSourceChannelMute(zeroBased(source), zeroBased(channel), parseInt(muted, 10) !== 0);
+}
+
+function source_channel_reset(source, channel) {
+  ensureEngine().resetSourceChannel(zeroBased(source), zeroBased(channel));
+  emitFullState();
 }
 
 function cell(source, channel, stepIndex, enabled, velocity, probability, cycle) {

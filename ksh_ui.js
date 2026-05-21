@@ -152,6 +152,7 @@ for (key in ksh_shared.colors) {
 colors.edit = [0.96, 0.62, 0.22, 1];
 colors.editLight = [0.58, 0.80, 0.97, 1];
 colors.generated = [0.36, 0.66, 0.95, 1];
+colors.mutedCellOff = [0.12, 0.13, 0.14, 1];
 
 var state = makeState();
 var previewData = null;
@@ -209,6 +210,17 @@ function sourceCellColor(lane, light) {
     return light ? colors.editLight : colors.edit;
   }
   return (light ? DC_LANE_COLORS_LIGHT : DC_LANE_COLORS)[lane % DC_LANE_COLORS.length];
+}
+
+function mutedSourceCellColor(color) {
+  var gray = (color[0] + color[1] + color[2]) / 3;
+
+  return [
+    gray * 0.56 + color[0] * 0.12,
+    gray * 0.56 + color[1] * 0.12,
+    gray * 0.56 + color[2] * 0.12,
+    color[3]
+  ];
 }
 
 function normalizeSourceLayerMode(mode) {
@@ -290,6 +302,10 @@ function makeSource() {
   return source;
 }
 
+function makeSourceChannelMutes() {
+  return ksh_shared.makeSourceChannelMutes();
+}
+
 function makeState() {
   var sources = [];
   var lanes = [];
@@ -312,12 +328,14 @@ function makeState() {
     laneCount: 3,
     refreshSteps: 1,
     generationMode: "stack",
+    staticSource: 0,
     rate: "16n",
     swing: 0,
     velocityHumanize: 0,
     timingHumanize: 0,
     deviceActive: 1,
     lanes: lanes,
+    sourceChannelMutes: makeSourceChannelMutes(),
     sources: sources
   };
 }
@@ -365,7 +383,7 @@ function drawHeader() {
     sourceX += sourceBtnW + sourceBtnGap;
   }
 
-  ksh_shared.button(hitZones, "mode", state.generationMode === "stack" ? "Stack" : "Per Lane", modeX, 18, 78, 25, false);
+  ksh_shared.button(hitZones, "mode", ksh_shared.generationModeLabel(state.generationMode), modeX, 18, 78, 25, false);
   ksh_shared.valueBox(hitZones, "steps", "Steps", state.stepCount, modeX + 92, 18, 78, 30, 13);
   ksh_shared.valueBox(hitZones, "lanes", "Lanes", state.laneCount, modeX + 184, 18, 78, 30, 13);
   ksh_shared.valueBox(hitZones, "refresh", "Refresh", state.refreshSteps, modeX + 276, 18, 84, 30, 13);
@@ -453,31 +471,44 @@ function drawSourceGrid() {
   var x;
   var y;
   var cell;
+  var muted;
+  var labelZoneW = EDITOR_LAYOUT.LABEL_COL_W * scale;
+  var labelZoneX = layout.gridX0 - labelZoneW;
+  var baseColor;
+  var lightColor;
 
   ksh_shared.text("Source " + (selectedSource + 1) + " Pattern", x0, layout.sourceTitleY, 13, colors.text);
   drawStepNumberLabels(x0, cellW, layout.sourceStepY);
 
   for (lane = 0; lane < state.laneCount; lane += 1) {
-    ksh_shared.text(state.lanes[lane].label, layout.labelRight, y0 + lane * cellH + 16 * scale, 10 * scale, colors.muted, "right");
+    muted = state.sourceChannelMutes[selectedSource] && state.sourceChannelMutes[selectedSource][lane];
+    y = y0 + lane * cellH;
+    ksh_shared.text(state.lanes[lane].label, layout.labelRight, y + 16 * scale, 10 * scale, muted ? colors.text : colors.muted, "right");
+    ksh_shared.zone(hitZones, "source_row_label", labelZoneX, y, labelZoneW - 4 * scale, cellH, { lane: lane });
     for (step = 0; step < state.stepCount; step += 1) {
       x = x0 + step * cellW;
-      y = y0 + lane * cellH;
       cell = state.sources[selectedSource][lane][step];
       if (cell.enabled) {
+        baseColor = sourceCellColor(lane, 0);
+        lightColor = sourceCellColor(lane, 1);
+        if (muted) {
+          baseColor = mutedSourceCellColor(baseColor);
+          lightColor = mutedSourceCellColor(lightColor);
+        }
         ksh_shared.sourceCellBackground(
           x + cellPad,
           y + cellPad,
           cellW - cellPad * 2,
           cellH - cellPad * 2,
           layerMode,
-          sourceCellColor(lane, 0),
-          sourceCellColor(lane, 1)
+          baseColor,
+          lightColor
         );
-        ksh_shared.text(String(sourceLayerValue(cell, layerMode)), x + cellW / 2, y + 14 * scale, 9 * scale, colors.off, "center");
+        ksh_shared.text(String(sourceLayerValue(cell, layerMode)), x + cellW / 2, y + 14 * scale, 9 * scale, muted ? colors.muted : colors.off, "center");
       } else {
-        ksh_shared.rect(x + cellPad, y + cellPad, cellW - cellPad * 2, cellH - cellPad * 2, colors.off);
+        ksh_shared.rect(x + cellPad, y + cellPad, cellW - cellPad * 2, cellH - cellPad * 2, muted ? colors.mutedCellOff : colors.off);
       }
-      ksh_shared.strokeRect(x + cellPad, y + cellPad, cellW - cellPad * 2, cellH - cellPad * 2, selectedLane === lane && selectedStep === step ? colors.text : colors.strokeSoft, 1);
+      ksh_shared.strokeRect(x + cellPad, y + cellPad, cellW - cellPad * 2, cellH - cellPad * 2, selectedLane === lane && selectedStep === step ? colors.text : muted ? colors.muted : colors.strokeSoft, 1);
       ksh_shared.zone(hitZones, "source_cell", x + cellPad, y + cellPad, cellW - cellPad * 2, cellH - cellPad * 2, { lane: lane, step: step });
     }
   }
@@ -553,6 +584,26 @@ function sendLane(lane) {
 function sendCell(source, lane, step) {
   var cell = state.sources[source][lane][step];
   send("cell", source + 1, lane + 1, step + 1, cell.enabled, cell.velocity, cell.probability, cell.cycle);
+}
+
+function sendSourceChannelMute(source, lane) {
+  send("source_channel_mute", source + 1, lane + 1, state.sourceChannelMutes[source][lane]);
+}
+
+function selectSource(source) {
+  selectedSource = ksh_shared.clamp(source, 0, SOURCE_COUNT - 1);
+  state.staticSource = selectedSource;
+  send("static_source", selectedSource + 1);
+}
+
+function resetSourceChannelRow(source, lane) {
+  var step;
+
+  state.sourceChannelMutes[source][lane] = 0;
+  for (step = 0; step < MAX_STEPS; step += 1) {
+    state.sources[source][lane][step] = ksh_shared.defaultCell();
+  }
+  send("source_channel_reset", source + 1, lane + 1);
 }
 
 function sync_all() {
@@ -773,6 +824,7 @@ function engine_state(json) {
   try {
     engineState = JSON.parse(json);
     ksh_shared.applyEngineState(state, engineState);
+    selectedSource = ksh_shared.clamp(state.staticSource, 0, SOURCE_COUNT - 1);
     selectedLane = ksh_shared.clamp(selectedLane, 0, state.laneCount - 1);
     selectedStep = ksh_shared.clamp(selectedStep, 0, state.stepCount - 1);
     applyEditorSize();
@@ -800,9 +852,9 @@ function onclick(x, y, button, cmd, shift, capslock, option, ctrl) {
   }
 
   if (z.id === "source_pick") {
-    selectedSource = z.data.source;
+    selectSource(z.data.source);
   } else if (z.id === "mode") {
-    state.generationMode = state.generationMode === "stack" ? "per_channel" : "stack";
+    ksh_shared.cycleGenerationMode(state);
     send("mode", state.generationMode);
   } else if (z.id === "rate") {
     ksh_shared.cycleRate(state, shift ? -1 : 1);
@@ -821,6 +873,10 @@ function onclick(x, y, button, cmd, shift, capslock, option, ctrl) {
     } else {
       beginSourceCellInteraction(z, x, y, modifierLayerMode(shift, option));
     }
+  } else if (z.id === "source_row_label") {
+    selectedLane = z.data.lane;
+    state.sourceChannelMutes[selectedSource][selectedLane] = state.sourceChannelMutes[selectedSource][selectedLane] ? 0 : 1;
+    sendSourceChannelMute(selectedSource, selectedLane);
   } else if (z.id === "lane_select" || z.id === "lane_label") {
     send("channel_audition", z.data.lane + 1);
   } else if (z.id === "lane_note") {
@@ -889,14 +945,26 @@ function source_layer_mode(mode) {
   setSourceLayerMode(mode);
 }
 
-// Double-click a lane label to open the inline rename overlay (a real Max
-// textedit driven by the editor subpatcher).
+// Double-click the side-panel label to open the inline rename overlay (a real
+// Max textedit driven by the editor subpatcher). Double-clicking a source row
+// label clears that source/channel row.
 function ondblclick(x, y, button, cmd, shift, capslock, option, ctrl) {
   var z = ksh_shared.findZone(hitZones, x, y);
 
   rememberUiContext.call(this);
 
-  if (!z || z.id !== "lane_label") {
+  if (!z) {
+    return;
+  }
+
+  if (z.id === "source_row_label") {
+    selectedLane = z.data.lane;
+    resetSourceChannelRow(selectedSource, selectedLane);
+    mgraphics.redraw();
+    return;
+  }
+
+  if (z.id !== "lane_label") {
     return;
   }
 
@@ -988,6 +1056,9 @@ function anything() {
   } else {
     rememberUiContext.call(this);
     ksh_shared.applyStatusMessage(state, messagename, arrayfromargs(arguments));
+    if (messagename === "static_source") {
+      selectedSource = ksh_shared.clamp(state.staticSource, 0, SOURCE_COUNT - 1);
+    }
     if (messagename === "channels") {
       selectedLane = ksh_shared.clamp(selectedLane, 0, state.laneCount - 1);
       applyEditorSize();

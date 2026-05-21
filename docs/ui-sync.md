@@ -12,8 +12,8 @@ persist independent state.
   visible dimensions.
 - Status selectors such as `steps`, `channels`, `refresh_steps`, `mode`, `rate`,
   `swing`, `velocity_humanize`, `timing_humanize`, `device_active`, `phase_offset_beats`,
-  `channel_label`, `channel_note`, and `channel_lock` are incremental UI hints
-  emitted by setters.
+  `channel_label`, `channel_note`, `channel_lock`, `static_source`, and
+  `source_channel_mute` are incremental UI hints emitted by setters.
 - `channel_audition <channel>` triggers a one-shot MIDI note for that channel's
   configured pitch (editor lane row/label click). Output uses fixed MIDI channel
   1 and fixed note duration; audition does not change engine state.
@@ -32,6 +32,8 @@ persist independent state.
   percentage where `100` means half the current step interval; early hits depend
   on engine lookahead and cannot occur before playback starts.
 - `channel_audition` (1-based channel index) previews that channel's MIDI note once.
+- `static_source <source>` stores the selected source pattern for Static mode;
+  the editor mirrors it as the visible source pattern.
 - Compact and editor UIs call `sync_all` during init/load/open paths so a newly
   visible UI catches up to the persisted engine state.
 
@@ -46,6 +48,11 @@ persist independent state.
   does not echo individual `cell` messages back to the editor.
 - Source-cell messages use `cell <source> <channel> <step> <enabled> <velocity>
   <probability> <cycle>`.
+- Source row messages use `source_channel_mute <source> <channel> <muted>` and
+  `source_channel_reset <source> <channel>`. Reset emits a fresh `engine_state`
+  because it clears all source cells in that row.
+- Incoming MIDI note-on pitches 0-3 are routed by the patch shell to
+  `static_source 1-4`.
 
 ## Naming
 

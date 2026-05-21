@@ -1234,6 +1234,139 @@
       },
       {
         "box": {
+          "id": "midi-notein",
+          "maxclass": "newobj",
+          "numinlets": 1,
+          "numoutlets": 3,
+          "patching_rect": [
+            180,
+            700,
+            50,
+            22
+          ],
+          "outlettype": [
+            "int",
+            "int",
+            "int"
+          ],
+          "text": "notein"
+        }
+      },
+      {
+        "box": {
+          "id": "midi-stripnote",
+          "maxclass": "newobj",
+          "numinlets": 2,
+          "numoutlets": 2,
+          "patching_rect": [
+            180,
+            740,
+            64,
+            22
+          ],
+          "outlettype": [
+            "int",
+            "int"
+          ],
+          "text": "stripnote"
+        }
+      },
+      {
+        "box": {
+          "id": "midi-source-select",
+          "maxclass": "newobj",
+          "numinlets": 2,
+          "numoutlets": 5,
+          "patching_rect": [
+            180,
+            780,
+            110,
+            22
+          ],
+          "outlettype": [
+            "bang",
+            "bang",
+            "bang",
+            "bang",
+            ""
+          ],
+          "text": "sel 0 1 2 3"
+        }
+      },
+      {
+        "box": {
+          "id": "midi-source-1",
+          "maxclass": "message",
+          "numinlets": 2,
+          "numoutlets": 1,
+          "patching_rect": [
+            300,
+            700,
+            100,
+            22
+          ],
+          "outlettype": [
+            ""
+          ],
+          "text": "static_source 1"
+        }
+      },
+      {
+        "box": {
+          "id": "midi-source-2",
+          "maxclass": "message",
+          "numinlets": 2,
+          "numoutlets": 1,
+          "patching_rect": [
+            300,
+            730,
+            100,
+            22
+          ],
+          "outlettype": [
+            ""
+          ],
+          "text": "static_source 2"
+        }
+      },
+      {
+        "box": {
+          "id": "midi-source-3",
+          "maxclass": "message",
+          "numinlets": 2,
+          "numoutlets": 1,
+          "patching_rect": [
+            300,
+            760,
+            100,
+            22
+          ],
+          "outlettype": [
+            ""
+          ],
+          "text": "static_source 3"
+        }
+      },
+      {
+        "box": {
+          "id": "midi-source-4",
+          "maxclass": "message",
+          "numinlets": 2,
+          "numoutlets": 1,
+          "patching_rect": [
+            300,
+            790,
+            100,
+            22
+          ],
+          "outlettype": [
+            ""
+          ],
+          "text": "static_source 4"
+        }
+      },
+      {
+        "box": {
           "id": "loadbang",
           "maxclass": "newobj",
           "numinlets": 1,
@@ -1535,6 +1668,138 @@
         "patchline": {
           "source": [
             "enginecmds",
+            0
+          ],
+          "destination": [
+            "engine",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "midi-notein",
+            0
+          ],
+          "destination": [
+            "midi-stripnote",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "midi-notein",
+            1
+          ],
+          "destination": [
+            "midi-stripnote",
+            1
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "midi-stripnote",
+            0
+          ],
+          "destination": [
+            "midi-source-select",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "midi-source-select",
+            0
+          ],
+          "destination": [
+            "midi-source-1",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "midi-source-select",
+            1
+          ],
+          "destination": [
+            "midi-source-2",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "midi-source-select",
+            2
+          ],
+          "destination": [
+            "midi-source-3",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "midi-source-select",
+            3
+          ],
+          "destination": [
+            "midi-source-4",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "midi-source-1",
+            0
+          ],
+          "destination": [
+            "engine",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "midi-source-2",
+            0
+          ],
+          "destination": [
+            "engine",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "midi-source-3",
+            0
+          ],
+          "destination": [
+            "engine",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "midi-source-4",
             0
           ],
           "destination": [

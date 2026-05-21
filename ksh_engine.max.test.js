@@ -135,6 +135,9 @@ function testMaxWrapperBootsEngineAndExposesHandlers() {
   assert.strictEqual(typeof sb.phase_offset_beats, "function");
   assert.strictEqual(typeof sb.device_active, "function");
   assert.strictEqual(typeof sb.editor_active, "function");
+  assert.strictEqual(typeof sb.static_source, "function");
+  assert.strictEqual(typeof sb.source_channel_mute, "function");
+  assert.strictEqual(typeof sb.source_channel_reset, "function");
 }
 
 function testStatusMessagesEmitUiSelectors() {
@@ -142,17 +145,24 @@ function testStatusMessagesEmitUiSelectors() {
   var stepsEvent;
   var lockEvent;
   var phaseEvent;
+  var staticSourceEvent;
+  var muteEvent;
 
   sb._clear();
   sb.steps(8);
+  sb.mode("static");
+  sb.static_source(3);
   sb.channel_lock(1, 2);
   sb.velocity_humanize(12);
   sb.timing_humanize(8);
   sb.phase_offset_beats(0.125);
+  sb.source_channel_mute(2, 1, 1);
 
   stepsEvent = lastEventOn(sb, "steps");
   lockEvent = lastEventOn(sb, "channel_lock");
   phaseEvent = lastEventOn(sb, "phase_offset_beats");
+  staticSourceEvent = lastEventOn(sb, "static_source");
+  muteEvent = lastEventOn(sb, "source_channel_mute");
 
   assert.ok(stepsEvent, "steps should emit a direct UI selector");
   assert.deepStrictEqual(stepsEvent.args, ["steps", "8"]);
@@ -161,6 +171,10 @@ function testStatusMessagesEmitUiSelectors() {
     "channel_lock status should use Max/UI-facing 1-based source indices");
   assert.ok(phaseEvent, "phase_offset_beats should emit a direct UI selector");
   assert.deepStrictEqual(phaseEvent.args, ["phase_offset_beats", "0.125"]);
+  assert.ok(staticSourceEvent, "static_source should emit a direct UI selector");
+  assert.deepStrictEqual(staticSourceEvent.args, ["static_source", "3"]);
+  assert.ok(muteEvent, "source_channel_mute should emit a direct UI selector");
+  assert.deepStrictEqual(muteEvent.args, ["source_channel_mute", "2", "1", "1"]);
   assert.deepStrictEqual(lastEventOn(sb, "velocity_humanize").args, ["velocity_humanize", "12"]);
   assert.deepStrictEqual(lastEventOn(sb, "timing_humanize").args, ["timing_humanize", "8"]);
   assert.strictEqual(eventsOn(sb, "status").length, 0,
@@ -231,6 +245,33 @@ function testCellMessageWritesToEngineSourceAndCoalescesPreview() {
   assert.strictEqual(sb.kshEngine.sources[1][0][4].cycle, 3);
 }
 
+function testSourceChannelResetClearsStateAndEmitsFullState() {
+  var sb = makeMaxSandbox();
+  var stateEvents;
+  var parsed;
+
+  sb._clear();
+  sb.cell(1, 1, 1, 1, 88, 30, 3);
+  sb.source_channel_mute(1, 1, 1);
+  sb._flush();
+  sb._clear();
+
+  sb.source_channel_reset(1, 1);
+
+  assert.strictEqual(sb.kshEngine.sources[0][0][0].enabled, 0);
+  assert.strictEqual(sb.kshEngine.sources[0][0][0].velocity, 100);
+  assert.strictEqual(sb.kshEngine.sources[0][0][0].probability, 100);
+  assert.strictEqual(sb.kshEngine.sources[0][0][0].cycle, 1);
+  assert.strictEqual(sb.kshEngine.sourceChannelMutes[0][0], 0);
+
+  stateEvents = eventsOn(sb, "engine_state");
+  assert.strictEqual(stateEvents.length, 1,
+    "source_channel_reset should emit one full engine_state event");
+  parsed = JSON.parse(stateEvents[0].args[1]);
+  assert.strictEqual(parsed.sources[0][0][0].enabled, 0);
+  assert.strictEqual(parsed.sourceChannelMutes[0][0], 0);
+}
+
 function testChannelAuditionEmitsNoteToOutlet() {
   var sb = makeMaxSandbox();
 
@@ -298,6 +339,8 @@ function testGetValueOfSetValueOfRoundtripsEngineState() {
   sb.velocity_humanize(12);
   sb.timing_humanize(8);
   sb.phase_offset_beats(0.5);
+  sb.mode("static");
+  sb.static_source(4);
   sb.cell(1, 1, 1, 1, 64, 30, 1);
   sb.channel_label(1, "Sub");
   sb.channel_note(2, 50);
@@ -315,6 +358,8 @@ function testGetValueOfSetValueOfRoundtripsEngineState() {
   assert.strictEqual(parsed.velocityHumanize, 12);
   assert.strictEqual(parsed.timingHumanize, 8);
   assert.strictEqual(parsed.phaseOffsetBeats, 0.5);
+  assert.strictEqual(parsed.generationMode, "static");
+  assert.strictEqual(parsed.staticSource, 3);
   assert.strictEqual(parsed.channels[0].label, "Sub");
   assert.strictEqual(parsed.channels[1].note, 50);
 
@@ -330,6 +375,8 @@ function testGetValueOfSetValueOfRoundtripsEngineState() {
   assert.strictEqual(sb2.kshEngine.velocityHumanize, 12);
   assert.strictEqual(sb2.kshEngine.timingHumanize, 8);
   assert.strictEqual(sb2.kshEngine.phaseOffsetBeats, 0.5);
+  assert.strictEqual(sb2.kshEngine.generationMode, "static");
+  assert.strictEqual(sb2.kshEngine.staticSource, 3);
   assert.strictEqual(sb2.kshEngine.channels[0].label, "Sub");
   assert.strictEqual(sb2.kshEngine.channels[1].note, 50);
   assert.strictEqual(sb2.kshEngine.sources[0][0][0].enabled, 1);
@@ -483,6 +530,7 @@ testStatusMessagesEmitUiSelectors();
 testSyncAllEmitsStateAndPreview();
 testRecomposeCommandsFlushPreviewForCompactUi();
 testCellMessageWritesToEngineSourceAndCoalescesPreview();
+testSourceChannelResetClearsStateAndEmitsFullState();
 testChannelAuditionEmitsNoteToOutlet();
 testTransportPositionEmitsNativeSchedulerEvent();
 testResetClearsNativeScheduler();

@@ -324,6 +324,26 @@ ksh_shared.cycleRate = function (state, direction) {
   state.rate = rates[i];
 };
 
+ksh_shared.generationModeLabel = function (mode) {
+  if (mode === "per_channel") {
+    return "Per Lane";
+  }
+  if (mode === "static") {
+    return "Static";
+  }
+  return "Stack";
+};
+
+ksh_shared.cycleGenerationMode = function (state) {
+  if (state.generationMode === "stack") {
+    state.generationMode = "per_channel";
+  } else if (state.generationMode === "per_channel") {
+    state.generationMode = "static";
+  } else {
+    state.generationMode = "stack";
+  }
+};
+
 ksh_shared.defaultCell = function () {
   return ksh_shared.constants.defaultCell();
 };
@@ -332,11 +352,27 @@ ksh_shared.cloneCell = function (cell) {
   return ksh_shared.constants.cloneCell(cell);
 };
 
+ksh_shared.makeSourceChannelMutes = function () {
+  var mutes = [];
+  var source;
+  var lane;
+
+  for (source = 0; source < ksh_shared.SOURCE_COUNT; source += 1) {
+    mutes[source] = [];
+    for (lane = 0; lane < ksh_shared.MAX_LANES; lane += 1) {
+      mutes[source][lane] = 0;
+    }
+  }
+
+  return mutes;
+};
+
 ksh_shared.applyEngineState = function (state, engineState) {
   var source;
   var lane;
   var step;
   var channels;
+  var muteRow;
 
   if (!engineState) {
     return;
@@ -345,7 +381,12 @@ ksh_shared.applyEngineState = function (state, engineState) {
   state.stepCount = ksh_shared.clamp(engineState.stepCount, 1, ksh_shared.MAX_STEPS);
   state.laneCount = ksh_shared.clamp(engineState.channelCount, 1, ksh_shared.MAX_LANES);
   state.refreshSteps = ksh_shared.clamp(engineState.refreshSteps, 1, state.stepCount);
-  state.generationMode = engineState.generationMode === "per_channel" ? "per_channel" : "stack";
+  if (engineState.generationMode === "per_channel" || engineState.generationMode === "static") {
+    state.generationMode = engineState.generationMode;
+  } else {
+    state.generationMode = "stack";
+  }
+  state.staticSource = ksh_shared.clamp(engineState.staticSource || 0, 0, ksh_shared.SOURCE_COUNT - 1);
   state.rate = ksh_shared.constants.normalizeRate(engineState.rate);
   state.swing = ksh_shared.clamp(engineState.swing, 0, 100);
   state.velocityHumanize = ksh_shared.clamp(engineState.velocityHumanize, 0, 100);
@@ -354,6 +395,8 @@ ksh_shared.applyEngineState = function (state, engineState) {
   if (engineState.deviceActive !== undefined) {
     state.deviceActive = ksh_shared.toggleValue(engineState.deviceActive);
   }
+
+  state.sourceChannelMutes = ksh_shared.makeSourceChannelMutes();
 
   channels = engineState.channels;
   if (channels) {
@@ -375,6 +418,15 @@ ksh_shared.applyEngineState = function (state, engineState) {
       }
     }
   }
+
+  if (engineState.sourceChannelMutes) {
+    for (source = 0; source < Math.min(ksh_shared.SOURCE_COUNT, engineState.sourceChannelMutes.length); source += 1) {
+      muteRow = engineState.sourceChannelMutes[source] || [];
+      for (lane = 0; lane < Math.min(ksh_shared.MAX_LANES, muteRow.length); lane += 1) {
+        state.sourceChannelMutes[source][lane] = muteRow[lane] ? 1 : 0;
+      }
+    }
+  }
 };
 
 ksh_shared.applyStatusMessage = function (state, name, args) {
@@ -388,7 +440,13 @@ ksh_shared.applyStatusMessage = function (state, name, args) {
   } else if (name === "refresh_steps") {
     state.refreshSteps = ksh_shared.clamp(args[0], 1, state.stepCount);
   } else if (name === "mode") {
-    state.generationMode = String(args[0]) === "per_channel" ? "per_channel" : "stack";
+    if (String(args[0]) === "per_channel" || String(args[0]) === "static") {
+      state.generationMode = String(args[0]);
+    } else {
+      state.generationMode = "stack";
+    }
+  } else if (name === "static_source") {
+    state.staticSource = ksh_shared.clamp(args[0] - 1, 0, ksh_shared.SOURCE_COUNT - 1);
   } else if (name === "rate") {
     state.rate = ksh_shared.constants.normalizeRate(args[0]);
   } else if (name === "swing") {
@@ -409,5 +467,17 @@ ksh_shared.applyStatusMessage = function (state, name, args) {
   } else if (name === "channel_lock") {
     lane = ksh_shared.clamp(args[0] - 1, 0, ksh_shared.MAX_LANES - 1);
     state.lanes[lane].lock = String(args[1]).toLowerCase() === "random" ? -1 : ksh_shared.clamp(args[1] - 1, -1, ksh_shared.SOURCE_COUNT - 1);
+  } else if (name === "source_channel_mute") {
+    lane = ksh_shared.clamp(args[1] - 1, 0, ksh_shared.MAX_LANES - 1);
+    if (!state.sourceChannelMutes) {
+      state.sourceChannelMutes = ksh_shared.makeSourceChannelMutes();
+    }
+    state.sourceChannelMutes[ksh_shared.clamp(args[0] - 1, 0, ksh_shared.SOURCE_COUNT - 1)][lane] = ksh_shared.toggleValue(args[2]);
+  } else if (name === "source_channel_reset") {
+    lane = ksh_shared.clamp(args[1] - 1, 0, ksh_shared.MAX_LANES - 1);
+    if (!state.sourceChannelMutes) {
+      state.sourceChannelMutes = ksh_shared.makeSourceChannelMutes();
+    }
+    state.sourceChannelMutes[ksh_shared.clamp(args[0] - 1, 0, ksh_shared.SOURCE_COUNT - 1)][lane] = 0;
   }
 };

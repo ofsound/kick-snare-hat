@@ -57,6 +57,7 @@ function makeState() {
     laneCount: 3,
     refreshSteps: 1,
     generationMode: "stack",
+    staticSource: 0,
     rate: "16n",
     swing: 0,
     lanes: lanes
@@ -73,7 +74,7 @@ function paint() {
 function drawHeader() {
   ksh_shared.rect(0, 0, WIDTH, 58, colors.panel2);
   ksh_shared.text("Kick Snare Hat", 14, 24, 17, colors.text);
-  ksh_shared.button(hitZones, "mode", state.generationMode === "stack" ? "Stack" : "Per Lane", 250, 18, 78, 25, false);
+  ksh_shared.button(hitZones, "mode", ksh_shared.generationModeLabel(state.generationMode), 250, 18, 78, 25, false);
   ksh_shared.valueBox(hitZones, "steps", "Steps", state.stepCount, 342, 18, 78);
   ksh_shared.valueBox(hitZones, "lanes", "Lanes", state.laneCount, 434, 18, 78);
   ksh_shared.valueBox(hitZones, "refresh", "Refresh", state.refreshSteps, 526, 18, 84);
@@ -158,7 +159,7 @@ function onclick(x, y, button, cmd, shift) {
   if (z.id === "open_editor") {
     send("open_editor");
   } else if (z.id === "mode") {
-    state.generationMode = state.generationMode === "stack" ? "per_channel" : "stack";
+    ksh_shared.cycleGenerationMode(state);
     send("mode", state.generationMode);
   } else if (z.id === "rate") {
     ksh_shared.cycleRate(state, shift ? -1 : 1);
