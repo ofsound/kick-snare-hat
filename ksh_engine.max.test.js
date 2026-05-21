@@ -401,6 +401,33 @@ function testEditorActiveEnablesCurrentStepEmission() {
     "current_step should fire while the editor is active");
 }
 
+function testLookaheadSchedulingStillEmitsCurrentStep() {
+  var sb = makeMaxSandbox();
+  var currentStepEvents;
+  sb._clear();
+  sb.editor_active(1);
+  sb.steps(2);
+  sb.channels(1);
+  sb.mode("per_channel");
+  sb.channel_lock(1, 1);
+  sb.rate("16n");
+  sb.tempo(120);
+  sb.timing_humanize(100);
+  sb.cell(1, 1, 1, 1, 100, 100, 1);
+  sb.cell(1, 1, 2, 1, 100, 100, 1);
+  sb._flush();
+  sb._clear();
+
+  sb.transport_position(0, 1);
+  sb._clear();
+  sb.transport_position(0.12, 1);
+
+  currentStepEvents = eventsOn(sb, "current_step");
+  assert.ok(currentStepEvents.some(function (event) {
+    return String(event.args[1]) === "2" || event.args[1] === 2;
+  }), "lookahead-scheduled step should still emit current_step for editor highlighting");
+}
+
 function testDeviceActiveSuppressesTransportOutputAndClearsScheduler() {
   var sb = makeMaxSandbox();
   sb._clear();
@@ -463,6 +490,7 @@ testGetValueOfSetValueOfRoundtripsEngineState();
 testSetValueOfRejectsMalformedJsonWithoutChangingState();
 testSetValueOfAppliesValidPartialState();
 testEditorActiveEnablesCurrentStepEmission();
+testLookaheadSchedulingStillEmitsCurrentStep();
 testDeviceActiveSuppressesTransportOutputAndClearsScheduler();
 testMessnamedFailuresAreSwallowed();
 

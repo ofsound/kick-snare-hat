@@ -898,7 +898,7 @@ var KSH_EngineClass = null;
       baseDelayMs = (this.beatForGlobalStep(scheduleStep) - songBeats) * quarterMs;
       scheduledNotes = this.fireStep(step, scheduleStep, {
         baseDelayMs: baseDelayMs,
-        reportStep: false
+        reportStep: true
       });
       notes = notes.concat(scheduledNotes);
       this.lastScheduledGlobalStep = scheduleStep;
