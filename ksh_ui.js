@@ -166,6 +166,12 @@ var sourceLayerMode = "velocity";
 var hoverLayerMode = null;
 var hitZones = [];
 var editingLane = -1;
+var lastLaneAuditionLane = -1;
+var lastLaneAuditionAt = 0;
+var LANE_AUDITION_DEBOUNCE_MS = 60;
+var laneRenameTap = { lane: -1, at: 0 };
+var sourceRowResetTap = { lane: -1, at: 0 };
+var LANE_RENAME_MS = 450;
 var velocityDrag = null;
 var VELOCITY_DRAG_THRESHOLD = 4;
 var SOURCE_PAINT_DRAG_THRESHOLD = 4;
@@ -606,11 +612,113 @@ function resetSourceChannelRow(source, lane) {
   send("source_channel_reset", source + 1, lane + 1);
 }
 
+function showLaneLabelEdit(z, lane) {
+  editingLane = lane;
+  selectedLane = lane;
+  send("label_edit_set", state.lanes[lane].label);
+  send(
+    "label_edit_show",
+    Math.round(z.x),
+    Math.round(z.y),
+    Math.round(z.w),
+    Math.round(z.h)
+  );
+}
+
+function auditionLane(lane, keepLabelEditor) {
+  if (!keepLabelEditor && editingLane >= 0) {
+    send("label_edit_hide");
+    editingLane = -1;
+  }
+  send("channel_audition", lane + 1);
+}
+
+// jsui may invoke onclick once per click (button 1) or on both press and release.
+function auditionLaneOnce(lane, keepLabelEditor) {
+  var now = Date.now();
+
+  if (
+    lastLaneAuditionLane === lane &&
+    now - lastLaneAuditionAt < LANE_AUDITION_DEBOUNCE_MS
+  ) {
+    return;
+  }
+
+  lastLaneAuditionLane = lane;
+  lastLaneAuditionAt = now;
+  auditionLane(lane, keepLabelEditor);
+}
+
+function isLanePreviewZone(zoneId) {
+  return zoneId === "lane_select" || zoneId === "lane_label";
+}
+
+// Detect rename in onclick; do not use jsui ondblclick (it suppresses onclick).
+// Every click on a lane row auditions the channel. A second click on the same
+// label within LANE_RENAME_MS additionally opens the rename overlay; the
+// audition is NOT swallowed by that detection.
+function handleLanePanelClick(z, button) {
+  var lane = z.data.lane;
+  var now = Date.now();
+  var isRenameTap;
+
+  if (button === 0) {
+    return;
+  }
+
+  isRenameTap =
+    z.id === "lane_label" &&
+    laneRenameTap.lane === lane &&
+    now - laneRenameTap.at <= LANE_RENAME_MS;
+
+  auditionLaneOnce(lane, isRenameTap);
+
+  if (isRenameTap) {
+    laneRenameTap.lane = -1;
+    laneRenameTap.at = 0;
+    showLaneLabelEdit(z, lane);
+    mgraphics.redraw();
+    return;
+  }
+
+  laneRenameTap.lane = lane;
+  laneRenameTap.at = now;
+}
+
+function handleSourceRowLabelClick(z, button) {
+  var lane = z.data.lane;
+  var now = Date.now();
+
+  if (button === 0) {
+    return;
+  }
+
+  if (sourceRowResetTap.lane === lane && now - sourceRowResetTap.at <= LANE_RENAME_MS) {
+    sourceRowResetTap.lane = -1;
+    sourceRowResetTap.at = 0;
+    resetSourceChannelRow(selectedSource, lane);
+    mgraphics.redraw();
+    return;
+  }
+
+  sourceRowResetTap.lane = lane;
+  sourceRowResetTap.at = now;
+  selectedLane = lane;
+  state.sourceChannelMutes[selectedSource][selectedLane] = state.sourceChannelMutes[selectedSource][selectedLane] ? 0 : 1;
+  sendSourceChannelMute(selectedSource, selectedLane);
+}
+
 function sync_all() {
   rememberUiContext.call(this);
   applyEditorSize();
   // Make sure no stale rename overlay is left visible after a re-open.
   editingLane = -1;
+  lastLaneAuditionLane = -1;
+  lastLaneAuditionAt = 0;
+  laneRenameTap.lane = -1;
+  laneRenameTap.at = 0;
+  sourceRowResetTap.lane = -1;
+  sourceRowResetTap.at = 0;
   send("label_edit_hide");
   send("sync_all");
   mgraphics.redraw();
@@ -874,11 +982,9 @@ function onclick(x, y, button, cmd, shift, capslock, option, ctrl) {
       beginSourceCellInteraction(z, x, y, modifierLayerMode(shift, option));
     }
   } else if (z.id === "source_row_label") {
-    selectedLane = z.data.lane;
-    state.sourceChannelMutes[selectedSource][selectedLane] = state.sourceChannelMutes[selectedSource][selectedLane] ? 0 : 1;
-    sendSourceChannelMute(selectedSource, selectedLane);
-  } else if (z.id === "lane_select" || z.id === "lane_label") {
-    send("channel_audition", z.data.lane + 1);
+    handleSourceRowLabelClick(z, button);
+  } else if (isLanePreviewZone(z.id)) {
+    handleLanePanelClick(z, button);
   } else if (z.id === "lane_note") {
     selectedLane = z.data.lane;
     state.lanes[selectedLane].note = ksh_shared.clamp(state.lanes[selectedLane].note + (shift ? -1 : 1), 0, 127);
@@ -898,12 +1004,14 @@ function onclick(x, y, button, cmd, shift, capslock, option, ctrl) {
 }
 
 function ondrag(x, y, button) {
-  if (!velocityDrag) {
+  if (button === 0) {
+    if (velocityDrag) {
+      endSourceCellInteraction();
+    }
     return;
   }
 
-  if (button === 0) {
-    endSourceCellInteraction();
+  if (!velocityDrag) {
     return;
   }
 
@@ -943,42 +1051,6 @@ function onkeydown(keycode, textcharacter, updown, cmd, shift, capslock, option,
 
 function source_layer_mode(mode) {
   setSourceLayerMode(mode);
-}
-
-// Double-click the side-panel label to open the inline rename overlay (a real
-// Max textedit driven by the editor subpatcher). Double-clicking a source row
-// label clears that source/channel row.
-function ondblclick(x, y, button, cmd, shift, capslock, option, ctrl) {
-  var z = ksh_shared.findZone(hitZones, x, y);
-
-  rememberUiContext.call(this);
-
-  if (!z) {
-    return;
-  }
-
-  if (z.id === "source_row_label") {
-    selectedLane = z.data.lane;
-    resetSourceChannelRow(selectedSource, selectedLane);
-    mgraphics.redraw();
-    return;
-  }
-
-  if (z.id !== "lane_label") {
-    return;
-  }
-
-  editingLane = z.data.lane;
-  selectedLane = editingLane;
-  send("label_edit_set", state.lanes[editingLane].label);
-  send(
-    "label_edit_show",
-    Math.round(z.x),
-    Math.round(z.y),
-    Math.round(z.w),
-    Math.round(z.h)
-  );
-  mgraphics.redraw();
 }
 
 // Receives the committed text from the textedit overlay (Enter pressed).

@@ -329,6 +329,54 @@ function testResetClearsNativeScheduler() {
     "reset should clear pending native scheduler events and held notes");
 }
 
+function testStoppedTransportClearsSchedulerOnceNotPerTick() {
+  // Regression: when Live's transport is stopped, plugsync~ keeps emitting
+  // transport_position(*, 0). The engine used to send a `clear` to
+  // ksh_scheduler_commands on every one of those ticks, which raced against
+  // and silenced one-shot auditions queued through the same `pipe`. The
+  // clear must only fire on the *transition* from playing -> stopped.
+  var sb = makeMaxSandbox();
+  sb._clear();
+  sb.steps(4);
+  sb.channels(1);
+
+  // Start playing so a subsequent stop counts as a transition.
+  sb.transport_position(0, 1);
+  sb._clear();
+
+  // First stopped tick: should emit one `clear` (the transition).
+  sb.transport_position(0, 0);
+  var clears = sb._named().filter(function (m) {
+    return m.bus === "ksh_scheduler_commands" && m.args[0] === "clear";
+  });
+  assert.strictEqual(clears.length, 1,
+    "playing -> stopped transition should clear pending scheduler events");
+
+  // Subsequent stopped ticks: must NOT emit any further `clear`s, otherwise
+  // they will race against and silence audition notes.
+  sb._clear();
+  sb.transport_position(0, 0);
+  sb.transport_position(0.001, 0);
+  sb.transport_position(0.002, 0);
+  clears = sb._named().filter(function (m) {
+    return m.bus === "ksh_scheduler_commands" && m.args[0] === "clear";
+  });
+  assert.strictEqual(clears.length, 0,
+    "stopped-state transport_position ticks must not flush the native scheduler repeatedly");
+
+  // Auditioning while stopped must produce a note event that is not
+  // accompanied by a scheduler clear (which would race the pipe).
+  sb._clear();
+  sb.channel_audition(1);
+  assert.strictEqual(sb._notes().length, 1,
+    "audition while stopped should emit a one-shot note event");
+  clears = sb._named().filter(function (m) {
+    return m.bus === "ksh_scheduler_commands" && m.args[0] === "clear";
+  });
+  assert.strictEqual(clears.length, 0,
+    "audition path must not emit a scheduler clear that would silence itself");
+}
+
 function testGetValueOfSetValueOfRoundtripsEngineState() {
   var sb = makeMaxSandbox();
   sb._clear();
@@ -534,6 +582,7 @@ testSourceChannelResetClearsStateAndEmitsFullState();
 testChannelAuditionEmitsNoteToOutlet();
 testTransportPositionEmitsNativeSchedulerEvent();
 testResetClearsNativeScheduler();
+testStoppedTransportClearsSchedulerOnceNotPerTick();
 testGetValueOfSetValueOfRoundtripsEngineState();
 testSetValueOfRejectsMalformedJsonWithoutChangingState();
 testSetValueOfAppliesValidPartialState();

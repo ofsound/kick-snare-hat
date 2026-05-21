@@ -932,16 +932,26 @@ var KSH_EngineClass = null;
       return [];
     }
 
-    this.transportPlaying = isPlaying;
-
     if (!isPlaying) {
-      if (typeof cancelPendingNoteTasks === "function") {
-        cancelPendingNoteTasks();
+      // Only flush the native scheduler on the *transition* from playing to
+      // stopped. plugsync~ keeps emitting transport_position while the
+      // transport is stopped, and a `clear` to ksh_scheduler_commands wipes
+      // the pipe (note-delay) and sends `stop` to makenote — which would
+      // race against and silence one-shot auditions queued through the same
+      // pipe. See `editor play button` regression: auditions only fired
+      // reliably while the transport was playing prior to this fix.
+      if (this.transportPlaying) {
+        if (typeof cancelPendingNoteTasks === "function") {
+          cancelPendingNoteTasks();
+        }
       }
+      this.transportPlaying = 0;
       this.lastFiredGlobalStep = null;
       this.lastScheduledGlobalStep = null;
       return [];
     }
+
+    this.transportPlaying = isPlaying;
 
     globalStep = this.globalStepForBeats(songBeats);
     step = mod(globalStep, this.stepCount);
