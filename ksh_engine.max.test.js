@@ -136,6 +136,7 @@ function testMaxWrapperBootsEngineAndExposesHandlers() {
   assert.strictEqual(typeof sb.device_active, "function");
   assert.strictEqual(typeof sb.editor_active, "function");
   assert.strictEqual(typeof sb.static_source, "function");
+  assert.strictEqual(typeof sb.channel_loop_length, "function");
   assert.strictEqual(typeof sb.source_channel_mute, "function");
   assert.strictEqual(typeof sb.source_channel_reset, "function");
 }
@@ -147,12 +148,14 @@ function testStatusMessagesEmitUiSelectors() {
   var phaseEvent;
   var staticSourceEvent;
   var muteEvent;
+  var loopLengthEvent;
 
   sb._clear();
   sb.steps(8);
   sb.mode("static");
   sb.static_source(3);
   sb.channel_lock(1, 2);
+  sb.channel_loop_length(1, 5);
   sb.velocity_humanize(12);
   sb.timing_humanize(8);
   sb.phase_offset_beats(0.125);
@@ -163,6 +166,7 @@ function testStatusMessagesEmitUiSelectors() {
   phaseEvent = lastEventOn(sb, "phase_offset_beats");
   staticSourceEvent = lastEventOn(sb, "static_source");
   muteEvent = lastEventOn(sb, "source_channel_mute");
+  loopLengthEvent = lastEventOn(sb, "channel_loop_length");
 
   assert.ok(stepsEvent, "steps should emit a direct UI selector");
   assert.deepStrictEqual(stepsEvent.args, ["steps", "8"]);
@@ -175,6 +179,8 @@ function testStatusMessagesEmitUiSelectors() {
   assert.deepStrictEqual(staticSourceEvent.args, ["static_source", "3"]);
   assert.ok(muteEvent, "source_channel_mute should emit a direct UI selector");
   assert.deepStrictEqual(muteEvent.args, ["source_channel_mute", "2", "1", "1"]);
+  assert.ok(loopLengthEvent, "channel_loop_length should emit a direct UI selector");
+  assert.deepStrictEqual(loopLengthEvent.args, ["channel_loop_length", "1", "5"]);
   assert.deepStrictEqual(lastEventOn(sb, "velocity_humanize").args, ["velocity_humanize", "12"]);
   assert.deepStrictEqual(lastEventOn(sb, "timing_humanize").args, ["timing_humanize", "8"]);
   assert.strictEqual(eventsOn(sb, "status").length, 0,
@@ -252,6 +258,8 @@ function testSourceChannelResetClearsStateAndEmitsFullState() {
   var parsed;
 
   sb._clear();
+  sb.steps(8);
+  sb.channel_loop_length(1, 3);
   sb.cell(1, 1, 1, 1, 88, 30, 3);
   sb.source_channel_mute(1, 1, 1);
   sb._flush();
@@ -264,6 +272,7 @@ function testSourceChannelResetClearsStateAndEmitsFullState() {
   assert.strictEqual(sb.kshEngine.sources[0][0][0].probability, 100);
   assert.strictEqual(sb.kshEngine.sources[0][0][0].cycle, 1);
   assert.strictEqual(sb.kshEngine.sourceChannelMutes[0][0], 0);
+  assert.strictEqual(sb.kshEngine.channels[0].loopLength, 8);
 
   stateEvents = eventsOn(sb, "engine_state");
   assert.strictEqual(stateEvents.length, 1,
@@ -271,6 +280,7 @@ function testSourceChannelResetClearsStateAndEmitsFullState() {
   parsed = JSON.parse(stateEvents[0].args[1]);
   assert.strictEqual(parsed.sources[0][0][0].enabled, 0);
   assert.strictEqual(parsed.sourceChannelMutes[0][0], 0);
+  assert.strictEqual(parsed.channels[0].loopLength, 8);
 }
 
 function testChannelAuditionEmitsNoteToOutlet() {
@@ -393,6 +403,7 @@ function testGetValueOfSetValueOfRoundtripsEngineState() {
   sb.cell(1, 1, 1, 1, 64, 30, 1);
   sb.channel_label(1, "Sub");
   sb.channel_note(2, 50);
+  sb.channel_loop_length(1, 5);
   sb._flush();
 
   var serialized = sb.getvalueof();
@@ -410,6 +421,7 @@ function testGetValueOfSetValueOfRoundtripsEngineState() {
   assert.strictEqual(parsed.generationMode, "static");
   assert.strictEqual(parsed.staticSource, 3);
   assert.strictEqual(parsed.channels[0].label, "Sub");
+  assert.strictEqual(parsed.channels[0].loopLength, 5);
   assert.strictEqual(parsed.channels[1].note, 50);
 
   // Roundtrip into a fresh sandbox to prove the wire format is reloadable.
@@ -427,6 +439,7 @@ function testGetValueOfSetValueOfRoundtripsEngineState() {
   assert.strictEqual(sb2.kshEngine.generationMode, "static");
   assert.strictEqual(sb2.kshEngine.staticSource, 3);
   assert.strictEqual(sb2.kshEngine.channels[0].label, "Sub");
+  assert.strictEqual(sb2.kshEngine.channels[0].loopLength, 5);
   assert.strictEqual(sb2.kshEngine.channels[1].note, 50);
   assert.strictEqual(sb2.kshEngine.sources[0][0][0].enabled, 1);
   assert.strictEqual(sb2.kshEngine.sources[0][0][0].probability, 30);

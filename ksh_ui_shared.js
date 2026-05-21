@@ -415,6 +415,9 @@ ksh_shared.applyEngineState = function (state, engineState) {
       }
       state.lanes[lane].note = ksh_shared.clamp(channels[lane].note, 0, 127);
       state.lanes[lane].lock = ksh_shared.clamp(channels[lane].lock, -1, ksh_shared.SOURCE_COUNT - 1);
+      state.lanes[lane].loopLength = channels[lane].loopLength === undefined
+        ? state.stepCount
+        : ksh_shared.clamp(channels[lane].loopLength, 1, state.stepCount);
     }
   }
 
@@ -444,6 +447,9 @@ ksh_shared.applyStatusMessage = function (state, name, args) {
   if (name === "steps") {
     state.stepCount = ksh_shared.clamp(args[0], 1, ksh_shared.MAX_STEPS);
     state.refreshSteps = ksh_shared.clamp(state.refreshSteps, 1, state.stepCount);
+    for (lane = 0; lane < ksh_shared.MAX_LANES; lane += 1) {
+      state.lanes[lane].loopLength = ksh_shared.clamp(state.lanes[lane].loopLength, 1, state.stepCount);
+    }
   } else if (name === "channels") {
     state.laneCount = ksh_shared.clamp(args[0], 1, ksh_shared.MAX_LANES);
   } else if (name === "refresh_steps") {
@@ -476,6 +482,9 @@ ksh_shared.applyStatusMessage = function (state, name, args) {
   } else if (name === "channel_lock") {
     lane = ksh_shared.clamp(args[0] - 1, 0, ksh_shared.MAX_LANES - 1);
     state.lanes[lane].lock = String(args[1]).toLowerCase() === "random" ? -1 : ksh_shared.clamp(args[1] - 1, -1, ksh_shared.SOURCE_COUNT - 1);
+  } else if (name === "channel_loop_length") {
+    lane = ksh_shared.clamp(args[0] - 1, 0, ksh_shared.MAX_LANES - 1);
+    state.lanes[lane].loopLength = ksh_shared.clamp(args[1], 1, state.stepCount);
   } else if (name === "source_channel_mute") {
     lane = ksh_shared.clamp(args[1] - 1, 0, ksh_shared.MAX_LANES - 1);
     if (!state.sourceChannelMutes) {
@@ -484,6 +493,7 @@ ksh_shared.applyStatusMessage = function (state, name, args) {
     state.sourceChannelMutes[ksh_shared.clamp(args[0] - 1, 0, ksh_shared.SOURCE_COUNT - 1)][lane] = ksh_shared.toggleValue(args[2]);
   } else if (name === "source_channel_reset") {
     lane = ksh_shared.clamp(args[1] - 1, 0, ksh_shared.MAX_LANES - 1);
+    state.lanes[lane].loopLength = state.stepCount;
     if (!state.sourceChannelMutes) {
       state.sourceChannelMutes = ksh_shared.makeSourceChannelMutes();
     }

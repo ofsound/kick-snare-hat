@@ -49,7 +49,8 @@ function makeState() {
     lanes[i] = {
       label: ksh_shared.defaultLabels[i],
       note: ksh_shared.defaultNotes[i],
-      lock: -1
+      lock: -1,
+      loopLength: 16
     };
   }
 

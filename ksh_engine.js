@@ -205,7 +205,8 @@ var KSH_EngineClass = null;
       this.channels[i] = {
         label: defaultLabels[i],
         note: defaultNotes[i],
-        lock: -1
+        lock: -1,
+        loopLength: this.stepCount
       };
     }
   };
@@ -231,9 +232,14 @@ var KSH_EngineClass = null;
   };
 
   KickSnareHatEngine.prototype.setStepCount = function (count) {
+    var channel;
+
     this.stepCount = clamp(count, 1, MAX_STEPS);
     this.currentStep = this.currentStep % this.stepCount;
     this.refreshSteps = clamp(this.refreshSteps, 1, this.stepCount);
+    for (channel = 0; channel < MAX_LANES; channel += 1) {
+      this.channels[channel].loopLength = clamp(this.channels[channel].loopLength, 1, this.stepCount);
+    }
     this.recomposeWindow(0, this.stepCount, true);
     this.status("steps " + this.stepCount);
   };
@@ -371,6 +377,13 @@ var KSH_EngineClass = null;
     );
   };
 
+  KickSnareHatEngine.prototype.setChannelLoopLength = function (channel, loopLength) {
+    channel = clamp(channel, 0, MAX_LANES - 1);
+    this.channels[channel].loopLength = clamp(loopLength, 1, this.stepCount);
+    this.recomposeWindow(0, this.stepCount, true);
+    this.status("channel_loop_length " + (channel + 1) + " " + this.channels[channel].loopLength);
+  };
+
   KickSnareHatEngine.prototype.auditionChannel = function (channel) {
     var note;
 
@@ -444,6 +457,32 @@ var KSH_EngineClass = null;
     return generatedCell.source === source ? generatedCell : null;
   };
 
+  KickSnareHatEngine.prototype.refreshGeneratedCellsForSourceEdit = function (source, channel, sourceStep) {
+    var loopLength;
+    var generatedStep;
+    var changed = false;
+
+    if (channel >= this.channelCount) {
+      return;
+    }
+
+    loopLength = clamp(this.channels[channel].loopLength, 1, this.stepCount);
+    if (sourceStep >= loopLength) {
+      return;
+    }
+
+    for (generatedStep = sourceStep; generatedStep < this.stepCount; generatedStep += loopLength) {
+      if (this.generatedCellForSourceEdit(source, channel, generatedStep)) {
+        this.generated[channel][generatedStep] = this.generatedCellFromSource(source, channel, generatedStep);
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      this.markPreviewDirty(false);
+    }
+  };
+
   KickSnareHatEngine.prototype.isSourceChannelMuted = function (source, channel) {
     source = clampSource(source);
     channel = clampChannel(channel);
@@ -452,13 +491,17 @@ var KSH_EngineClass = null;
 
   KickSnareHatEngine.prototype.generatedCellFromSource = function (source, channel, step) {
     var cell;
+    var sourceStep;
+
+    sourceStep = mod(step, clamp(this.channels[channel].loopLength, 1, this.stepCount));
 
     if (this.isSourceChannelMuted(source, channel)) {
       cell = defaultCell();
     } else {
-      cell = cloneCell(this.sources[source][channel][step]);
+      cell = cloneCell(this.sources[source][channel][sourceStep]);
     }
     cell.source = source;
+    cell.sourceStep = sourceStep;
     return cell;
   };
 
@@ -480,13 +523,14 @@ var KSH_EngineClass = null;
     for (step = 0; step < MAX_STEPS; step += 1) {
       this.sources[source][channel][step] = defaultCell();
     }
+    this.channels[channel].loopLength = this.stepCount;
     this.recomposeWindow(0, this.stepCount, true);
+    this.status("channel_loop_length " + (channel + 1) + " " + this.channels[channel].loopLength);
     this.status("source_channel_reset " + (source + 1) + " " + (channel + 1));
   };
 
   KickSnareHatEngine.prototype.setCell = function (source, channel, step, enabled, velocity, probability, cycle) {
     var cell;
-    var generatedCell;
     var params;
 
     source = clampSource(source);
@@ -500,75 +544,47 @@ var KSH_EngineClass = null;
     cell.probability = params.probability;
     cell.cycle = params.cycle;
 
-    generatedCell = this.generatedCellForSourceEdit(source, channel, step);
-    if (generatedCell) {
-      this.generated[channel][step] = this.generatedCellFromSource(source, channel, step);
-      this.markPreviewDirty(false);
-    }
+    this.refreshGeneratedCellsForSourceEdit(source, channel, step);
   };
 
   KickSnareHatEngine.prototype.setCellEnabled = function (source, channel, step, enabled) {
-    var generatedCell;
-
     source = clampSource(source);
     channel = clampChannel(channel);
     step = clampStep(step);
     enabled = enabled ? 1 : 0;
     this.sources[source][channel][step].enabled = enabled;
 
-    generatedCell = this.generatedCellForSourceEdit(source, channel, step);
-    if (generatedCell) {
-      this.generated[channel][step] = this.generatedCellFromSource(source, channel, step);
-      this.markPreviewDirty(false);
-    }
+    this.refreshGeneratedCellsForSourceEdit(source, channel, step);
   };
 
   KickSnareHatEngine.prototype.setCellVelocity = function (source, channel, step, velocity) {
-    var generatedCell;
-
     source = clampSource(source);
     channel = clampChannel(channel);
     step = clampStep(step);
     velocity = clamp(velocity, 1, 127);
     this.sources[source][channel][step].velocity = velocity;
 
-    generatedCell = this.generatedCellForSourceEdit(source, channel, step);
-    if (generatedCell) {
-      this.generated[channel][step] = this.generatedCellFromSource(source, channel, step);
-      this.markPreviewDirty(false);
-    }
+    this.refreshGeneratedCellsForSourceEdit(source, channel, step);
   };
 
   KickSnareHatEngine.prototype.setCellProbability = function (source, channel, step, probability) {
-    var generatedCell;
-
     source = clampSource(source);
     channel = clampChannel(channel);
     step = clampStep(step);
     probability = clamp(probability, 0, 100);
     this.sources[source][channel][step].probability = probability;
 
-    generatedCell = this.generatedCellForSourceEdit(source, channel, step);
-    if (generatedCell) {
-      this.generated[channel][step] = this.generatedCellFromSource(source, channel, step);
-      this.markPreviewDirty(false);
-    }
+    this.refreshGeneratedCellsForSourceEdit(source, channel, step);
   };
 
   KickSnareHatEngine.prototype.setCellCycle = function (source, channel, step, cycle) {
-    var generatedCell;
-
     source = clampSource(source);
     channel = clampChannel(channel);
     step = clampStep(step);
     cycle = clamp(cycle, 1, 64);
     this.sources[source][channel][step].cycle = cycle;
 
-    generatedCell = this.generatedCellForSourceEdit(source, channel, step);
-    if (generatedCell) {
-      this.generated[channel][step] = this.generatedCellFromSource(source, channel, step);
-      this.markPreviewDirty(false);
-    }
+    this.refreshGeneratedCellsForSourceEdit(source, channel, step);
   };
 
   KickSnareHatEngine.prototype.resetPlayback = function (emitStatus) {
@@ -602,7 +618,7 @@ var KSH_EngineClass = null;
       if (this.isSourceChannelMuted(sourceIndex, channel)) {
         continue;
       }
-      for (step = 0; step < this.stepCount; step += 1) {
+      for (step = 0; step < Math.min(this.stepCount, clamp(this.channels[channel].loopLength, 1, this.stepCount)); step += 1) {
         cell = this.sources[sourceIndex][channel][step];
         if (cell.enabled) {
           return false;
@@ -769,7 +785,7 @@ var KSH_EngineClass = null;
     }
 
     if (clamp(cell.cycle, 1, 64) > 1) {
-      key = this.cycleKey(cell.source, channel, step);
+      key = this.cycleKey(cell.source, channel, typeof cell.sourceStep === "number" ? cell.sourceStep : step);
       count = this.cycleCounters[key] || 0;
       this.cycleCounters[key] = count + 1;
       if (count % clamp(cell.cycle, 1, 64) !== 0) {
@@ -1006,7 +1022,8 @@ var KSH_EngineClass = null;
       channels.push({
         label: this.channels[ch].label,
         note: this.channels[ch].note,
-        lock: this.channels[ch].lock
+        lock: this.channels[ch].lock,
+        loopLength: this.channels[ch].loopLength
       });
       generated[ch] = [];
       for (st = 0; st < this.stepCount; st += 1) {
@@ -1084,6 +1101,9 @@ var KSH_EngineClass = null;
       this.refreshSteps = clamp(state.refreshSteps, 1, this.stepCount);
     }
     this.refreshSteps = clamp(this.refreshSteps, 1, this.stepCount);
+    for (channel = 0; channel < MAX_LANES; channel += 1) {
+      this.channels[channel].loopLength = clamp(this.channels[channel].loopLength, 1, this.stepCount);
+    }
     if (state.generationMode !== undefined) {
       this.generationMode = normalizeGenerationMode(state.generationMode);
     }
@@ -1124,6 +1144,9 @@ var KSH_EngineClass = null;
         }
         if (incomingChannel.lock !== undefined) {
           this.channels[channel].lock = clamp(incomingChannel.lock, -1, SOURCE_COUNT - 1);
+        }
+        if (incomingChannel.loopLength !== undefined) {
+          this.channels[channel].loopLength = clamp(incomingChannel.loopLength, 1, this.stepCount);
         }
       }
     }
@@ -1361,6 +1384,10 @@ function channel_audition(channel) {
 function channel_lock(channel, lock) {
   var normalized = String(lock).toLowerCase() === "random" ? -1 : zeroBased(lock);
   ensureEngine().setChannelLock(zeroBased(channel), normalized);
+}
+
+function channel_loop_length(channel, loopLength) {
+  ensureEngine().setChannelLoopLength(zeroBased(channel), loopLength);
 }
 
 function source_channel_mute(source, channel, muted) {

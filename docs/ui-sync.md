@@ -14,6 +14,8 @@ persist independent state.
   `swing`, `velocity_humanize`, `timing_humanize`, `device_active`, `phase_offset_beats`,
   `channel_label`, `channel_note`, `channel_lock`, `static_source`, and
   `source_channel_mute` are incremental UI hints emitted by setters.
+  `channel_loop_length <channel> <steps>` sets the per-channel source row loop
+  length, clamped to the current global step count.
 - `channel_audition <channel>` triggers a one-shot MIDI note for that channel's
   configured pitch (editor lane row/label click). Output uses fixed MIDI channel
   1 and fixed note duration; audition does not change engine state.
@@ -51,6 +53,9 @@ persist independent state.
 - Source row messages use `source_channel_mute <source> <channel> <muted>` and
   `source_channel_reset <source> <channel>`. Reset emits a fresh `engine_state`
   because it clears all source cells in that row.
+- Channel row loop length uses `channel_loop_length <channel> <steps>`. It is
+  channel-global across all source patterns, starts at source step 1, and wraps
+  source lookup inside the current global step range.
 - Incoming MIDI note-on pitches 0-3 are routed by the patch shell to
   `static_source 1-4`.
 

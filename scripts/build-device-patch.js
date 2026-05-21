@@ -97,7 +97,7 @@ function editorSubpatcher() {
           layer: 1,
           hidden: 1,
           keymode: 1,
-          fontsize: 10.0,
+          fontsize: 13.0,
           fontname: "Ableton Sans Medium",
           bgcolor: [0.10, 0.11, 0.13, 1.0],
           textcolor: [0.96, 0.62, 0.22, 1.0]

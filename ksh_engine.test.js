@@ -200,18 +200,93 @@ function testMutedSourceChannelDoesNotMakeSourceActive() {
 function testSourceChannelResetClearsCellsAndMute() {
   var engine = makeEngine([0]);
   clearAll(engine);
+  engine.setStepCount(8);
   engine.setChannelCount(1);
+  engine.setChannelLoopLength(0, 3);
   engine.setCell(0, 0, 0, 1, 44, 30, 3);
   engine.setCell(0, 0, 1, 1, 45, 40, 4);
   engine.setSourceChannelMute(0, 0, 1);
   engine.resetSourceChannel(0, 0);
 
   assert.strictEqual(engine.sourceChannelMutes[0][0], 0);
+  assert.strictEqual(engine.channels[0].loopLength, 8);
   assert.strictEqual(engine.sources[0][0][0].enabled, 0);
   assert.strictEqual(engine.sources[0][0][0].velocity, 100);
   assert.strictEqual(engine.sources[0][0][0].probability, 100);
   assert.strictEqual(engine.sources[0][0][0].cycle, 1);
   assert.strictEqual(engine.sources[0][0][1].enabled, 0);
+}
+
+function testChannelLoopLengthWrapsSourceStepLookup() {
+  var engine = makeEngine([0]);
+  clearAll(engine);
+  engine.setStepCount(8);
+  engine.setChannelCount(1);
+  engine.setGenerationMode("static");
+  engine.setStaticSource(0);
+  engine.setChannelLoopLength(0, 3);
+  engine.setCell(0, 0, 0, 1, 10, 100, 1);
+  engine.setCell(0, 0, 1, 1, 20, 100, 1);
+  engine.setCell(0, 0, 2, 1, 30, 100, 1);
+  engine.setCell(0, 0, 3, 1, 99, 100, 1);
+  engine.generateWindow(0, 8, true);
+
+  assert.strictEqual(engine.generated[0][0].velocity, 10);
+  assert.strictEqual(engine.generated[0][1].velocity, 20);
+  assert.strictEqual(engine.generated[0][2].velocity, 30);
+  assert.strictEqual(engine.generated[0][3].velocity, 10);
+  assert.strictEqual(engine.generated[0][4].velocity, 20);
+  assert.strictEqual(engine.generated[0][5].velocity, 30);
+  assert.strictEqual(engine.generated[0][6].velocity, 10);
+  assert.strictEqual(engine.generated[0][7].velocity, 20);
+}
+
+function testChannelLoopLengthRefreshesAllWrappedGeneratedCells() {
+  var engine = makeEngine([0]);
+  clearAll(engine);
+  engine.setStepCount(8);
+  engine.setChannelCount(1);
+  engine.setGenerationMode("static");
+  engine.setStaticSource(0);
+  engine.setChannelLoopLength(0, 3);
+  engine.setCell(0, 0, 0, 1, 10, 100, 1);
+  engine.setCell(0, 0, 1, 1, 20, 100, 1);
+  engine.setCell(0, 0, 2, 1, 30, 100, 1);
+  engine.generateWindow(0, 8, true);
+
+  engine.setCellVelocity(0, 0, 0, 88);
+
+  assert.strictEqual(engine.generated[0][0].velocity, 88);
+  assert.strictEqual(engine.generated[0][3].velocity, 88);
+  assert.strictEqual(engine.generated[0][6].velocity, 88);
+  assert.strictEqual(engine.generated[0][1].velocity, 20);
+
+  engine.setCellVelocity(0, 0, 5, 44);
+  assert.strictEqual(engine.generated[0][5].velocity, 30);
+}
+
+function testChannelLoopLengthClampsToStepCount() {
+  var engine = makeEngine([0]);
+  clearAll(engine);
+  engine.setStepCount(16);
+  engine.setChannelLoopLength(0, 12);
+  engine.setStepCount(8);
+
+  assert.strictEqual(engine.channels[0].loopLength, 8);
+
+  engine.setStepCount(16);
+  assert.strictEqual(engine.channels[0].loopLength, 8);
+}
+
+function testTrailingCellsDoNotMakeSourceActive() {
+  var engine = makeEngine([0]);
+  clearAll(engine);
+  engine.setStepCount(8);
+  engine.setChannelCount(1);
+  engine.setChannelLoopLength(0, 3);
+  engine.setCell(0, 0, 5, 1, 99, 100, 1);
+
+  assert.deepStrictEqual(engine.activeSourceIndices(), []);
 }
 
 function testChannelLockOverridesRandomSource() {
@@ -700,6 +775,7 @@ function testSerializeDeserializeRestoresSourceData() {
   engine.setChannelLabel(0, "Sub");
   engine.setChannelNote(0, 35);
   engine.setChannelLock(0, 1);
+  engine.setChannelLoopLength(0, 5);
   engine.setDeviceActive(0);
   engine.setVelocityHumanize(12);
   engine.setTimingHumanize(8);
@@ -716,6 +792,7 @@ function testSerializeDeserializeRestoresSourceData() {
   assert.strictEqual(restored.channels[0].label, "Sub");
   assert.strictEqual(restored.channels[0].note, 35);
   assert.strictEqual(restored.channels[0].lock, 1);
+  assert.strictEqual(restored.channels[0].loopLength, 5);
   assert.strictEqual(restored.deviceActive, false);
   assert.strictEqual(restored.velocityHumanize, 12);
   assert.strictEqual(restored.timingHumanize, 8);
@@ -834,6 +911,10 @@ testRandomSourceUsesOnlyPopulatedSourceWhenOthersEmpty();
 testSourceChannelMuteSuppressesGeneratedOutput();
 testMutedSourceChannelDoesNotMakeSourceActive();
 testSourceChannelResetClearsCellsAndMute();
+testChannelLoopLengthWrapsSourceStepLookup();
+testChannelLoopLengthRefreshesAllWrappedGeneratedCells();
+testChannelLoopLengthClampsToStepCount();
+testTrailingCellsDoNotMakeSourceActive();
 testChannelLockOverridesRandomSource();
 testCycleGateFiresEveryNthEncounter();
 testRandomGateUsesPercentage();

@@ -178,7 +178,7 @@
                   "layer": 1,
                   "hidden": 1,
                   "keymode": 1,
-                  "fontsize": 10,
+                  "fontsize": 13,
                   "fontname": "Ableton Sans Medium",
                   "bgcolor": [
                     0.1,

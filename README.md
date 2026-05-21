@@ -9,7 +9,7 @@ of using unconstrained randomness.
 - 1-32 sequencer steps.
 - 1-8 monophonic drum lanes.
 - Four source patterns, each containing every active lane.
-- Per-lane label, MIDI note, and source lock.
+- Per-lane label, MIDI note, source lock, and row loop length.
 - Fixed output on MIDI channel 1.
 - Three generation modes:
   - `stack`: each refresh window chooses one source pattern for all lanes and steps in that window.
@@ -75,6 +75,7 @@ channel_note 1 36
 channel_audition 1
 channel_lock 1 random
 channel_lock 1 2
+channel_loop_length 1 8
 
 cell 1 1 1 1 100 100 1
 cell 1 1 5 1 90 60 1
