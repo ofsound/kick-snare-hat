@@ -34,7 +34,7 @@ persist independent state.
 - `request_state` asks for `engine_state` only.
 - `device_active 0|1` toggles transport note output and clears pending scheduler
   output when disabled.
-- `native_timing 0|1` toggles the experimental Max-native playback-table path.
+- `native_timing 0|1` toggles the Max-native playback-table path (default on).
   Cycle, probability, velocity humanize, and timing humanize values are
   precomputed into the playback table. Native timing humanize uses a subtler
   range than the JS fallback and moves early hits into earlier table rows.

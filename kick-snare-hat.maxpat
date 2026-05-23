@@ -1703,6 +1703,25 @@
       },
       {
         "box": {
+          "id": "selstart",
+          "maxclass": "newobj",
+          "numinlets": 2,
+          "numoutlets": 2,
+          "patching_rect": [
+            720,
+            860,
+            42,
+            22
+          ],
+          "outlettype": [
+            "bang",
+            ""
+          ],
+          "text": "sel 1"
+        }
+      },
+      {
+        "box": {
           "id": "resetmsg",
           "maxclass": "message",
           "numinlets": 2,
@@ -1846,6 +1865,24 @@
             "int"
           ],
           "text": "expr floor((($f1-$f2)/$f3)+0.000001)%$f4"
+        }
+      },
+      {
+        "box": {
+          "id": "native-step-input-gate",
+          "maxclass": "newobj",
+          "numinlets": 2,
+          "numoutlets": 1,
+          "patching_rect": [
+            380,
+            1060,
+            40,
+            22
+          ],
+          "outlettype": [
+            ""
+          ],
+          "text": "gate"
         }
       },
       {
@@ -2602,6 +2639,30 @@
             0
           ],
           "destination": [
+            "native-step-input-gate",
+            1
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "native-transport-unpack",
+            2
+          ],
+          "destination": [
+            "native-step-input-gate",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "native-step-input-gate",
+            0
+          ],
+          "destination": [
             "native-step-change",
             0
           ]
@@ -3030,6 +3091,18 @@
       {
         "patchline": {
           "source": [
+            "observer",
+            0
+          ],
+          "destination": [
+            "selstart",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
             "selstop",
             0
           ],
@@ -3043,6 +3116,18 @@
         "patchline": {
           "source": [
             "selstop",
+            0
+          ],
+          "destination": [
+            "native-step-reset-msg",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "selstart",
             0
           ],
           "destination": [

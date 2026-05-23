@@ -65,7 +65,7 @@ function makeState() {
     staticSource: 0,
     rate: "16n",
     swing: 0,
-    nativeTiming: 0,
+    nativeTiming: 1,
     lanes: lanes
   };
 }

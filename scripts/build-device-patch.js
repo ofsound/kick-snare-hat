@@ -95,6 +95,11 @@ function nativeTimingBoxes() {
       numoutlets: 1,
       outlettype: ["int"]
     }),
+    box("native-step-input-gate", "newobj", "gate", [380.0, 1060.0, 40.0, 22.0], {
+      numinlets: 2,
+      numoutlets: 1,
+      outlettype: [""]
+    }),
     box("native-step-change", "newobj", "change", [340.0, 1080.0, 50.0, 22.0], {
       numinlets: 1,
       numoutlets: 2,
@@ -154,7 +159,9 @@ function nativeTimingLines() {
     line("native-phase", 0, "native-step-expr", 1),
     line("native-bps", 0, "native-step-expr", 2),
     line("native-steps", 0, "native-step-expr", 3),
-    line("native-step-expr", 0, "native-step-change", 0),
+    line("native-step-expr", 0, "native-step-input-gate", 1),
+    line("native-transport-unpack", 2, "native-step-input-gate", 0),
+    line("native-step-input-gate", 0, "native-step-change", 0),
     line("native-step-change", 0, "native-playing-gate", 1),
     line("native-step-reset-msg", 0, "native-step-change", 0),
     line("transportpos", 0, "native-transport-unpack", 0),
@@ -723,6 +730,11 @@ const patch = {
         numoutlets: 2,
         outlettype: ["bang", ""]
       }),
+      box("selstart", "newobj", "sel 1", [720.0, 860.0, 42.0, 22.0], {
+        numinlets: 2,
+        numoutlets: 2,
+        outlettype: ["bang", ""]
+      }),
       box("resetmsg", "message", "reset", [720.0, 820.0, 46.0, 22.0], {
         numinlets: 2,
         numoutlets: 1,
@@ -803,8 +815,10 @@ const patch = {
       line("tempo_observer", 0, "tempoprep", 0),
       line("tempoprep", 0, "engine", 0),
       line("observer", 0, "selstop", 0),
+      line("observer", 0, "selstart", 0),
       line("selstop", 0, "resetmsg", 0),
       line("selstop", 0, "native-step-reset-msg", 0),
+      line("selstart", 0, "native-step-reset-msg", 0),
       line("loadbang", 0, "native-step-reset-msg", 0),
       line("resetmsg", 0, "engine", 0)
     ],

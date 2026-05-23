@@ -36,6 +36,7 @@ function clearAll(engine) {
     }
   }
   engine._notes.length = 0;
+  engine.setNativeTiming(0);
   engine.reset();
 }
 
@@ -752,6 +753,12 @@ function testNativePlaybackRowsClampFirstStepEarlyTiming() {
   assert.deepStrictEqual(rows[1], [36, 100, 100, 1, 100]);
 }
 
+function testEngineDefaultsNativeTimingOn() {
+  var engine = makeEngine([0]);
+  assert.strictEqual(engine.nativeTiming, true);
+  assert.strictEqual(engine.nativeTimingActive(), true);
+}
+
 function testNativeTimingSuppressesJsLookaheadWhenSupported() {
   var engine = makeEngine([0]);
   clearAll(engine);
@@ -1225,6 +1232,7 @@ testNativePlaybackRowsShareVariationExpansionForProbabilityAndVelocity();
 testNativePlaybackRowsPrerollLateTimingHumanize();
 testNativePlaybackRowsPrerollEarlyTimingHumanize();
 testNativePlaybackRowsClampFirstStepEarlyTiming();
+testEngineDefaultsNativeTimingOn();
 testNativeTimingSuppressesJsLookaheadWhenSupported();
 testNativeTimingSupportsCycleGates();
 testNativeTimingSupportsProbabilityPreroll();

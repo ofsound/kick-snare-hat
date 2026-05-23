@@ -207,7 +207,7 @@ var KSH_EngineClass = null;
     this.lateGraceMs = 2;
     this.phaseOffsetBeats = 0;
     this.transportPlaying = 0;
-    this.nativeTiming = false;
+    this.nativeTiming = !!KSH_CONSTANTS.DEFAULT_NATIVE_TIMING;
     this.nativePlaybackStepCount = this.stepCount;
     this.nativePlaybackRows = null;
     this.editorActive = false;
@@ -1593,7 +1593,11 @@ var KSH_EngineClass = null;
     this.velocityHumanize = clamp(state.velocityHumanize, 0, 100);
     this.timingHumanize = clamp(state.timingHumanize, 0, 100);
     this.deviceActive = normalizeToggle(state.deviceActive);
-    this.nativeTiming = normalizeToggle(state.nativeTiming);
+    if (state.nativeTiming !== undefined) {
+      this.nativeTiming = normalizeToggle(state.nativeTiming);
+    } else {
+      this.nativeTiming = !!KSH_CONSTANTS.DEFAULT_NATIVE_TIMING;
+    }
     this.phaseOffsetBeats = parseFloat(state.phaseOffsetBeats) || 0;
     this.updateStepIntervalMs();
 

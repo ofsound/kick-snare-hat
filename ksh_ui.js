@@ -395,7 +395,7 @@ function makeState() {
     tempo: 120,
     phaseOffsetBeats: 0,
     deviceActive: 1,
-    nativeTiming: 0,
+    nativeTiming: 1,
     lanes: lanes,
     sourceChannelMutes: makeSourceChannelMutes(),
     sources: sources

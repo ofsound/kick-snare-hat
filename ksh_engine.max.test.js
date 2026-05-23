@@ -363,6 +363,7 @@ function testTransportPositionEmitsNativeSchedulerEvent() {
   sb.rate("16n");
   sb.tempo(120);
   sb.cell(1, 1, 1, 1, 90, 100, 1);
+  sb.native_timing(0);
   sb._flush();
   sb._clear();
 
@@ -389,6 +390,7 @@ function testTransportLookaheadEmitsDelayedNativeSchedulerEvent() {
   sb.rate("16n");
   sb.tempo(120);
   sb.cell(1, 1, 2, 1, 90, 100, 1);
+  sb.native_timing(0);
   sb._flush();
   sb._clear();
 
@@ -456,6 +458,7 @@ function testResetClearsNativeScheduler() {
   sb.steps(4);
   sb.channels(1);
   sb.cell(1, 1, 1, 1, 100, 100, 1);
+  sb.native_timing(0);
   sb._flush();
   sb._clear();
 
@@ -808,6 +811,7 @@ function testDeviceActiveSuppressesTransportOutputAndClearsScheduler() {
   sb.steps(4);
   sb.channels(1);
   sb.cell(1, 1, 1, 1, 100, 100, 1);
+  sb.native_timing(0);
   sb._flush();
   sb._clear();
 
