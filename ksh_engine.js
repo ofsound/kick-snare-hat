@@ -178,7 +178,11 @@ var KSH_EngineClass = null;
     this.timingHumanize = 0;
     this.deviceActive = true;
     this.currentStep = 0;
-    this.lastFiredGlobalStep = null;
+    this.lastReportedGlobalStep = null;
+    this.scheduledGlobalSteps = {};
+    this.scheduledNoteKeys = {};
+    this.lookaheadMs = 80;
+    this.lateGraceMs = 2;
     this.phaseOffsetBeats = 0;
     this.transportPlaying = 0;
     this.editorActive = false;
@@ -272,6 +276,11 @@ var KSH_EngineClass = null;
   KickSnareHatEngine.prototype.setRate = function (rate) {
     this.rate = normalizeRate(rate);
     this.updateStepIntervalMs();
+    this.scheduledGlobalSteps = {};
+    this.scheduledNoteKeys = {};
+    if (this.transportPlaying && typeof cancelPendingNoteTasks === "function") {
+      cancelPendingNoteTasks();
+    }
     this.status("rate " + this.rate);
   };
 
@@ -282,12 +291,25 @@ var KSH_EngineClass = null;
     }
     this.tempo = Math.max(20, Math.min(300, tempo));
     this.updateStepIntervalMs();
+    this.scheduledGlobalSteps = {};
+    this.scheduledNoteKeys = {};
+    if (this.transportPlaying && typeof cancelPendingNoteTasks === "function") {
+      cancelPendingNoteTasks();
+    }
     this.status("tempo " + this.tempo);
   };
 
   KickSnareHatEngine.prototype.updateStepIntervalMs = function () {
     var quarterMs = 60000 / this.tempo;
     this.stepIntervalMs = quarterMs * this.beatsPerStep();
+  };
+
+  KickSnareHatEngine.prototype.msToBeats = function (ms) {
+    return (clampFloat(ms, 0, 600000) * this.tempo) / 60000;
+  };
+
+  KickSnareHatEngine.prototype.msUntilBeat = function (targetBeat, currentBeat) {
+    return (targetBeat - currentBeat) * (60000 / this.tempo);
   };
 
   KickSnareHatEngine.prototype.beatsPerStep = function () {
@@ -328,7 +350,8 @@ var KSH_EngineClass = null;
     }
 
     this.deviceActive = active;
-    this.lastFiredGlobalStep = null;
+    this.scheduledGlobalSteps = {};
+    this.scheduledNoteKeys = {};
     if (!this.deviceActive) {
       if (typeof cancelPendingNoteTasks === "function") {
         cancelPendingNoteTasks();
@@ -346,7 +369,11 @@ var KSH_EngineClass = null;
       offset = 0;
     }
     this.phaseOffsetBeats = Math.max(-0.25, Math.min(0.25, offset));
-    this.lastFiredGlobalStep = null;
+    this.scheduledGlobalSteps = {};
+    this.scheduledNoteKeys = {};
+    if (this.transportPlaying && typeof cancelPendingNoteTasks === "function") {
+      cancelPendingNoteTasks();
+    }
     this.status("phase_offset_beats " + this.phaseOffsetBeats);
   };
 
@@ -591,7 +618,9 @@ var KSH_EngineClass = null;
     this.currentStep = 0;
     this.playingStepOneBased = 0;
     this.cycleCounters = {};
-    this.lastFiredGlobalStep = null;
+    this.lastReportedGlobalStep = null;
+    this.scheduledGlobalSteps = {};
+    this.scheduledNoteKeys = {};
     this.transportPlaying = 0;
     this.generateWindow(0, this.stepCount, true);
     this.reportPlayingStep();
@@ -841,23 +870,89 @@ var KSH_EngineClass = null;
     return Math.max(0, delayMs);
   };
 
-  KickSnareHatEngine.prototype.fireNativeGlobalStepRange = function (fromGlobalStep, toGlobalStep) {
-    var gs;
-    var step;
+  KickSnareHatEngine.prototype.pruneScheduledSteps = function (currentGlobalStep) {
+    var cutoff = currentGlobalStep - Math.max(this.stepCount * 4, 64);
+    var key;
 
-    fromGlobalStep = parseInt(fromGlobalStep, 10);
-    toGlobalStep = parseInt(toGlobalStep, 10);
-    if (isNaN(fromGlobalStep) || isNaN(toGlobalStep) || toGlobalStep < fromGlobalStep) {
+    for (key in this.scheduledGlobalSteps) {
+      if (Object.prototype.hasOwnProperty.call(this.scheduledGlobalSteps, key) && parseInt(key, 10) < cutoff) {
+        delete this.scheduledGlobalSteps[key];
+      }
+    }
+    for (key in this.scheduledNoteKeys) {
+      if (Object.prototype.hasOwnProperty.call(this.scheduledNoteKeys, key) && parseInt(key.split(":")[0], 10) < cutoff) {
+        delete this.scheduledNoteKeys[key];
+      }
+    }
+  };
+
+  KickSnareHatEngine.prototype.prepareStepForPlayback = function (step) {
+    if (step % this.refreshSteps === 0) {
+      this.generateWindow(step, this.refreshSteps, false);
+    }
+  };
+
+  KickSnareHatEngine.prototype.reportTransportStep = function (globalStep) {
+    var step = mod(globalStep, this.stepCount);
+
+    if (this.lastReportedGlobalStep === globalStep) {
       return;
     }
+    this.lastReportedGlobalStep = globalStep;
+    this.currentStep = step;
+    this.playingStepOneBased = step + 1;
+    this.reportPlayingStep();
+  };
 
-    for (gs = fromGlobalStep; gs <= toGlobalStep; gs += 1) {
-      step = mod(gs, this.stepCount);
-      this.fireStep(step, gs, {
-        baseDelayMs: 0,
-        reportStep: false
-      });
+  KickSnareHatEngine.prototype.scheduleGlobalStep = function (globalStep, songBeats) {
+    var key = String(globalStep);
+    var step;
+    var targetBeat;
+    var baseDelayMs;
+
+    if (this.scheduledGlobalSteps[key]) {
+      return [];
     }
+
+    step = mod(globalStep, this.stepCount);
+    targetBeat = this.beatForGlobalStep(globalStep);
+    baseDelayMs = this.msUntilBeat(targetBeat, songBeats);
+    if (baseDelayMs < -this.lateGraceMs) {
+      this.scheduledGlobalSteps[key] = 1;
+      return [];
+    }
+
+    this.scheduledGlobalSteps[key] = 1;
+    this.prepareStepForPlayback(step);
+    return this.fireStep(step, globalStep, {
+      baseDelayMs: baseDelayMs,
+      reportStep: false
+    });
+  };
+
+  KickSnareHatEngine.prototype.scheduleLookahead = function (songBeats, currentGlobalStep) {
+    var notes = [];
+    var lookaheadBeats = this.msToBeats(this.lookaheadMs);
+    var endBeat = songBeats + lookaheadBeats;
+    var globalStep = currentGlobalStep;
+    var targetBeat;
+    var scheduled;
+    var i;
+
+    while (true) {
+      targetBeat = this.beatForGlobalStep(globalStep);
+      if (targetBeat > endBeat + 0.000000001) {
+        break;
+      }
+
+      scheduled = this.scheduleGlobalStep(globalStep, songBeats);
+      for (i = 0; i < scheduled.length; i += 1) {
+        notes.push(scheduled[i]);
+      }
+      globalStep += 1;
+    }
+
+    return notes;
   };
 
   KickSnareHatEngine.prototype.fireStep = function (step, globalStep, options) {
@@ -883,13 +978,15 @@ var KSH_EngineClass = null;
       this.reportPlayingStep();
     }
 
-    if (step % this.refreshSteps === 0) {
-      this.generateWindow(step, this.refreshSteps, true);
-    }
-
     for (channel = 0; channel < this.channelCount; channel += 1) {
       cell = this.generated[channel][step];
       if (this.shouldFire(cell, channel, step)) {
+        if (typeof globalStep === "number") {
+          if (this.scheduledNoteKeys[globalStep + ":" + channel]) {
+            continue;
+          }
+          this.scheduledNoteKeys[globalStep + ":" + channel] = 1;
+        }
         note = {
           lane: channel + 1,
           step: step + 1,
@@ -941,6 +1038,8 @@ var KSH_EngineClass = null;
     var notes = [];
     var discontinuity;
     var previousGlobalStep;
+    var scheduled;
+    var i;
 
     songBeats = parseFloat(songBeats);
     if (isNaN(songBeats)) {
@@ -951,7 +1050,9 @@ var KSH_EngineClass = null;
 
     if (!this.deviceActive) {
       this.transportPlaying = 0;
-      this.lastFiredGlobalStep = null;
+      this.lastReportedGlobalStep = null;
+      this.scheduledGlobalSteps = {};
+      this.scheduledNoteKeys = {};
       if (this.playingStepOneBased !== 0) {
         this.playingStepOneBased = 0;
         this.reportPlayingStep();
@@ -973,7 +1074,9 @@ var KSH_EngineClass = null;
         }
       }
       this.transportPlaying = 0;
-      this.lastFiredGlobalStep = null;
+      this.lastReportedGlobalStep = null;
+      this.scheduledGlobalSteps = {};
+      this.scheduledNoteKeys = {};
       return [];
     }
 
@@ -981,36 +1084,23 @@ var KSH_EngineClass = null;
 
     globalStep = this.globalStepForBeats(songBeats);
     step = mod(globalStep, this.stepCount);
+    previousGlobalStep = this.lastReportedGlobalStep;
+    discontinuity = previousGlobalStep !== null && globalStep !== previousGlobalStep && globalStep !== previousGlobalStep + 1;
 
-    if (this.lastFiredGlobalStep === globalStep) {
-      return notes;
+    if (discontinuity) {
+      if (typeof cancelPendingNoteTasks === "function") {
+        cancelPendingNoteTasks();
+      }
+      this.scheduledGlobalSteps = {};
+      this.scheduledNoteKeys = {};
+      this.status("transport_jump " + songBeats + " step " + (step + 1));
     }
 
-    if (this.lastFiredGlobalStep !== globalStep) {
-      previousGlobalStep = this.lastFiredGlobalStep;
-      discontinuity = previousGlobalStep !== null && globalStep !== previousGlobalStep + 1;
-      this.lastFiredGlobalStep = globalStep;
-      this.currentStep = step;
-      this.playingStepOneBased = step + 1;
-      this.reportPlayingStep();
-      if (discontinuity) {
-        if (typeof cancelPendingNoteTasks === "function") {
-          cancelPendingNoteTasks();
-        }
-        this.status("transport_jump " + songBeats + " step " + (step + 1));
-      }
-      if (discontinuity && previousGlobalStep !== null) {
-        this.fireNativeGlobalStepRange(previousGlobalStep + 1, globalStep);
-      } else {
-        this.fireStep(step, globalStep, {
-          baseDelayMs: 0,
-          reportStep: false
-        });
-      }
-    }
-
-    if (step % this.refreshSteps === 0) {
-      this.generateWindow(step, this.refreshSteps, true);
+    this.reportTransportStep(globalStep);
+    this.pruneScheduledSteps(globalStep);
+    scheduled = this.scheduleLookahead(songBeats, globalStep);
+    for (i = 0; i < scheduled.length; i += 1) {
+      notes.push(scheduled[i]);
     }
 
     return notes;

@@ -377,6 +377,26 @@ function testTransportPositionEmitsNativeSchedulerEvent() {
   assert.deepStrictEqual(hitEvents[0].args, ["note_hit", "1", "1", "1", "1"]);
 }
 
+function testTransportLookaheadEmitsDelayedNativeSchedulerEvent() {
+  var sb = makeMaxSandbox();
+
+  sb._clear();
+  sb.steps(4);
+  sb.channels(1);
+  sb.rate("16n");
+  sb.tempo(120);
+  sb.cell(1, 1, 2, 1, 90, 100, 1);
+  sb._flush();
+  sb._clear();
+
+  sb.transport_position(0.1, 1);
+
+  var emitted = midiNotesOn(sb);
+  assert.strictEqual(emitted.length, 1, "lookahead should queue the next step before its edge");
+  assert.deepStrictEqual(emitted[0].args, [36, 90, 100, 1, 75],
+    "lookahead note event should include a positive pipe delay");
+}
+
 function testResetClearsNativeScheduler() {
   var sb = makeMaxSandbox();
   sb._clear();
@@ -787,6 +807,7 @@ testCellMessageWritesToEngineSourceAndCoalescesPreview();
 testSourceChannelResetClearsStateAndEmitsFullState();
 testChannelAuditionEmitsNoteToOutlet();
 testTransportPositionEmitsNativeSchedulerEvent();
+testTransportLookaheadEmitsDelayedNativeSchedulerEvent();
 testResetClearsNativeScheduler();
 testStoppedTransportClearsSchedulerOnceNotPerTick();
 testGetValueOfSetValueOfRoundtripsEngineState();
