@@ -186,6 +186,7 @@ function testMaxWrapperBootsEngineAndExposesHandlers() {
   assert.strictEqual(typeof sb.timing_humanize, "function");
   assert.strictEqual(typeof sb.phase_offset_beats, "function");
   assert.strictEqual(typeof sb.device_active, "function");
+  assert.strictEqual(typeof sb.native_timing, "function");
   assert.strictEqual(typeof sb.editor_active, "function");
   assert.strictEqual(typeof sb.static_source, "function");
   assert.strictEqual(typeof sb.channel_loop_length, "function");

@@ -58,7 +58,8 @@
             0,
             736,
             176
-          ]
+          ],
+          "layer": 0
         }
       },
       {
@@ -1720,6 +1721,384 @@
       },
       {
         "box": {
+          "id": "native-timing-toggle",
+          "maxclass": "live.toggle",
+          "varname": "ksh_native_timing",
+          "numinlets": 1,
+          "numoutlets": 1,
+          "outlettype": [
+            "int"
+          ],
+          "patching_rect": [
+            600,
+            1000,
+            58,
+            22
+          ],
+          "presentation": 0,
+          "presentation_rect": [
+            600,
+            1000,
+            58,
+            22
+          ],
+          "hidden": 1,
+          "layer": 0,
+          "parameter_enable": 1,
+          "parameter_mappable": 1,
+          "saved_attribute_attributes": {
+            "valueof": {
+              "parameter_linknames": 0,
+              "parameter_order": 3,
+              "parameter_invisible": 0,
+              "parameter_type": 2,
+              "parameter_initial": [
+                0
+              ],
+              "parameter_initial_enable": 1,
+              "parameter_shortname": "Native",
+              "parameter_longname": "ksh_native_timing",
+              "parameter_mappable": 1
+            }
+          }
+        }
+      },
+      {
+        "box": {
+          "id": "native-cmd-route",
+          "maxclass": "newobj",
+          "numinlets": 1,
+          "numoutlets": 2,
+          "patching_rect": [
+            520,
+            1040,
+            120,
+            22
+          ],
+          "outlettype": [
+            "",
+            ""
+          ],
+          "text": "route native_timing"
+        }
+      },
+      {
+        "box": {
+          "id": "native-timing-prep",
+          "maxclass": "newobj",
+          "numinlets": 1,
+          "numoutlets": 1,
+          "patching_rect": [
+            600,
+            1040,
+            140,
+            22
+          ],
+          "outlettype": [
+            ""
+          ],
+          "text": "prepend native_timing"
+        }
+      },
+      {
+        "box": {
+          "id": "native-meta-recv",
+          "maxclass": "newobj",
+          "numinlets": 0,
+          "numoutlets": 1,
+          "patching_rect": [
+            180,
+            1000,
+            120,
+            22
+          ],
+          "outlettype": [
+            ""
+          ],
+          "text": "r ksh_native_meta"
+        }
+      },
+      {
+        "box": {
+          "id": "native-meta-route",
+          "maxclass": "newobj",
+          "numinlets": 1,
+          "numoutlets": 2,
+          "patching_rect": [
+            180,
+            1040,
+            70,
+            22
+          ],
+          "outlettype": [
+            "",
+            ""
+          ],
+          "text": "route meta"
+        }
+      },
+      {
+        "box": {
+          "id": "native-meta-unpack",
+          "maxclass": "newobj",
+          "numinlets": 1,
+          "numoutlets": 3,
+          "patching_rect": [
+            260,
+            1000,
+            80,
+            22
+          ],
+          "outlettype": [
+            "float",
+            "float",
+            "int"
+          ],
+          "text": "unpack f f i"
+        }
+      },
+      {
+        "box": {
+          "id": "native-bps",
+          "maxclass": "newobj",
+          "numinlets": 1,
+          "numoutlets": 1,
+          "patching_rect": [
+            260,
+            1040,
+            40,
+            22
+          ],
+          "outlettype": [
+            "float"
+          ],
+          "text": "f 0.25"
+        }
+      },
+      {
+        "box": {
+          "id": "native-phase",
+          "maxclass": "newobj",
+          "numinlets": 1,
+          "numoutlets": 1,
+          "patching_rect": [
+            260,
+            1080,
+            40,
+            22
+          ],
+          "outlettype": [
+            "float"
+          ],
+          "text": "f 0."
+        }
+      },
+      {
+        "box": {
+          "id": "native-steps",
+          "maxclass": "newobj",
+          "numinlets": 1,
+          "numoutlets": 1,
+          "patching_rect": [
+            260,
+            1120,
+            40,
+            22
+          ],
+          "outlettype": [
+            "int"
+          ],
+          "text": "i 16"
+        }
+      },
+      {
+        "box": {
+          "id": "native-step-expr",
+          "maxclass": "newobj",
+          "numinlets": 4,
+          "numoutlets": 1,
+          "patching_rect": [
+            340,
+            1040,
+            220,
+            22
+          ],
+          "outlettype": [
+            "int"
+          ],
+          "text": "expr floor((($f1-$f2)/$f3)+0.000001)%$f4"
+        }
+      },
+      {
+        "box": {
+          "id": "native-step-change",
+          "maxclass": "newobj",
+          "numinlets": 1,
+          "numoutlets": 2,
+          "patching_rect": [
+            340,
+            1080,
+            50,
+            22
+          ],
+          "outlettype": [
+            "bang",
+            "int"
+          ],
+          "text": "change"
+        }
+      },
+      {
+        "box": {
+          "id": "native-transport-unpack",
+          "maxclass": "newobj",
+          "numinlets": 1,
+          "numoutlets": 3,
+          "patching_rect": [
+            180,
+            1160,
+            90,
+            22
+          ],
+          "outlettype": [
+            "",
+            "float",
+            "int"
+          ],
+          "text": "unpack s f i"
+        }
+      },
+      {
+        "box": {
+          "id": "native-timing-gate-recv",
+          "maxclass": "newobj",
+          "numinlets": 0,
+          "numoutlets": 1,
+          "patching_rect": [
+            480,
+            1040,
+            160,
+            22
+          ],
+          "outlettype": [
+            "int"
+          ],
+          "text": "r ksh_native_timing_gate"
+        }
+      },
+      {
+        "box": {
+          "id": "native-playing-gate",
+          "maxclass": "newobj",
+          "numinlets": 2,
+          "numoutlets": 1,
+          "patching_rect": [
+            420,
+            1080,
+            40,
+            22
+          ],
+          "outlettype": [
+            ""
+          ],
+          "text": "gate"
+        }
+      },
+      {
+        "box": {
+          "id": "native-mode-gate",
+          "maxclass": "newobj",
+          "numinlets": 2,
+          "numoutlets": 1,
+          "patching_rect": [
+            480,
+            1080,
+            40,
+            22
+          ],
+          "outlettype": [
+            ""
+          ],
+          "text": "gate"
+        }
+      },
+      {
+        "box": {
+          "id": "native-fire-recv",
+          "maxclass": "newobj",
+          "numinlets": 0,
+          "numoutlets": 1,
+          "patching_rect": [
+            540,
+            1040,
+            140,
+            22
+          ],
+          "outlettype": [
+            "int"
+          ],
+          "text": "r ksh_native_fire_step"
+        }
+      },
+      {
+        "box": {
+          "id": "native-fire-prep",
+          "maxclass": "newobj",
+          "numinlets": 1,
+          "numoutlets": 1,
+          "patching_rect": [
+            540,
+            1080,
+            110,
+            22
+          ],
+          "outlettype": [
+            ""
+          ],
+          "text": "prepend play_step"
+        }
+      },
+      {
+        "box": {
+          "id": "native-step-js",
+          "maxclass": "newobj",
+          "numinlets": 1,
+          "numoutlets": 1,
+          "patching_rect": [
+            660,
+            1080,
+            130,
+            22
+          ],
+          "outlettype": [
+            ""
+          ],
+          "text": "js ksh_native_step.js"
+        }
+      },
+      {
+        "box": {
+          "id": "native-playback-dict",
+          "maxclass": "newobj",
+          "text": "dict ksh_native_playback",
+          "patching_rect": [
+            840,
+            1080,
+            140,
+            22
+          ],
+          "numinlets": 1,
+          "numoutlets": 4,
+          "outlettype": [
+            "dictionary",
+            "",
+            "",
+            ""
+          ]
+        }
+      },
+      {
+        "box": {
           "id": "tempo_observer",
           "maxclass": "newobj",
           "numinlets": 1,
@@ -2191,6 +2570,234 @@
       {
         "patchline": {
           "source": [
+            "native-timing-toggle",
+            0
+          ],
+          "destination": [
+            "native-timing-prep",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "native-timing-prep",
+            0
+          ],
+          "destination": [
+            "engine",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "enginecmds",
+            0
+          ],
+          "destination": [
+            "native-cmd-route",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "native-cmd-route",
+            0
+          ],
+          "destination": [
+            "native-timing-prep",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "native-cmd-route",
+            0
+          ],
+          "destination": [
+            "native-timing-toggle",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "native-timing-gate-recv",
+            0
+          ],
+          "destination": [
+            "native-mode-gate",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "native-meta-recv",
+            0
+          ],
+          "destination": [
+            "native-meta-route",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "native-meta-route",
+            0
+          ],
+          "destination": [
+            "native-meta-unpack",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "native-meta-unpack",
+            0
+          ],
+          "destination": [
+            "native-bps",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "native-meta-unpack",
+            1
+          ],
+          "destination": [
+            "native-phase",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "native-meta-unpack",
+            2
+          ],
+          "destination": [
+            "native-steps",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "transportbeat",
+            1
+          ],
+          "destination": [
+            "native-step-expr",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "native-bps",
+            0
+          ],
+          "destination": [
+            "native-step-expr",
+            2
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "native-phase",
+            0
+          ],
+          "destination": [
+            "native-step-expr",
+            1
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "native-steps",
+            0
+          ],
+          "destination": [
+            "native-step-expr",
+            3
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "native-step-expr",
+            0
+          ],
+          "destination": [
+            "native-step-change",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "native-step-change",
+            0
+          ],
+          "destination": [
+            "native-playing-gate",
+            1
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "transportpos",
+            0
+          ],
+          "destination": [
+            "native-transport-unpack",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "native-transport-unpack",
+            2
+          ],
+          "destination": [
+            "native-playing-gate",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
             "note-delay",
             3
           ],
@@ -2543,6 +3150,12 @@
         "bootpath": ".",
         "type": "TEXT",
         "implicit": 1
+      },
+      {
+        "name": "ksh_native_step.js",
+        "bootpath": ".",
+        "type": "TEXT",
+        "implicit": 1
       }
     ],
     "parameters": {
@@ -2554,6 +3167,11 @@
       "pattern-store": [
         "ksh_pattern_data",
         "KSH Pattern",
+        0
+      ],
+      "native-timing-toggle": [
+        "ksh_native_timing",
+        "Native Timing",
         0
       ]
     }

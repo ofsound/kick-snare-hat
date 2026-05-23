@@ -65,6 +65,7 @@ function makeState() {
     staticSource: 0,
     rate: "16n",
     swing: 0,
+    nativeTiming: 0,
     lanes: lanes
   };
 }
@@ -79,6 +80,7 @@ function paint() {
 function drawActionColumn() {
   ksh_shared.rect(0, 0, ACTION_COLUMN_WIDTH, HEIGHT, colors.panel2);
   ksh_shared.button(hitZones, "open_editor", "Edit", 14, 18, 58, 25, true);
+  ksh_shared.button(hitZones, "native_timing", "Native", 14, 55, 58, 25, state.nativeTiming);
 }
 
 function drawPreview() {
@@ -178,6 +180,8 @@ function onclick(x, y, button, cmd, shift) {
 
   if (z.id === "open_editor") {
     send("open_editor");
+  } else if (z.id === "native_timing") {
+    send("native_timing", state.nativeTiming ? 0 : 1);
   }
   mgraphics.redraw();
 }

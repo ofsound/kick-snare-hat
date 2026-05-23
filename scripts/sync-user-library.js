@@ -5,6 +5,7 @@ const ROOT = path.resolve(__dirname, "..");
 
 const DEVICE_FILES = [
   "ksh_engine.js",
+  "ksh_native_step.js",
   "ksh_compact_ui.js",
   "ksh_ui.js",
   "ksh_ui_shared.js",

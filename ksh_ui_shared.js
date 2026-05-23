@@ -557,6 +557,8 @@ ksh_shared.applyStatusMessage = function (state, name, args) {
     state.timingHumanize = ksh_shared.clamp(args[0], 0, 100);
   } else if (name === "device_active") {
     state.deviceActive = ksh_shared.toggleValue(args[0]);
+  } else if (name === "native_timing") {
+    state.nativeTiming = ksh_shared.toggleValue(args[0]);
   } else if (name === "channel_label") {
     lane = ksh_shared.clamp(args[0] - 1, 0, ksh_shared.MAX_LANES - 1);
     args.shift();

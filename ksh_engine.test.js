@@ -1011,4 +1011,64 @@ function testSerializeForPersistenceIncludesChannelSettings() {
 
 testSerializeForPersistenceIncludesChannelSettings();
 
+function testNativeTimingCatchUpOnTransportJump() {
+  var engine = makeEngine([0.99, 0.99, 0.99, 0.99]);
+  clearAll(engine);
+  engine.setChannelCount(1);
+  engine.setStepCount(4);
+  engine.setGenerationMode("static");
+  engine.setCell(0, 0, 0, 1, 100, 100, 1);
+  engine.setCell(0, 0, 1, 1, 100, 100, 1);
+  engine.setCell(0, 0, 2, 1, 100, 100, 1);
+  engine.generateWindow(0, 4, true);
+  engine.setNativeTiming(1);
+  engine._notes.length = 0;
+  engine.transportPosition(0, 1);
+  engine._notes.length = 0;
+  engine.transportPosition(0.75, 1);
+  assert.ok(engine._notes.length >= 2, "native mode should catch up skipped steps after a jump");
+}
+
+function testNativeTimingEmitsOnStepEdgeOnly() {
+  var engine = makeEngine([0.99, 0.99, 0.99]);
+  clearAll(engine);
+  engine.setChannelCount(1);
+  engine.setStepCount(4);
+  engine.setGenerationMode("static");
+  engine.setCell(0, 0, 0, 1, 100, 100, 1);
+  engine.generateWindow(0, 4, true);
+  engine.setNativeTiming(1);
+  engine._notes.length = 0;
+  engine.transportPosition(0, 1);
+  assert.ok(engine._notes.length >= 1, "native mode should emit on step edge");
+  engine._notes.length = 0;
+  engine.transportPosition(0.01, 1);
+  assert.strictEqual(engine._notes.length, 0, "native mode should not emit again on same step");
+  engine.setNativeTiming(0);
+  engine._notes.length = 0;
+  engine.transportPosition(1, 1);
+  assert.ok(engine._notes.length >= 1, "js mode should emit when advancing transport");
+}
+
+function testNativePlaybackSnapshotListsEnabledHits() {
+  var engine = makeEngine([0.99]);
+  clearAll(engine);
+  engine.setChannelCount(1);
+  engine.setStepCount(2);
+  engine.setGenerationMode("static");
+  engine.setCell(0, 0, 0, 1, 100, 100, 1);
+  engine.setCell(0, 0, 1, 1, 90, 100, 1);
+  engine.generateWindow(0, 2, true);
+  engine.flushPreview();
+
+  var snapshot = engine.nativePlaybackSnapshot;
+  assert.ok(snapshot);
+  assert.deepStrictEqual(snapshot["0"], [36, 100]);
+  assert.deepStrictEqual(snapshot["1"], [36, 90]);
+}
+
+testNativeTimingEmitsOnStepEdgeOnly();
+testNativeTimingCatchUpOnTransportJump();
+testNativePlaybackSnapshotListsEnabledHits();
+
 console.log("ksh_engine tests passed");
