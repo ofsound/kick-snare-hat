@@ -34,7 +34,7 @@ Checks patchline inlet/outlet bounds, nested editor subpatcher, `.amxd` payload 
 - `r ksh_engine_events` → UIs for `engine_state` / `preview`
 - `plugsync~` → `transport_position` → engine
 - `live.path` + `live.observer` → tempo and transport stop → `reset`
-- `autopattr` + `pattrstorage ksh_state` → engine `getvalueof` / `setvalueof`
+- `textedit` `ksh_pattern_data` ← engine `text` message (compact JSON); restore via `prepend pattern_data` → engine
 - Editor subpatcher: `jsui` `ksh_ui.js`, opened via `pcontrol` / `route open_editor`
 
 ## dependency_cache

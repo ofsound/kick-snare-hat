@@ -17,6 +17,13 @@ function line(src, outlet, dst, inlet) {
   return { patchline: { source: [src, outlet], destination: [dst, inlet] } };
 }
 
+function persistenceParameterRegistry() {
+  return {
+    "dirty-param": ["ksh_dirty_revision", "KSH Dirty", 0],
+    "pattern-store": ["ksh_pattern_data", "KSH Pattern", 0]
+  };
+}
+
 function editorDimensions(stepCount, laneCount) {
   const gridCellW = 25;
   const gridCellH = 22;
@@ -308,8 +315,8 @@ const patch = {
       box("engine", "newobj", "js ksh_engine.js", [540.0, 800.0, 120.0, 22.0], {
         varname: "ksh_engine",
         numinlets: 1,
-        numoutlets: 1,
-        outlettype: [""]
+        numoutlets: 2,
+        outlettype: ["", ""]
       }),
       box("note-unpack", "newobj", "unpack i i i i f", [540.0, 840.0, 112.0, 22.0], {
         numinlets: 1,
@@ -404,6 +411,104 @@ const patch = {
         numoutlets: 1,
         outlettype: [""]
       }),
+      box("dirty-recv", "newobj", "r ksh_dirty_tick", [840.0, 800.0, 110.0, 22.0], {
+        numinlets: 0,
+        numoutlets: 1,
+        outlettype: [""]
+      }),
+      {
+        box: {
+          id: "dirty-param",
+          maxclass: "live.numbox",
+          varname: "ksh_dirty_revision",
+          numinlets: 1,
+          numoutlets: 2,
+          outlettype: ["", "float"],
+          patching_rect: [840.0, 840.0, 80.0, 22.0],
+          hidden: 1,
+          parameter_enable: 1,
+          parameter_mappable: 0,
+          saved_attribute_attributes: {
+            valueof: {
+              parameter_linknames: 0,
+              parameter_order: 1,
+              parameter_invisible: 0,
+              parameter_mmin: 0.0,
+              parameter_mmax: 1000000.0,
+              parameter_initial: [0.0],
+              parameter_type: 0,
+              parameter_initial_enable: 1,
+              parameter_shortname: "KSH Dirty",
+              parameter_longname: "ksh_dirty_revision",
+              parameter_mappable: 0,
+              parameter_unitstyle: 0
+            }
+          }
+        }
+      },
+      {
+        box: {
+          id: "pattern-store",
+          maxclass: "textedit",
+          varname: "ksh_pattern_data",
+          numinlets: 1,
+          numoutlets: 4,
+          patching_rect: [1060.0, 840.0, 320.0, 22.0],
+          outlettype: ["", "", "", ""],
+          hidden: 1,
+          parameter_enable: 1,
+          parameter_mappable: 0,
+          fontsize: 10,
+          keymode: 0,
+          saved_attribute_attributes: {
+            valueof: {
+              parameter_linknames: 0,
+              parameter_order: 2,
+              parameter_invisible: 0,
+              parameter_type: 3,
+              parameter_initial_enable: 0,
+              parameter_shortname: "KSH Pattern",
+              parameter_longname: "ksh_pattern_data",
+              parameter_mappable: 0
+            }
+          }
+        }
+      },
+      box("pattern-pattr", "newobj", "pattr @bindto ksh_pattern_data", [1060.0, 880.0, 180.0, 22.0], {
+        numinlets: 1,
+        numoutlets: 3,
+        outlettype: ["", "", ""]
+      }),
+      box("pattern-restore-prep", "newobj", "prepend pattern_data", [1060.0, 920.0, 130.0, 22.0], {
+        numinlets: 1,
+        numoutlets: 1,
+        outlettype: [""]
+      }),
+      box("restore-engine-msg", "message", "restore_pattern_store", [1060.0, 960.0, 150.0, 22.0], {
+        numinlets: 2,
+        numoutlets: 1,
+        outlettype: [""]
+      }),
+      box("restore-wait", "newobj", "delay 100", [1060.0, 1040.0, 60.0, 22.0], {
+        numinlets: 2,
+        numoutlets: 1,
+        outlettype: [""]
+      }),
+      box("restore-defer", "newobj", "deferlow", [1060.0, 840.0, 60.0, 22.0], {
+        numinlets: 1,
+        numoutlets: 1,
+        outlettype: [""]
+      }),
+      box("restore-loadbang", "newobj", "loadmess 1", [1060.0, 1080.0, 70.0, 22.0], {
+        numinlets: 1,
+        numoutlets: 1,
+        outlettype: [""]
+      }),
+      box("restore-loadbang-wait", "newobj", "delay 300", [1060.0, 1120.0, 70.0, 22.0], {
+        numinlets: 2,
+        numoutlets: 1,
+        outlettype: [""]
+      }),
       box("midi-notein", "newobj", "notein", [180.0, 700.0, 50.0, 22.0], {
         numinlets: 1,
         numoutlets: 3,
@@ -444,6 +549,11 @@ const patch = {
         numoutlets: 1,
         outlettype: ["bang"]
       }),
+      box("thisdevice", "newobj", "live.thisdevice", [120.0, 760.0, 100.0, 22.0], {
+        numinlets: 1,
+        numoutlets: 2,
+        outlettype: ["bang", "int"]
+      }),
       box("initmsg", "message", "init", [40.0, 800.0, 38.0, 22.0], {
         numinlets: 2,
         numoutlets: 1,
@@ -483,19 +593,6 @@ const patch = {
         numoutlets: 1,
         outlettype: [""]
       }),
-      // Persistence column shifted right so the wide pattrstorage box does
-      // not collide with the tempo column above.
-      box("autopattr", "newobj", "autopattr @greedy 1", [1060.0, 760.0, 112.0, 22.0], {
-        numinlets: 1,
-        numoutlets: 4,
-        outlettype: ["", "", "", ""]
-      }),
-      box("pattrstorage", "newobj", "pattrstorage ksh_state @greedy 1 @savemode 0", [1060.0, 800.0, 260.0, 22.0], {
-        varname: "ksh_state",
-        numinlets: 1,
-        numoutlets: 4,
-        outlettype: ["", "", "", ""]
-      })
     ],
     lines: [
       line("ui", 0, "route-open", 0),
@@ -508,6 +605,15 @@ const patch = {
       line("recvcmd", 0, "ui", 0),
       line("recvevents", 0, "ui", 0),
       line("enginecmds", 0, "engine", 0),
+      line("dirty-recv", 0, "dirty-param", 0),
+      line("pattern-store", 0, "pattern-restore-prep", 0),
+      line("restore-loadbang", 0, "restore-loadbang-wait", 0),
+      line("restore-loadbang-wait", 0, "restore-engine-msg", 0),
+      line("pattern-restore-prep", 0, "engine", 0),
+      line("thisdevice", 0, "restore-defer", 0),
+      line("restore-defer", 0, "restore-wait", 0),
+      line("restore-wait", 0, "restore-engine-msg", 0),
+      line("restore-engine-msg", 0, "engine", 0),
       line("midi-notein", 0, "midi-stripnote", 0),
       line("midi-notein", 1, "midi-stripnote", 1),
       line("midi-stripnote", 0, "midi-source-select", 0),
@@ -542,9 +648,9 @@ const patch = {
       line("transportbeat", 1, "transportpos", 1),
       line("transportbeat", 0, "transportpos", 0),
       line("transportpos", 0, "engine", 0),
-      line("loadbang", 0, "initmsg", 0),
+      line("loadbang", 0, "thisdevice", 0),
       line("initmsg", 0, "ui", 0),
-      line("loadbang", 0, "livepath", 0),
+      line("thisdevice", 0, "livepath", 0),
       line("livepath", 0, "observer", 0),
       line("livepath", 0, "tempo_observer", 0),
       line("tempo_observer", 0, "tempoprep", 0),
@@ -559,7 +665,8 @@ const patch = {
       { name: "ksh_compact_ui.js", bootpath: ".", type: "TEXT", implicit: 1 },
       { name: "ksh_ui_shared.js", bootpath: ".", type: "TEXT", implicit: 1 },
       { name: "ksh_constants.js", bootpath: ".", type: "TEXT", implicit: 1 }
-    ]
+    ],
+    parameters: persistenceParameterRegistry()
   }
 };
 

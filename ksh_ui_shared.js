@@ -376,6 +376,87 @@ ksh_shared.makeSourceChannelMutes = function () {
   return mutes;
 };
 
+ksh_shared.applyPersistenceState = function (state, payload) {
+  var source;
+  var channel;
+  var step;
+  var entry;
+  var channelsIn;
+  var mutesIn;
+
+  if (!payload || payload.v !== 1) {
+    return false;
+  }
+
+  state.stepCount = ksh_shared.clamp(payload.stepCount, 1, ksh_shared.MAX_STEPS);
+  state.laneCount = ksh_shared.clamp(payload.channelCount, 1, ksh_shared.MAX_LANES);
+  state.refreshSteps = ksh_shared.clamp(payload.refreshSteps, 1, state.stepCount);
+  if (payload.generationMode === "per_channel" || payload.generationMode === "static") {
+    state.generationMode = payload.generationMode;
+  } else {
+    state.generationMode = "stack";
+  }
+  state.staticSource = ksh_shared.clamp(payload.staticSource || 0, 0, ksh_shared.SOURCE_COUNT - 1);
+  state.rate = ksh_shared.constants.normalizeRate(payload.rate);
+  state.swing = ksh_shared.clamp(payload.swing, 0, 100);
+  state.velocityHumanize = ksh_shared.clamp(payload.velocityHumanize, 0, 100);
+  state.timingHumanize = ksh_shared.clamp(payload.timingHumanize, 0, 100);
+  if (payload.deviceActive !== undefined) {
+    state.deviceActive = ksh_shared.toggleValue(payload.deviceActive);
+  }
+
+  for (source = 0; source < ksh_shared.SOURCE_COUNT; source += 1) {
+    for (channel = 0; channel < ksh_shared.MAX_LANES; channel += 1) {
+      for (step = 0; step < ksh_shared.MAX_STEPS; step += 1) {
+        state.sources[source][channel][step] = ksh_shared.defaultCell();
+      }
+    }
+  }
+
+  channelsIn = payload.channels || [];
+  for (channel = 0; channel < ksh_shared.MAX_LANES; channel += 1) {
+    if (channelsIn[channel]) {
+      state.lanes[channel].label = String(channelsIn[channel][0] || state.lanes[channel].label);
+      state.lanes[channel].note = ksh_shared.clamp(channelsIn[channel][1], 0, 127);
+      state.lanes[channel].lock = ksh_shared.clamp(channelsIn[channel][2], -1, ksh_shared.SOURCE_COUNT - 1);
+      state.lanes[channel].loopLength = ksh_shared.clamp(channelsIn[channel][3], 1, state.stepCount);
+    }
+    state.lanes[channel].loopLength = ksh_shared.clamp(state.lanes[channel].loopLength, 1, state.stepCount);
+  }
+
+  mutesIn = payload.sourceChannelMutes || [];
+  for (source = 0; source < ksh_shared.SOURCE_COUNT; source += 1) {
+    muteRow = mutesIn[source] || [];
+    for (channel = 0; channel < ksh_shared.MAX_LANES; channel += 1) {
+      state.sourceChannelMutes[source][channel] = muteRow[channel] ? 1 : 0;
+    }
+  }
+
+  for (var cellIndex = 0; cellIndex < (payload.cells || []).length; cellIndex += 1) {
+    entry = payload.cells[cellIndex];
+    if (!entry || entry.length < 7) {
+      continue;
+    }
+    source = entry[0];
+    channel = entry[1];
+    step = entry[2];
+    if (source < 0 || source >= ksh_shared.SOURCE_COUNT || channel < 0 || channel >= ksh_shared.MAX_LANES) {
+      continue;
+    }
+    if (step < 0 || step >= ksh_shared.MAX_STEPS) {
+      continue;
+    }
+    state.sources[source][channel][step] = ksh_shared.cloneCell({
+      enabled: entry[3],
+      velocity: entry[4],
+      probability: entry[5],
+      cycle: entry[6]
+    });
+  }
+
+  return true;
+};
+
 ksh_shared.applyEngineState = function (state, engineState) {
   var source;
   var lane;
@@ -384,6 +465,10 @@ ksh_shared.applyEngineState = function (state, engineState) {
   var muteRow;
 
   if (!engineState) {
+    return;
+  }
+
+  if (engineState.v === 1 && ksh_shared.applyPersistenceState(state, engineState)) {
     return;
   }
 

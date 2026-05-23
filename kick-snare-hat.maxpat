@@ -861,7 +861,7 @@
           "id": "engine",
           "maxclass": "newobj",
           "numinlets": 1,
-          "numoutlets": 1,
+          "numoutlets": 2,
           "patching_rect": [
             540,
             800,
@@ -870,6 +870,7 @@
           ],
           "varname": "ksh_engine",
           "outlettype": [
+            "",
             ""
           ],
           "text": "js ksh_engine.js"
@@ -1234,6 +1235,230 @@
       },
       {
         "box": {
+          "id": "dirty-recv",
+          "maxclass": "newobj",
+          "numinlets": 0,
+          "numoutlets": 1,
+          "patching_rect": [
+            840,
+            800,
+            110,
+            22
+          ],
+          "outlettype": [
+            ""
+          ],
+          "text": "r ksh_dirty_tick"
+        }
+      },
+      {
+        "box": {
+          "id": "dirty-param",
+          "maxclass": "live.numbox",
+          "varname": "ksh_dirty_revision",
+          "numinlets": 1,
+          "numoutlets": 2,
+          "outlettype": [
+            "",
+            "float"
+          ],
+          "patching_rect": [
+            840,
+            840,
+            80,
+            22
+          ],
+          "hidden": 1,
+          "parameter_enable": 1,
+          "parameter_mappable": 0,
+          "saved_attribute_attributes": {
+            "valueof": {
+              "parameter_linknames": 0,
+              "parameter_order": 1,
+              "parameter_invisible": 0,
+              "parameter_mmin": 0,
+              "parameter_mmax": 1000000,
+              "parameter_initial": [
+                0
+              ],
+              "parameter_type": 0,
+              "parameter_initial_enable": 1,
+              "parameter_shortname": "KSH Dirty",
+              "parameter_longname": "ksh_dirty_revision",
+              "parameter_mappable": 0,
+              "parameter_unitstyle": 0
+            }
+          }
+        }
+      },
+      {
+        "box": {
+          "id": "pattern-store",
+          "maxclass": "textedit",
+          "varname": "ksh_pattern_data",
+          "numinlets": 1,
+          "numoutlets": 4,
+          "patching_rect": [
+            1060,
+            840,
+            320,
+            22
+          ],
+          "outlettype": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "hidden": 1,
+          "parameter_enable": 1,
+          "parameter_mappable": 0,
+          "fontsize": 10,
+          "keymode": 0,
+          "saved_attribute_attributes": {
+            "valueof": {
+              "parameter_linknames": 0,
+              "parameter_order": 2,
+              "parameter_invisible": 0,
+              "parameter_type": 3,
+              "parameter_initial_enable": 0,
+              "parameter_shortname": "KSH Pattern",
+              "parameter_longname": "ksh_pattern_data",
+              "parameter_mappable": 0
+            }
+          }
+        }
+      },
+      {
+        "box": {
+          "id": "pattern-pattr",
+          "maxclass": "newobj",
+          "numinlets": 1,
+          "numoutlets": 3,
+          "patching_rect": [
+            1060,
+            880,
+            180,
+            22
+          ],
+          "outlettype": [
+            "",
+            "",
+            ""
+          ],
+          "text": "pattr @bindto ksh_pattern_data"
+        }
+      },
+      {
+        "box": {
+          "id": "pattern-restore-prep",
+          "maxclass": "newobj",
+          "numinlets": 1,
+          "numoutlets": 1,
+          "patching_rect": [
+            1060,
+            920,
+            130,
+            22
+          ],
+          "outlettype": [
+            ""
+          ],
+          "text": "prepend pattern_data"
+        }
+      },
+      {
+        "box": {
+          "id": "restore-engine-msg",
+          "maxclass": "message",
+          "numinlets": 2,
+          "numoutlets": 1,
+          "patching_rect": [
+            1060,
+            960,
+            150,
+            22
+          ],
+          "outlettype": [
+            ""
+          ],
+          "text": "restore_pattern_store"
+        }
+      },
+      {
+        "box": {
+          "id": "restore-wait",
+          "maxclass": "newobj",
+          "numinlets": 2,
+          "numoutlets": 1,
+          "patching_rect": [
+            1060,
+            1040,
+            60,
+            22
+          ],
+          "outlettype": [
+            ""
+          ],
+          "text": "delay 100"
+        }
+      },
+      {
+        "box": {
+          "id": "restore-defer",
+          "maxclass": "newobj",
+          "numinlets": 1,
+          "numoutlets": 1,
+          "patching_rect": [
+            1060,
+            840,
+            60,
+            22
+          ],
+          "outlettype": [
+            ""
+          ],
+          "text": "deferlow"
+        }
+      },
+      {
+        "box": {
+          "id": "restore-loadbang",
+          "maxclass": "newobj",
+          "numinlets": 1,
+          "numoutlets": 1,
+          "patching_rect": [
+            1060,
+            1080,
+            70,
+            22
+          ],
+          "outlettype": [
+            ""
+          ],
+          "text": "loadmess 1"
+        }
+      },
+      {
+        "box": {
+          "id": "restore-loadbang-wait",
+          "maxclass": "newobj",
+          "numinlets": 2,
+          "numoutlets": 1,
+          "patching_rect": [
+            1060,
+            1120,
+            70,
+            22
+          ],
+          "outlettype": [
+            ""
+          ],
+          "text": "delay 300"
+        }
+      },
+      {
+        "box": {
           "id": "midi-notein",
           "maxclass": "newobj",
           "numinlets": 1,
@@ -1385,6 +1610,25 @@
       },
       {
         "box": {
+          "id": "thisdevice",
+          "maxclass": "newobj",
+          "numinlets": 1,
+          "numoutlets": 2,
+          "patching_rect": [
+            120,
+            760,
+            100,
+            22
+          ],
+          "outlettype": [
+            "bang",
+            "int"
+          ],
+          "text": "live.thisdevice"
+        }
+      },
+      {
+        "box": {
           "id": "initmsg",
           "maxclass": "message",
           "numinlets": 2,
@@ -1510,49 +1754,6 @@
           ],
           "text": "prepend tempo"
         }
-      },
-      {
-        "box": {
-          "id": "autopattr",
-          "maxclass": "newobj",
-          "numinlets": 1,
-          "numoutlets": 4,
-          "patching_rect": [
-            1060,
-            760,
-            112,
-            22
-          ],
-          "outlettype": [
-            "",
-            "",
-            "",
-            ""
-          ],
-          "text": "autopattr @greedy 1"
-        }
-      },
-      {
-        "box": {
-          "id": "pattrstorage",
-          "maxclass": "newobj",
-          "numinlets": 1,
-          "numoutlets": 4,
-          "patching_rect": [
-            1060,
-            800,
-            260,
-            22
-          ],
-          "varname": "ksh_state",
-          "outlettype": [
-            "",
-            "",
-            "",
-            ""
-          ],
-          "text": "pattrstorage ksh_state @greedy 1 @savemode 0"
-        }
       }
     ],
     "lines": [
@@ -1668,6 +1869,114 @@
         "patchline": {
           "source": [
             "enginecmds",
+            0
+          ],
+          "destination": [
+            "engine",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "dirty-recv",
+            0
+          ],
+          "destination": [
+            "dirty-param",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "pattern-store",
+            0
+          ],
+          "destination": [
+            "pattern-restore-prep",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "restore-loadbang",
+            0
+          ],
+          "destination": [
+            "restore-loadbang-wait",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "restore-loadbang-wait",
+            0
+          ],
+          "destination": [
+            "restore-engine-msg",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "pattern-restore-prep",
+            0
+          ],
+          "destination": [
+            "engine",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "thisdevice",
+            0
+          ],
+          "destination": [
+            "restore-defer",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "restore-defer",
+            0
+          ],
+          "destination": [
+            "restore-wait",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "restore-wait",
+            0
+          ],
+          "destination": [
+            "restore-engine-msg",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "restore-engine-msg",
             0
           ],
           "destination": [
@@ -2091,7 +2400,7 @@
             0
           ],
           "destination": [
-            "initmsg",
+            "thisdevice",
             0
           ]
         }
@@ -2111,7 +2420,7 @@
       {
         "patchline": {
           "source": [
-            "loadbang",
+            "thisdevice",
             0
           ],
           "destination": [
@@ -2236,6 +2545,18 @@
         "type": "TEXT",
         "implicit": 1
       }
-    ]
+    ],
+    "parameters": {
+      "dirty-param": [
+        "ksh_dirty_revision",
+        "KSH Dirty",
+        0
+      ],
+      "pattern-store": [
+        "ksh_pattern_data",
+        "KSH Pattern",
+        0
+      ]
+    }
   }
 }

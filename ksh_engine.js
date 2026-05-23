@@ -1,6 +1,6 @@
 autowatch = 0;
 inlets = 1;
-outlets = 1;
+outlets = 2;
 
 // Load shared limits. In Node, require resolves ksh_constants.js relative to
 // this file. In Max js, include() reads the sibling file and exposes
@@ -1185,6 +1185,142 @@ var KSH_EngineClass = null;
     this.resetPlayback(false);
   };
 
+  KickSnareHatEngine.prototype.serializeForPersistence = function () {
+    var source;
+    var channel;
+    var step;
+    var cell;
+    var cells = [];
+    var channelsOut = [];
+    var mutes = [];
+
+    for (source = 0; source < SOURCE_COUNT; source += 1) {
+      for (channel = 0; channel < this.channelCount; channel += 1) {
+        for (step = 0; step < this.stepCount; step += 1) {
+          cell = this.sources[source][channel][step];
+          if (cell.enabled !== 0 || cell.velocity !== 100 || cell.probability !== 100 || cell.cycle !== 1) {
+            cells.push([
+              source,
+              channel,
+              step,
+              cell.enabled ? 1 : 0,
+              cell.velocity,
+              cell.probability,
+              cell.cycle
+            ]);
+          }
+        }
+      }
+    }
+
+    for (channel = 0; channel < this.channelCount; channel += 1) {
+      channelsOut.push([
+        this.channels[channel].label,
+        this.channels[channel].note,
+        this.channels[channel].lock,
+        this.channels[channel].loopLength
+      ]);
+    }
+
+    for (source = 0; source < SOURCE_COUNT; source += 1) {
+      mutes.push(this.sourceChannelMutes[source].slice(0, this.channelCount));
+    }
+
+    return {
+      v: 1,
+      stepCount: this.stepCount,
+      channelCount: this.channelCount,
+      refreshSteps: this.refreshSteps,
+      generationMode: this.generationMode,
+      staticSource: this.staticSource,
+      rate: this.rate,
+      tempo: this.tempo,
+      swing: this.swing,
+      velocityHumanize: this.velocityHumanize,
+      timingHumanize: this.timingHumanize,
+      deviceActive: this.deviceActive ? 1 : 0,
+      phaseOffsetBeats: this.phaseOffsetBeats,
+      channels: channelsOut,
+      sourceChannelMutes: mutes,
+      cells: cells
+    };
+  };
+
+  KickSnareHatEngine.prototype.deserializeForPersistence = function (state) {
+    var source;
+    var channel;
+    var step;
+    var entry;
+    var channelsIn;
+    var mutesIn;
+
+    if (!state || state.v !== 1) {
+      return false;
+    }
+
+    this.stepCount = clamp(state.stepCount, 1, MAX_STEPS);
+    this.channelCount = clamp(state.channelCount, 1, MAX_LANES);
+    this.refreshSteps = clamp(state.refreshSteps, 1, this.stepCount);
+    this.generationMode = normalizeGenerationMode(state.generationMode);
+    this.staticSource = clamp(state.staticSource, 0, SOURCE_COUNT - 1);
+    this.rate = normalizeRate(state.rate);
+    this.tempo = Math.max(20, Math.min(300, parseFloat(state.tempo) || this.tempo));
+    this.swing = clamp(state.swing, 0, 100);
+    this.velocityHumanize = clamp(state.velocityHumanize, 0, 100);
+    this.timingHumanize = clamp(state.timingHumanize, 0, 100);
+    this.deviceActive = normalizeToggle(state.deviceActive);
+    this.phaseOffsetBeats = parseFloat(state.phaseOffsetBeats) || 0;
+    this.updateStepIntervalMs();
+
+    for (source = 0; source < SOURCE_COUNT; source += 1) {
+      this.sources[source] = makePattern();
+    }
+
+    channelsIn = state.channels || [];
+    for (channel = 0; channel < this.channelCount; channel += 1) {
+      if (channelsIn[channel]) {
+        this.channels[channel].label = String(channelsIn[channel][0] || this.channels[channel].label);
+        this.channels[channel].note = clamp(channelsIn[channel][1], 0, 127);
+        this.channels[channel].lock = clamp(channelsIn[channel][2], -1, SOURCE_COUNT - 1);
+        this.channels[channel].loopLength = clamp(channelsIn[channel][3], 1, this.stepCount);
+      }
+      this.channels[channel].loopLength = clamp(this.channels[channel].loopLength, 1, this.stepCount);
+    }
+
+    mutesIn = state.sourceChannelMutes || [];
+    for (source = 0; source < SOURCE_COUNT; source += 1) {
+      for (channel = 0; channel < this.channelCount; channel += 1) {
+        this.sourceChannelMutes[source][channel] =
+          mutesIn[source] && mutesIn[source][channel] ? 1 : 0;
+      }
+    }
+
+    for (var cellIndex = 0; cellIndex < state.cells.length; cellIndex += 1) {
+      entry = state.cells[cellIndex];
+      if (!entry || entry.length < 7) {
+        continue;
+      }
+      source = entry[0];
+      channel = entry[1];
+      step = entry[2];
+      if (source < 0 || source >= SOURCE_COUNT || channel < 0 || channel >= MAX_LANES) {
+        continue;
+      }
+      if (step < 0 || step >= MAX_STEPS) {
+        continue;
+      }
+      this.sources[source][channel][step] = cloneCell({
+        enabled: entry[3],
+        velocity: entry[4],
+        probability: entry[5],
+        cycle: entry[6]
+      });
+    }
+
+    this.resetPlayback(false);
+    return true;
+  };
+
   KickSnareHatEngine.normalizeIncomingState = normalizeIncomingState;
   KSH_EngineClass = KickSnareHatEngine;
   root.KickSnareHatEngine = KickSnareHatEngine;
@@ -1196,6 +1332,19 @@ var KSH_EngineClass = null;
 
 var kshEngine = null;
 var kshPendingPreviewTask = null;
+var kshDirtyRevision = 0;
+var KSH_PERSISTENCE_CHUNK_PREFIX = "ksh_json_chunks_v1";
+var KSH_PERSISTENCE_CHUNK_SIZE = 900;
+var kshEmbeddedRestoreChunks = [];
+var kshRestoreTask = null;
+var kshRestoreAttempt = 0;
+var KSH_RESTORE_MAX_ATTEMPTS = 24;
+var KSH_RESTORE_DELAYS_MS = [
+  0, 25, 50, 100, 150, 250, 400, 600, 900, 1200, 1500, 2000, 2500, 3000,
+  4000, 5000, 6500, 8000, 10000, 12000, 14000, 16000, 18000, 20000
+];
+var kshRestoreFinished = false;
+var kshRestoreApplied = false;
 
 function postPersistenceError(error) {
   var message;
@@ -1231,11 +1380,475 @@ function safeMessnamed() {
   }
 }
 
+function safeNotifyClients() {
+  if (typeof notifyclients !== "function") {
+    return;
+  }
+  try {
+    notifyclients();
+  } catch (error) {
+    KSH_CONSTANTS.debugPost("notifyclients failed", error);
+  }
+}
+
+function pushPatternToStore() {
+  var json;
+  var store;
+
+  if (typeof JSON === "undefined") {
+    return;
+  }
+
+  json = JSON.stringify(ensureEngine().serializeForPersistence());
+  if (!json) {
+    return;
+  }
+
+  // textedit only understands "set", not "text". URI-encode so the payload is one
+  // atom (JSON spaces would split on a patch cord and break restore).
+  if (typeof this !== "undefined" && this.patcher) {
+    try {
+      store = this.patcher.getnamed("ksh_pattern_data");
+      if (store && typeof store.message === "function") {
+        if (typeof encodeURIComponent === "function") {
+          json = encodeURIComponent(json);
+        }
+        store.message("set", json);
+        return;
+      }
+    } catch (pushError) {
+      KSH_CONSTANTS.debugPost("pattern-store set failed", pushError);
+    }
+  }
+
+  safeOutlet.apply(this, [1].concat(encodeStateJson(json)));
+}
+
+function markPersistentChange() {
+  kshDirtyRevision = (kshDirtyRevision + 1) % 1000000;
+  safeMessnamed("ksh_dirty_tick", kshDirtyRevision);
+  pushPatternToStore();
+  safeNotifyClients();
+}
+
+function persistenceArgs(args) {
+  var list;
+  var i;
+  var value;
+  var source;
+
+  source = args;
+  if (source === undefined || source === null) {
+    source = arguments;
+  }
+
+  if (typeof arrayfromargs === "function") {
+    try {
+      return arrayfromargs(source);
+    } catch (arrayError) {
+      // Live can deliver Dict / String objects that arrayfromargs rejects.
+    }
+  }
+
+  if (typeof source.length !== "number") {
+    return [String(source)];
+  }
+
+  list = [];
+  for (i = 0; i < source.length; i += 1) {
+    value = source[i];
+    if (value === undefined || value === null) {
+      continue;
+    }
+    if (typeof value === "string" || typeof value === "number") {
+      list.push(String(value));
+      continue;
+    }
+    if (typeof value === "object" && typeof value.length === "number") {
+      list = list.concat(Array.prototype.slice.call(value));
+      continue;
+    }
+    list.push(String(value));
+  }
+  return list;
+}
+
+function encodeStateJson(json) {
+  var encoded;
+  var chunks;
+  var i;
+
+  encoded = typeof encodeURIComponent === "function" ? encodeURIComponent(json) : json;
+  chunks = [KSH_PERSISTENCE_CHUNK_PREFIX];
+
+  for (i = 0; i < encoded.length; i += KSH_PERSISTENCE_CHUNK_SIZE) {
+    chunks.push(encoded.slice(i, i + KSH_PERSISTENCE_CHUNK_SIZE));
+  }
+
+  return chunks;
+}
+
+function decodeStateJson(args) {
+  var value;
+  var encoded;
+
+  if (!args || !args.length) {
+    return "";
+  }
+
+  if (args.length === 1) {
+    value = args[0];
+    if (value && typeof value === "object" && typeof value.length === "number" && typeof value !== "string") {
+      args = Array.prototype.slice.call(value);
+    } else {
+      return typeof value === "string" ? value : String(value);
+    }
+  }
+
+  if (args[0] === "text") {
+    return args.slice(1).join(" ");
+  }
+
+  if (args[0] === KSH_PERSISTENCE_CHUNK_PREFIX) {
+    encoded = args.slice(1).join("");
+    return typeof decodeURIComponent === "function" ? decodeURIComponent(encoded) : encoded;
+  }
+
+  return args.join("");
+}
+
+function liveApiParameterValue(longName) {
+  var device;
+  var count;
+  var i;
+  var param;
+  var name;
+  var value;
+
+  if (typeof LiveAPI !== "function") {
+    return "";
+  }
+
+  try {
+    device = new LiveAPI("this_device");
+    count = device.getcount("parameters");
+    for (i = 0; i < count; i += 1) {
+      param = new LiveAPI(device.getpath() + " parameters " + i);
+      name = param.get("name");
+      if (Array.isArray(name)) {
+        name = name[0];
+      }
+      if (String(name || "").replace(/'/g, "") === longName) {
+        value = param.get("value");
+        return normalizePersistencePayload([value]);
+      }
+    }
+  } catch (liveApiError) {
+    KSH_CONSTANTS.debugPost("LiveAPI parameter read failed", liveApiError);
+  }
+
+  return "";
+}
+
+function decodePatternStoreText(value) {
+  var decoded;
+
+  if (!value) {
+    return "";
+  }
+
+  value = String(value).replace(/^\s+|\s+$/g, "");
+  if (!value) {
+    return "";
+  }
+
+  if (value.charAt(0) === "{") {
+    return value;
+  }
+
+  if (typeof decodeURIComponent === "function") {
+    try {
+      decoded = decodeURIComponent(value);
+      if (decoded && decoded.charAt(0) === "{") {
+        return decoded;
+      }
+    } catch (decodeError) {
+      // not URI-encoded persistence text
+    }
+  }
+
+  return value;
+}
+
+function persistencePayloadLooksLikeJson(value) {
+  if (!value) {
+    return false;
+  }
+
+  value = decodePatternStoreText(value);
+  if (!value || value === "get" || value === "bang") {
+    return false;
+  }
+
+  if (value.length < 12) {
+    return false;
+  }
+
+  if (value.charAt(0) !== "{") {
+    return false;
+  }
+
+  if (value.indexOf("\"v\":1") >= 0) {
+    return true;
+  }
+
+  return value.indexOf("\"stepCount\"") >= 0 || value.indexOf("\"sources\"") >= 0;
+}
+
+function persistencePayloadIsValid(args) {
+  var value;
+
+  if (!args || !args.length) {
+    return false;
+  }
+
+  if (args[0] === KSH_PERSISTENCE_CHUNK_PREFIX) {
+    return true;
+  }
+
+  value = normalizePersistencePayload(args);
+  return persistencePayloadLooksLikeJson(value);
+}
+
+function readPatternStoreValue() {
+  var box;
+  var pattrBox;
+  var value;
+  var text;
+  var attrNames;
+  var i;
+  var liveValue;
+
+  liveValue = liveApiParameterValue("ksh_pattern_data");
+  if (liveValue) {
+    return liveValue;
+  }
+
+  if (typeof this !== "undefined" && this.patcher) {
+    try {
+      pattrBox = this.patcher.getnamed("pattern-pattr");
+      if (pattrBox && typeof pattrBox.getvalueof === "function") {
+        value = pattrBox.getvalueof();
+        text = normalizePersistencePayload([value]);
+        if (text) {
+          return text;
+        }
+      }
+    } catch (pattrError) {
+      KSH_CONSTANTS.debugPost("pattr read failed", pattrError);
+    }
+
+    try {
+      box = this.patcher.getnamed("ksh_pattern_data");
+      if (box && typeof box.getvalueof === "function") {
+        value = box.getvalueof();
+        text = normalizePersistencePayload([value]);
+        if (text) {
+          return text;
+        }
+      }
+    } catch (storeValueError) {
+      KSH_CONSTANTS.debugPost("pattern-store getvalueof failed", storeValueError);
+    }
+
+    if (box) {
+      attrNames = ["text", "value"];
+      for (i = 0; i < attrNames.length; i += 1) {
+        try {
+          value = box.getattr(attrNames[i]);
+          text = normalizePersistencePayload([value]);
+          if (text) {
+            return text;
+          }
+        } catch (attrError) {
+          // try next attribute
+        }
+      }
+    }
+  }
+
+  return "";
+}
+
+function cancelRestoreTask() {
+  if (kshRestoreTask && typeof kshRestoreTask.cancel === "function") {
+    kshRestoreTask.cancel();
+  }
+  kshRestoreTask = null;
+}
+
+function finishRestoreUiInit() {
+  if (kshRestoreFinished) {
+    return;
+  }
+  kshRestoreFinished = true;
+  emitFullState();
+  snapshot();
+  safeMessnamed("ksh_ui_commands", "init");
+}
+
+function tryRestoreFromPatternStore() {
+  var value;
+
+  kshRestoreApplied = false;
+  value = readPatternStoreValue.call(this);
+  if (!value) {
+    return false;
+  }
+
+  return applyPatternPayload([value]);
+}
+
+function scheduleRestoreAttempt() {
+  var delayMs;
+
+  if (kshRestoreFinished) {
+    return;
+  }
+
+  if (kshRestoreAttempt >= KSH_RESTORE_MAX_ATTEMPTS) {
+    finishRestoreUiInit();
+    return;
+  }
+
+  delayMs = KSH_RESTORE_DELAYS_MS[kshRestoreAttempt];
+  kshRestoreAttempt += 1;
+
+  if (typeof Task !== "function") {
+    if (tryRestoreFromPatternStore()) {
+      finishRestoreUiInit();
+    }
+    return;
+  }
+
+  kshRestoreTask = new Task(function () {
+    kshRestoreTask = null;
+    if (kshRestoreFinished) {
+      return;
+    }
+    if (tryRestoreFromPatternStore()) {
+      finishRestoreUiInit();
+      return;
+    }
+    scheduleRestoreAttempt();
+  }, this);
+  kshRestoreTask.schedule(delayMs);
+}
+
+function restore_pattern_store() {
+  cancelRestoreTask();
+  kshRestoreAttempt = 0;
+  kshRestoreFinished = false;
+  kshRestoreApplied = false;
+  scheduleRestoreAttempt();
+}
+
+function normalizePersistencePayload(args) {
+  var value;
+  var parsed;
+  var inner;
+
+  value = decodeStateJson(args);
+  if (!value) {
+    return "";
+  }
+
+  if (value && typeof value === "object" && typeof value.length === "number" && value.length) {
+    value = value[0];
+  }
+
+  value = String(value).replace(/^\s+|\s+$/g, "");
+  if (!value) {
+    return "";
+  }
+
+  value = decodePatternStoreText(value);
+  if (!value) {
+    return "";
+  }
+
+  if (value.charAt(0) !== "{") {
+    return value;
+  }
+
+  try {
+    parsed = JSON.parse(value);
+    if (parsed && parsed.ksh_pattern_data !== undefined) {
+      inner = parsed.ksh_pattern_data;
+      if (Array.isArray(inner)) {
+        inner = inner[0];
+      }
+      if (typeof inner === "string" && inner && inner !== "get") {
+        return decodePatternStoreText(inner);
+      }
+    }
+    if (parsed && parsed.v === 1) {
+      return JSON.stringify(parsed);
+    }
+  } catch (unwrapError) {
+    // Fall through with the raw textedit buffer.
+  }
+
+  return value;
+}
+
+function applySerializedState(value, emitPreview) {
+  var engine;
+  var parsed;
+  var previous;
+
+  if (typeof JSON === "undefined" || !value) {
+    return false;
+  }
+
+  engine = ensureEngine();
+  previous = JSON.parse(JSON.stringify(engine.serialize()));
+
+  try {
+    parsed = JSON.parse(value);
+    if (parsed && parsed.v === 1 && typeof engine.deserializeForPersistence === "function") {
+      engine.deserializeForPersistence(parsed);
+    } else {
+      engine.deserialize(parsed);
+    }
+  } catch (error) {
+    try {
+      engine.deserialize(previous);
+    } catch (restoreError) {
+      KSH_CONSTANTS.debugPost("state restore failed", restoreError);
+    }
+    if (persistencePayloadLooksLikeJson(value)) {
+      postPersistenceError(error);
+    }
+    return false;
+  }
+
+  if (parsed && parsed.v === 1) {
+    kshRestoreApplied = true;
+  }
+
+  emitFullState();
+  snapshot();
+  return true;
+}
+
 function emitFullState() {
   if (typeof JSON === "undefined") {
     return;
   }
-  safeMessnamed("ksh_engine_events", "engine_state", JSON.stringify(ensureEngine().serialize()));
+  // Compact v1 JSON fits in one messnamed atom; full serialize() is too large for
+  // the editor jsui to receive reliably over ksh_engine_events.
+  safeMessnamed("ksh_engine_events", "engine_state", JSON.stringify(ensureEngine().serializeForPersistence()));
 }
 
 if (typeof module === "undefined" || !module.exports) {
@@ -1331,60 +1944,74 @@ function reset() {
 
 function steps(value) {
   ensureEngine().setStepCount(value);
+  markPersistentChange();
 }
 
 function channels(value) {
   ensureEngine().setChannelCount(value);
+  markPersistentChange();
 }
 
 function refresh_steps(value) {
   ensureEngine().setRefreshSteps(value);
+  markPersistentChange();
 }
 
 function mode(value) {
   ensureEngine().setGenerationMode(value);
+  markPersistentChange();
 }
 
 function static_source(source) {
   ensureEngine().setStaticSource(zeroBased(source));
+  markPersistentChange();
 }
 
 function rate(value) {
   ensureEngine().setRate(value);
+  markPersistentChange();
 }
 
 function tempo(value) {
   ensureEngine().setTempo(value);
+  markPersistentChange();
 }
 
 function swing(value) {
   ensureEngine().setSwing(value);
+  markPersistentChange();
 }
 
 function velocity_humanize(value) {
   ensureEngine().setVelocityHumanize(value);
+  markPersistentChange();
 }
 
 function timing_humanize(value) {
   ensureEngine().setTimingHumanize(value);
+  markPersistentChange();
 }
 
 function device_active(value) {
   ensureEngine().setDeviceActive(value);
+  markPersistentChange();
 }
 
 function phase_offset_beats(value) {
   ensureEngine().setPhaseOffsetBeats(value);
+  markPersistentChange();
 }
 
 function channel_label() {
   var args = arrayfromargs(arguments);
   var channel = zeroBased(args.shift());
   ensureEngine().setChannelLabel(channel, args.join(" "));
+  markPersistentChange();
 }
 
 function channel_note(channel, note) {
   ensureEngine().setChannelNote(zeroBased(channel), note);
+  markPersistentChange();
 }
 
 function channel_audition(channel) {
@@ -1394,18 +2021,22 @@ function channel_audition(channel) {
 function channel_lock(channel, lock) {
   var normalized = String(lock).toLowerCase() === "random" ? -1 : zeroBased(lock);
   ensureEngine().setChannelLock(zeroBased(channel), normalized);
+  markPersistentChange();
 }
 
 function channel_loop_length(channel, loopLength) {
   ensureEngine().setChannelLoopLength(zeroBased(channel), loopLength);
+  markPersistentChange();
 }
 
 function source_channel_mute(source, channel, muted) {
   ensureEngine().setSourceChannelMute(zeroBased(source), zeroBased(channel), parseInt(muted, 10) !== 0);
+  markPersistentChange();
 }
 
 function source_channel_reset(source, channel) {
   ensureEngine().resetSourceChannel(zeroBased(source), zeroBased(channel));
+  markPersistentChange();
   emitFullState();
 }
 
@@ -1419,6 +2050,7 @@ function cell(source, channel, stepIndex, enabled, velocity, probability, cycle)
     probability,
     cycle
   );
+  markPersistentChange();
 }
 
 function cell_enabled(source, channel, stepIndex, enabled) {
@@ -1428,18 +2060,22 @@ function cell_enabled(source, channel, stepIndex, enabled) {
     zeroBased(stepIndex),
     parseInt(enabled, 10) !== 0
   );
+  markPersistentChange();
 }
 
 function cell_velocity(source, channel, stepIndex, velocity) {
   ensureEngine().setCellVelocity(zeroBased(source), zeroBased(channel), zeroBased(stepIndex), velocity);
+  markPersistentChange();
 }
 
 function cell_probability(source, channel, stepIndex, probability) {
   ensureEngine().setCellProbability(zeroBased(source), zeroBased(channel), zeroBased(stepIndex), probability);
+  markPersistentChange();
 }
 
 function cell_cycle(source, channel, stepIndex, cycleValue) {
   ensureEngine().setCellCycle(zeroBased(source), zeroBased(channel), zeroBased(stepIndex), cycleValue);
+  markPersistentChange();
 }
 
 function snapshot() {
@@ -1462,45 +2098,85 @@ function getvalueof() {
   if (typeof JSON === "undefined") {
     return "";
   }
-  return JSON.stringify(ensureEngine().serialize());
+  return encodeStateJson(JSON.stringify(ensureEngine().serialize()));
 }
 
-function setvalueof(value) {
-  var engine;
-  var parsed;
-  var previous;
+function applyPatternPayload(args) {
+  var value;
 
-  if (typeof JSON === "undefined" || !value) {
+  if (typeof JSON === "undefined" || !args || !args.length) {
+    return false;
+  }
+
+  if (!persistencePayloadIsValid(args)) {
+    return false;
+  }
+
+  value = normalizePersistencePayload(args);
+  if (!persistencePayloadLooksLikeJson(value)) {
+    return false;
+  }
+
+  return applySerializedState(value, true);
+}
+
+function pattern_data() {
+  applyPatternPayload(persistenceArgs(arguments));
+}
+
+function setvalueof() {
+  if (typeof JSON === "undefined" || !arguments.length) {
     return;
   }
 
-  if (typeof value !== "string") {
-    value = String(value);
+  applyPatternPayload(persistenceArgs(arguments));
+}
+
+function embedded_state_begin() {
+  kshEmbeddedRestoreChunks = [];
+}
+
+function embedded_state_chunk(index, chunk) {
+  index = parseInt(index, 10);
+  if (isNaN(index) || index < 0) {
+    return;
   }
+  kshEmbeddedRestoreChunks[index] = String(chunk || "");
+}
 
-  engine = ensureEngine();
-  previous = JSON.parse(JSON.stringify(engine.serialize()));
+function embedded_state_end() {
+  var value;
 
-  try {
-    parsed = JSON.parse(value);
-    engine.deserialize(parsed);
-  } catch (error) {
-    try {
-      engine.deserialize(previous);
-    } catch (restoreError) {
-      KSH_CONSTANTS.debugPost("setvalueof restore failed", restoreError);
-    }
-    postPersistenceError(error);
+  if (!kshEmbeddedRestoreChunks.length) {
     return;
   }
 
-  emitFullState();
+  value = decodeStateJson([KSH_PERSISTENCE_CHUNK_PREFIX].concat(kshEmbeddedRestoreChunks));
+  kshEmbeddedRestoreChunks = [];
+  applySerializedState(value, true);
+}
+
+function save() {
+  var chunks;
+  var i;
+
+  if (typeof JSON === "undefined" || typeof embedmessage !== "function") {
+    return;
+  }
+
+  chunks = encodeStateJson(JSON.stringify(ensureEngine().serialize()));
+  embedmessage("embedded_state_begin", chunks.length - 1);
+  for (i = 1; i < chunks.length; i += 1) {
+    embedmessage("embedded_state_chunk", i - 1, chunks[i]);
+  }
+  embedmessage("embedded_state_end");
 }
 
 function state(json) {
   if (typeof JSON !== "undefined" && json) {
     try {
       ensureEngine().deserialize(JSON.parse(json));
+      markPersistentChange();
       emitFullState();
     } catch (error) {
       KSH_CONSTANTS.debugPost("state JSON failed", error);

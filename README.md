@@ -28,7 +28,7 @@ of using unconstrained randomness.
 - Floating editor subpatcher opened from the compact UI, with source dropdown, all-lane source grid editor, generated grid preview, lane labels, lane note/lock controls, and per-cell velocity/probability/cycle controls.
 - Source Pattern layer modes for velocity, cycle, and probability via buttons, number keys `1`/`2`/`3`, Shift hover for cycle, and Option hover for probability.
 - Source Pattern row labels can mute a source/channel row or reset it to blank defaults.
-- `autopattr` plus `pattrstorage` persist engine pattern state only; UIs mirror via `engine_state` / `preview` events.
+- Hidden `textedit` Live parameter `ksh_pattern_data` stores compact pattern JSON with the set; UIs mirror via `engine_state` / `preview` events.
 - Per-source cell values:
   - enabled
   - velocity

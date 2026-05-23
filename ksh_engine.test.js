@@ -942,4 +942,73 @@ testGenerateWindowScansActiveSourcesOnce();
 testChannelAuditionEmitsConfiguredNote();
 testDeserializeDoesNotEmitIntermediateStatuses();
 
+function testSerializeForPersistenceRoundtripsSparsePattern() {
+  var engine = makeEngine([0.5]);
+  var json;
+  var restored;
+  var payload;
+
+  engine.setStepCount(8);
+  engine.setChannelCount(2);
+  engine.swing = 25;
+  engine.setCell(0, 0, 0, 1, 64, 30, 1);
+  engine.channels[0].label = "Sub";
+  engine.channels[1].note = 50;
+
+  payload = engine.serializeForPersistence();
+  assert.strictEqual(payload.v, 1);
+  assert.strictEqual(payload.stepCount, 8);
+  assert.strictEqual(payload.channelCount, 2);
+  assert.strictEqual(payload.swing, 25);
+  assert.ok(payload.cells.length >= 1);
+
+  json = JSON.stringify(payload);
+  assert.ok(json.length < 5000, "compact persistence JSON should stay reasonably small");
+
+  restored = makeEngine([0.5]);
+  restored.deserializeForPersistence(JSON.parse(json));
+
+  assert.strictEqual(restored.stepCount, 8);
+  assert.strictEqual(restored.channelCount, 2);
+  assert.strictEqual(restored.swing, 25);
+  assert.strictEqual(restored.sources[0][0][0].enabled, 1);
+  assert.strictEqual(restored.sources[0][0][0].velocity, 64);
+  assert.strictEqual(restored.channels[0].label, "Sub");
+  assert.strictEqual(restored.channels[1].note, 50);
+}
+
+testSerializeForPersistenceRoundtripsSparsePattern();
+
+function testSerializeForPersistenceIncludesChannelSettings() {
+  var engine = makeEngine([0.5]);
+
+  engine.setStepCount(16);
+  engine.setChannelCount(8);
+  engine.channels[0].note = 36;
+  engine.channels[1].note = 38;
+  engine.channels[0].loopLength = 16;
+  engine.channels[1].lock = 2;
+  engine.setGenerationMode("static");
+  engine.setCell(0, 0, 0, 1, 100, 100, 1);
+  engine.setCell(1, 1, 4, 1, 80, 50, 2);
+
+  var payload = engine.serializeForPersistence();
+  var restored = makeEngine([0.5]);
+
+  restored.deserializeForPersistence(payload);
+
+  assert.strictEqual(restored.channels[0].note, 36);
+  assert.strictEqual(restored.channels[1].note, 38);
+  assert.strictEqual(restored.channels[0].loopLength, 16);
+  assert.strictEqual(restored.channels[1].lock, 2);
+  assert.strictEqual(restored.generationMode, "static");
+  assert.strictEqual(restored.sources[0][0][0].enabled, 1);
+  assert.strictEqual(restored.sources[1][1][4].enabled, 1);
+  assert.strictEqual(restored.sources[1][1][4].velocity, 80);
+  assert.strictEqual(restored.sources[1][1][4].probability, 50);
+  assert.strictEqual(restored.sources[1][1][4].cycle, 2);
+}
+
+testSerializeForPersistenceIncludesChannelSettings();
+
 console.log("ksh_engine tests passed");

@@ -61,7 +61,7 @@
 ## 4. Architecture (do not break casually)
 
 - **Engine ↔ UI:** Engine emits `engine_state` / `preview` via `messnamed("ksh_engine_events", ...)`. UIs send commands through `messnamed("ksh_ui_commands", ...)` and the patch routes them to `ksh_engine.js`.
-- **Persistence:** `autopattr` + `pattrstorage ksh_state` store engine JSON only (`getvalueof` / `setvalueof`). UIs mirror state; they are not the source of truth.
+- **Persistence:** hidden `textedit` Live parameter `ksh_pattern_data` stores compact JSON via `text` message from the engine; restore via `pattern_data` (not `setvalueof`, which rejects Live’s atom lists). UIs mirror state; they are not the source of truth.
 - **Transport:** `plugsync~` + `transport_position` drive step timing; `live.observer` for tempo and stop → `reset`.
 - **Dual runtime:** `ksh_engine.js` wraps the class in an IIFE with `module.exports` for Node and Max-only `outlet` / `Task` / `messnamed` code behind `if (typeof module === "undefined" || !module.exports)`.
 

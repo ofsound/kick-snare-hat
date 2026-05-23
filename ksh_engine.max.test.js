@@ -14,6 +14,8 @@ function makeMaxSandbox() {
   var named = [];
   var scheduled = [];
   var posts = [];
+  var notifications = 0;
+  var embeddedMessages = [];
 
   function TaskStub(fn, ctx) {
     var self = this;
@@ -35,8 +37,8 @@ function makeMaxSandbox() {
 
   var sandbox = {
     autowatch: 0,
-    inlets: 0,
-    outlets: 0,
+    inlets: 1,
+    outlets: 2,
     messagename: "",
     outlet: function (idx) {
       var args = Array.prototype.slice.call(arguments, 1);
@@ -61,6 +63,12 @@ function makeMaxSandbox() {
     },
     post: function () {
       posts.push(Array.prototype.slice.call(arguments).join(""));
+    },
+    notifyclients: function () {
+      notifications += 1;
+    },
+    embedmessage: function () {
+      embeddedMessages.push(Array.prototype.slice.call(arguments));
     },
     Task: TaskStub,
     JSON: JSON,
@@ -92,9 +100,35 @@ function makeMaxSandbox() {
     named.length = 0;
     scheduled.length = 0;
     posts.length = 0;
+    embeddedMessages.length = 0;
+    notifications = 0;
   };
   sandbox._scheduledCount = function () { return scheduled.length; };
   sandbox._posts = function () { return posts.slice(); };
+  sandbox._notifications = function () { return notifications; };
+  sandbox._embeddedMessages = function () { return embeddedMessages.slice(); };
+  sandbox._patternStoreWrites = function () { return patternStoreWrites.slice(); };
+  var patternStoreWrites = [];
+  sandbox.patcher = {
+    getnamed: function (name) {
+      if (name === "ksh_pattern_data") {
+        return {
+          message: function () {
+            if (arguments[0] === "set" && arguments[1]) {
+              patternStoreWrites.push(String(arguments[1]));
+            }
+          }
+        };
+      }
+      if (name === "pattern-pattr") {
+        return {
+          message: function () {},
+          getvalueof: function () { return ""; }
+        };
+      }
+      return null;
+    }
+  };
 
   vm.createContext(sandbox);
   sandbox.include = function (filename) {
@@ -104,6 +138,13 @@ function makeMaxSandbox() {
   var src = fs.readFileSync(path.join(__dirname, "ksh_engine.js"), "utf8");
   vm.runInContext(src, sandbox, { filename: "ksh_engine.js" });
   return sandbox;
+}
+
+function midiNotesOn(sb, outletIndex) {
+  outletIndex = outletIndex === undefined ? 0 : outletIndex;
+  return sb._notes().filter(function (note) {
+    return note.outlet === outletIndex;
+  });
 }
 
 function eventsOn(sb, eventName) {
@@ -117,6 +158,13 @@ function lastEventOn(sb, eventName) {
   return events[events.length - 1];
 }
 
+function decodePersistenceValue(value) {
+  if (Array.isArray(value) && value[0] === "ksh_json_chunks_v1") {
+    return decodeURIComponent(value.slice(1).join(""));
+  }
+  return value;
+}
+
 function testMaxWrapperBootsEngineAndExposesHandlers() {
   var sb = makeMaxSandbox();
   assert.ok(sb.kshEngine, "kshEngine should be constructed by the Max wrapper");
@@ -128,6 +176,10 @@ function testMaxWrapperBootsEngineAndExposesHandlers() {
   assert.strictEqual(typeof sb.sync_all, "function");
   assert.strictEqual(typeof sb.getvalueof, "function");
   assert.strictEqual(typeof sb.setvalueof, "function");
+  assert.strictEqual(typeof sb.save, "function");
+  assert.strictEqual(typeof sb.embedded_state_begin, "function");
+  assert.strictEqual(typeof sb.embedded_state_chunk, "function");
+  assert.strictEqual(typeof sb.embedded_state_end, "function");
   assert.strictEqual(typeof sb.midi_channel, "undefined");
   assert.strictEqual(typeof sb.duration_ms, "undefined");
   assert.strictEqual(typeof sb.velocity_humanize, "function");
@@ -278,9 +330,12 @@ function testSourceChannelResetClearsStateAndEmitsFullState() {
   assert.strictEqual(stateEvents.length, 1,
     "source_channel_reset should emit one full engine_state event");
   parsed = JSON.parse(stateEvents[0].args[1]);
-  assert.strictEqual(parsed.sources[0][0][0].enabled, 0);
+  assert.strictEqual(parsed.v, 1);
+  assert.ok(!parsed.cells || !parsed.cells.some(function (cell) {
+    return cell[0] === 0 && cell[1] === 0 && cell[2] === 0 && cell[3] === 1;
+  }), "compact engine_state should not include cleared source cells");
   assert.strictEqual(parsed.sourceChannelMutes[0][0], 0);
-  assert.strictEqual(parsed.channels[0].loopLength, 8);
+  assert.strictEqual(parsed.channels[0][3], 8);
 }
 
 function testChannelAuditionEmitsNoteToOutlet() {
@@ -291,8 +346,8 @@ function testChannelAuditionEmitsNoteToOutlet() {
   sb.channel_note(2, 50);
   sb.channel_audition(2);
 
-  assert.strictEqual(sb._notes().length, 1);
-  assert.deepStrictEqual(sb._notes()[0].args, [50, 100, 100, 1, 0]);
+  assert.strictEqual(midiNotesOn(sb).length, 1);
+  assert.deepStrictEqual(midiNotesOn(sb)[0].args, [50, 100, 100, 1, 0]);
 }
 
 function testTransportPositionEmitsNativeSchedulerEvent() {
@@ -310,10 +365,8 @@ function testTransportPositionEmitsNativeSchedulerEvent() {
 
   sb.transport_position(0, 1);
 
-  var emitted = sb._notes();
+  var emitted = midiNotesOn(sb);
   assert.strictEqual(emitted.length, 1, "should emit one raw note event");
-  // safeOutlet(0, pitch, velocity, durationMs, channel, delayMs)
-  assert.strictEqual(emitted[0].outlet, 0);
   assert.deepStrictEqual(emitted[0].args, [36, 90, 100, 1, 0],
     "raw note event should be pitch velocity duration channel delay");
   assert.strictEqual(sb._scheduledCount(), 0,
@@ -334,7 +387,7 @@ function testResetClearsNativeScheduler() {
   sb._clear();
 
   sb.transport_position(0, 1);
-  assert.strictEqual(sb._notes().length, 1, "note event should emit immediately to the native scheduler");
+  assert.strictEqual(midiNotesOn(sb).length, 1, "note event should emit immediately to the native scheduler");
   sb._clear();
 
   sb.reset();
@@ -385,7 +438,7 @@ function testStoppedTransportClearsSchedulerOnceNotPerTick() {
   // accompanied by a scheduler clear (which would race the pipe).
   sb._clear();
   sb.channel_audition(1);
-  assert.strictEqual(sb._notes().length, 1,
+  assert.strictEqual(midiNotesOn(sb).length, 1,
     "audition while stopped should emit a one-shot note event");
   clears = sb._named().filter(function (m) {
     return m.bus === "ksh_scheduler_commands" && m.args[0] === "clear";
@@ -413,8 +466,9 @@ function testGetValueOfSetValueOfRoundtripsEngineState() {
   sb._flush();
 
   var serialized = sb.getvalueof();
-  assert.strictEqual(typeof serialized, "string");
-  var parsed = JSON.parse(serialized);
+  assert.ok(Array.isArray(serialized), "getvalueof should return chunked persistence atoms");
+  assert.strictEqual(serialized[0], "ksh_json_chunks_v1");
+  var parsed = JSON.parse(decodePersistenceValue(serialized));
   assert.strictEqual(parsed.stepCount, 8);
   assert.strictEqual(parsed.channelCount, 2);
   assert.strictEqual(parsed.swing, 40);
@@ -433,7 +487,7 @@ function testGetValueOfSetValueOfRoundtripsEngineState() {
   // Roundtrip into a fresh sandbox to prove the wire format is reloadable.
   var sb2 = makeMaxSandbox();
   sb2._clear();
-  sb2.setvalueof(serialized);
+  sb2.setvalueof.apply(sb2, serialized);
   sb2._flush();
   assert.strictEqual(sb2.kshEngine.stepCount, 8);
   assert.strictEqual(sb2.kshEngine.channelCount, 2);
@@ -456,6 +510,24 @@ function testGetValueOfSetValueOfRoundtripsEngineState() {
   assert.ok(engineStateEvents.length >= 1, "setvalueof should emit engine_state");
 }
 
+function testSetValueOfRejectsEmptyOrNonPersistencePayload() {
+  var sb = makeMaxSandbox();
+  var before;
+  var posts;
+
+  sb._clear();
+  before = sb.getvalueof();
+  sb.setvalueof("");
+  assert.deepStrictEqual(sb.getvalueof(), before, "empty setvalueof should not change engine state");
+  sb.setvalueof("not json");
+  assert.deepStrictEqual(sb.getvalueof(), before, "non-persistence setvalueof should not change engine state");
+  sb.setvalueof("get");
+  assert.deepStrictEqual(sb.getvalueof(), before, "pattr get token should not change engine state");
+  posts = sb._posts().join("");
+  assert.ok(posts.indexOf("Could not restore saved state") === -1,
+    "benign empty recall should not spam the Max console");
+}
+
 function testSetValueOfRejectsMalformedJsonWithoutChangingState() {
   var sb = makeMaxSandbox();
   var before;
@@ -468,10 +540,10 @@ function testSetValueOfRejectsMalformedJsonWithoutChangingState() {
   sb._clear();
 
   assert.doesNotThrow(function () {
-    sb.setvalueof("{");
+    sb.setvalueof("{\"v\":1,\"stepCount\":8,\"channelCount\":2,\"cells\":}");
   }, "malformed setvalueof JSON should not throw");
 
-  assert.strictEqual(sb.getvalueof(), before,
+  assert.deepStrictEqual(sb.getvalueof(), before,
     "malformed setvalueof input should keep the current engine state");
   assert.strictEqual(eventsOn(sb, "engine_state").length, 0,
     "failed setvalueof should not emit engine_state");
@@ -490,6 +562,123 @@ function testSetValueOfAppliesValidPartialState() {
   assert.strictEqual(sb.kshEngine.channelCount, 2);
   assert.ok(eventsOn(sb, "engine_state").length >= 1,
     "valid partial setvalueof state should emit engine_state");
+  assert.ok(eventsOn(sb, "preview").length >= 1,
+    "valid setvalueof state should emit preview for UI grids");
+}
+
+function testSetValueOfUnwrapsTexteditAndLiveParameterWrapper() {
+  var sb = makeMaxSandbox();
+  var payload = JSON.stringify({
+    v: 1,
+    stepCount: 8,
+    channelCount: 2,
+    refreshSteps: 1,
+    generationMode: "static",
+    staticSource: 0,
+    rate: "16n",
+    tempo: 120,
+    swing: 0,
+    velocityHumanize: 0,
+    timingHumanize: 0,
+    deviceActive: 1,
+    phaseOffsetBeats: 0,
+    channels: [["1", 36, -1, 8], ["2", 38, -1, 8]],
+    sourceChannelMutes: [[0, 0], [0, 0], [0, 0], [0, 0]],
+    cells: [[0, 0, 0, 1, 100, 100, 1]]
+  });
+  var wrapped = JSON.stringify({ ksh_pattern_data: [payload] });
+
+  sb._clear();
+  sb.pattern_data(payload);
+  assert.strictEqual(sb.kshEngine.stepCount, 8);
+  assert.strictEqual(sb.kshEngine.sources[0][0][0].enabled, 1);
+
+  sb._clear();
+  sb.pattern_data(wrapped);
+  assert.strictEqual(sb.kshEngine.stepCount, 8);
+  assert.strictEqual(sb.kshEngine.channels[0].note, 36);
+}
+
+function testPersistentMutationsNotifyPattrClients() {
+  var sb = makeMaxSandbox();
+  var dirtyTicks;
+
+  sb._clear();
+  sb.cell(1, 1, 1, 1, 64, 30, 1);
+  assert.strictEqual(sb._notifications(), 1,
+    "source cell edits should notify pattr clients for Live-set persistence");
+  dirtyTicks = sb._named().filter(function (m) {
+    return m.bus === "ksh_dirty_tick";
+  });
+  assert.strictEqual(dirtyTicks.length, 1,
+    "source cell edits should tick the Live dirty parameter");
+  assert.ok(
+    sb._patternStoreWrites().some(function (write) {
+      return write.indexOf("%7B") === 0 || write.indexOf("%22v%22%3A1") !== -1;
+    }),
+    "source cell edits should push URI-encoded JSON to pattern-store via set"
+  );
+
+  sb.channel_label(1, "Sub");
+  assert.strictEqual(sb._notifications(), 2,
+    "channel metadata edits should notify pattr clients");
+
+  sb.swing(25);
+  assert.strictEqual(sb._notifications(), 3,
+    "global settings edits should notify pattr clients");
+
+  sb.source_channel_reset(1, 1);
+  assert.strictEqual(sb._notifications(), 4,
+    "source/channel resets should notify pattr clients");
+}
+
+function testSetValueOfDoesNotNotifyPattrClients() {
+  var sb = makeMaxSandbox();
+
+  sb._clear();
+  sb.setvalueof("{\"stepCount\":6,\"channelCount\":2}");
+
+  assert.strictEqual(sb._notifications(), 0,
+    "restoring from pattr should not mark the restored value dirty again");
+}
+
+function testSaveEmbedsChunkedStateAndRestoresOnReload() {
+  var sb = makeMaxSandbox();
+  var sb2;
+  var messages;
+  var i;
+
+  sb._clear();
+  sb.steps(8);
+  sb.channels(2);
+  sb.swing(40);
+  sb.cell(1, 1, 1, 1, 64, 30, 1);
+  sb.channel_label(1, "Sub");
+  sb._clear();
+
+  sb.save();
+  messages = sb._embeddedMessages();
+  assert.ok(messages.length > 2, "save should embed begin/chunk/end messages");
+  assert.strictEqual(messages[0][0], "embedded_state_begin");
+  assert.strictEqual(messages[messages.length - 1][0], "embedded_state_end");
+  assert.strictEqual(messages[1][0], "embedded_state_chunk");
+
+  sb2 = makeMaxSandbox();
+  sb2._clear();
+  for (i = 0; i < messages.length; i += 1) {
+    sb2[messages[i][0]].apply(sb2, messages[i].slice(1));
+  }
+
+  assert.strictEqual(sb2.kshEngine.stepCount, 8);
+  assert.strictEqual(sb2.kshEngine.channelCount, 2);
+  assert.strictEqual(sb2.kshEngine.swing, 40);
+  assert.strictEqual(sb2.kshEngine.sources[0][0][0].enabled, 1);
+  assert.strictEqual(sb2.kshEngine.sources[0][0][0].velocity, 64);
+  assert.strictEqual(sb2.kshEngine.channels[0].label, "Sub");
+  assert.strictEqual(sb2._notifications(), 0,
+    "embedded restore should not mark the Live set dirty");
+  assert.ok(eventsOn(sb2, "engine_state").length >= 1,
+    "embedded restore should emit engine_state so UIs resync");
 }
 
 function testEditorActiveEnablesCurrentStepEmission() {
@@ -555,7 +744,7 @@ function testDeviceActiveSuppressesTransportOutputAndClearsScheduler() {
   sb.device_active(0);
   sb.transport_position(0, 1);
 
-  assert.strictEqual(sb._notes().length, 0,
+  assert.strictEqual(midiNotesOn(sb).length, 0,
     "inactive device should suppress transport note output");
   assert.ok(eventsOn(sb, "device_active").length >= 1,
     "device_active should emit a UI status selector");
@@ -567,7 +756,7 @@ function testDeviceActiveSuppressesTransportOutputAndClearsScheduler() {
   sb.device_active(1);
   sb.transport_position(0, 1);
 
-  assert.strictEqual(sb._notes().length, 1,
+  assert.strictEqual(midiNotesOn(sb).length, 1,
     "active device should resume transport note output");
 }
 
@@ -604,8 +793,70 @@ testTransportPositionEmitsNativeSchedulerEvent();
 testResetClearsNativeScheduler();
 testStoppedTransportClearsSchedulerOnceNotPerTick();
 testGetValueOfSetValueOfRoundtripsEngineState();
+testSetValueOfRejectsEmptyOrNonPersistencePayload();
 testSetValueOfRejectsMalformedJsonWithoutChangingState();
 testSetValueOfAppliesValidPartialState();
+testSetValueOfUnwrapsTexteditAndLiveParameterWrapper();
+
+function testRestorePatternStoreReadsPattrAndInitsUi() {
+  var sb = makeMaxSandbox();
+  var payload = JSON.stringify({
+    v: 1,
+    stepCount: 16,
+    channelCount: 8,
+    refreshSteps: 1,
+    generationMode: "static",
+    staticSource: 2,
+    rate: "16n",
+    tempo: 120,
+    swing: 15,
+    velocityHumanize: 0,
+    timingHumanize: 0,
+    deviceActive: 1,
+    phaseOffsetBeats: 0,
+    channels: [["1", 36, -1, 16]],
+    sourceChannelMutes: [[0, 0], [0, 0], [0, 0], [0, 0]],
+    cells: [[0, 0, 0, 1, 100, 100, 1]]
+  });
+  var wrapped = JSON.stringify({ ksh_pattern_data: [payload] });
+
+  sb.patcher.getnamed = function (name) {
+    if (name === "pattern-pattr") {
+      return {
+        getvalueof: function () {
+          return wrapped;
+        },
+        message: function () {}
+      };
+    }
+    if (name === "ksh_pattern_data") {
+      return {
+        message: function () {}
+      };
+    }
+    return null;
+  };
+
+  sb._clear();
+  sb.restore_pattern_store();
+  while (sb._scheduledCount()) {
+    sb._flush();
+  }
+
+  assert.strictEqual(sb.kshEngine.stepCount, 16);
+  assert.strictEqual(sb.kshEngine.swing, 15);
+  assert.strictEqual(sb.kshEngine.sources[0][0][0].enabled, 1);
+  assert.ok(sb._named().some(function (m) {
+    return m.bus === "ksh_ui_commands" && m.args[0] === "init";
+  }), "restore_pattern_store should init UIs after successful recall");
+  assert.ok(eventsOn(sb, "preview").length >= 1,
+    "restore_pattern_store should emit preview for grids");
+}
+
+testRestorePatternStoreReadsPattrAndInitsUi();
+testPersistentMutationsNotifyPattrClients();
+testSetValueOfDoesNotNotifyPattrClients();
+testSaveEmbedsChunkedStateAndRestoresOnReload();
 testEditorActiveEnablesCurrentStepEmission();
 testLookaheadSchedulingStillEmitsCurrentStep();
 testDeviceActiveSuppressesTransportOutputAndClearsScheduler();
