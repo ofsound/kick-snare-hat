@@ -141,8 +141,7 @@ function validateNativeScheduler(patcher, errors) {
 	    "clear-delay-msg": "clear",
 	    "stop-notes-msg": "stop",
 	    "native-step-reset-msg": "set -1",
-	    "native-step-input-gate": "gate",
-	    "selstart": "sel 1"
+	    "native-step-input-gate": "gate"
 	  };
   const expectedLines = [
     ["engine", 0, "note-unpack", 0],
@@ -168,7 +167,6 @@ function validateNativeScheduler(patcher, errors) {
 	    ["native-step-input-gate", 0, "native-step-change", 0],
 	    ["native-step-reset-msg", 0, "native-step-change", 0],
 	    ["selstop", 0, "native-step-reset-msg", 0],
-	    ["selstart", 0, "native-step-reset-msg", 0],
 	    ["loadbang", 0, "native-step-reset-msg", 0]
 	  ];
   const lines = patcher.lines || [];

@@ -1703,25 +1703,6 @@
       },
       {
         "box": {
-          "id": "selstart",
-          "maxclass": "newobj",
-          "numinlets": 2,
-          "numoutlets": 2,
-          "patching_rect": [
-            720,
-            860,
-            42,
-            22
-          ],
-          "outlettype": [
-            "bang",
-            ""
-          ],
-          "text": "sel 1"
-        }
-      },
-      {
-        "box": {
           "id": "resetmsg",
           "maxclass": "message",
           "numinlets": 2,
@@ -3091,18 +3072,6 @@
       {
         "patchline": {
           "source": [
-            "observer",
-            0
-          ],
-          "destination": [
-            "selstart",
-            0
-          ]
-        }
-      },
-      {
-        "patchline": {
-          "source": [
             "selstop",
             0
           ],
@@ -3116,18 +3085,6 @@
         "patchline": {
           "source": [
             "selstop",
-            0
-          ],
-          "destination": [
-            "native-step-reset-msg",
-            0
-          ]
-        }
-      },
-      {
-        "patchline": {
-          "source": [
-            "selstart",
             0
           ],
           "destination": [

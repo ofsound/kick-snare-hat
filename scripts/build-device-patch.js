@@ -730,11 +730,6 @@ const patch = {
         numoutlets: 2,
         outlettype: ["bang", ""]
       }),
-      box("selstart", "newobj", "sel 1", [720.0, 860.0, 42.0, 22.0], {
-        numinlets: 2,
-        numoutlets: 2,
-        outlettype: ["bang", ""]
-      }),
       box("resetmsg", "message", "reset", [720.0, 820.0, 46.0, 22.0], {
         numinlets: 2,
         numoutlets: 1,
@@ -815,10 +810,8 @@ const patch = {
       line("tempo_observer", 0, "tempoprep", 0),
       line("tempoprep", 0, "engine", 0),
       line("observer", 0, "selstop", 0),
-      line("observer", 0, "selstart", 0),
       line("selstop", 0, "resetmsg", 0),
       line("selstop", 0, "native-step-reset-msg", 0),
-      line("selstart", 0, "native-step-reset-msg", 0),
       line("loadbang", 0, "native-step-reset-msg", 0),
       line("resetmsg", 0, "engine", 0)
     ],
