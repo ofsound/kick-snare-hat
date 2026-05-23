@@ -140,10 +140,30 @@ function nativeTimingBoxes() {
       numoutlets: 4,
       outlettype: ["", "", "", ""]
     }),
-    box("native-hit-iter", "newobj", "zl.iter 5", [600.0, 1120.0, 62.0, 22.0], {
+    box("native-hit-iter", "newobj", "zl.iter 9", [600.0, 1120.0, 62.0, 22.0], {
       numinlets: 2,
       numoutlets: 2,
       outlettype: ["", ""]
+    }),
+    box("native-hit-unpack", "newobj", "unpack i i i i f i i i i", [660.0, 1120.0, 150.0, 22.0], {
+      numinlets: 1,
+      numoutlets: 9,
+      outlettype: ["int", "int", "int", "int", "float", "int", "int", "int", "int"]
+    }),
+    box("native-hit-ui-pack", "newobj", "pack i i i i", [820.0, 1120.0, 60.0, 22.0], {
+      numinlets: 4,
+      numoutlets: 1,
+      outlettype: [""]
+    }),
+    box("native-hit-ui-prep", "newobj", "prepend note_hit", [820.0, 1160.0, 100.0, 22.0], {
+      numinlets: 1,
+      numoutlets: 1,
+      outlettype: [""]
+    }),
+    box("native-hit-events", "newobj", "s ksh_engine_events", [820.0, 1200.0, 128.0, 22.0], {
+      numinlets: 1,
+      numoutlets: 0,
+      outlettype: []
     })
   ];
 }
@@ -171,7 +191,18 @@ function nativeTimingLines() {
     line("native-mode-gate", 0, "native-playback-coll", 0),
     line("native-playback-cmds", 0, "native-playback-coll", 0),
     line("native-playback-coll", 0, "native-hit-iter", 0),
-    line("native-hit-iter", 0, "note-unpack", 0)
+    line("native-hit-iter", 0, "native-hit-unpack", 0),
+    line("native-hit-unpack", 0, "note-delay", 0),
+    line("native-hit-unpack", 1, "note-delay", 1),
+    line("native-hit-unpack", 2, "note-delay", 2),
+    line("native-hit-unpack", 3, "note-delay", 3),
+    line("native-hit-unpack", 4, "note-delay", 4),
+    line("native-hit-unpack", 5, "native-hit-ui-pack", 0),
+    line("native-hit-unpack", 6, "native-hit-ui-pack", 1),
+    line("native-hit-unpack", 7, "native-hit-ui-pack", 2),
+    line("native-hit-unpack", 8, "native-hit-ui-pack", 3),
+    line("native-hit-ui-pack", 0, "native-hit-ui-prep", 0),
+    line("native-hit-ui-prep", 0, "native-hit-events", 0)
   ];
 }
 

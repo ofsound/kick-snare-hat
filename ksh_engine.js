@@ -1061,16 +1061,26 @@ var KSH_EngineClass = null;
 	          targetDelayMs = (targetPosition - targetRowFloat) * this.stepIntervalMs;
 	          targetRow = mod(targetRowFloat, this.nativePlaybackStepCount);
 	          row = rows[targetRow];
-	          row.push(this.channels[channel].note);
-	          row.push(velocity);
-	          row.push(KSH_CONSTANTS.DEFAULT_NOTE_DURATION_MS);
-	          row.push(KSH_CONSTANTS.DEFAULT_MIDI_CHANNEL);
-	          row.push(Math.max(0, targetDelayMs));
+	          this.appendNativeHit(row, channel, rowStep, cell, velocity, targetDelayMs);
 	        }
 	      }
 	    }
 
 	    return rows;
+  };
+
+  KickSnareHatEngine.prototype.appendNativeHit = function (row, channel, rowStep, cell, velocity, delayMs) {
+    var sourceStep = typeof cell.sourceStep === "number" ? cell.sourceStep : rowStep;
+
+    row.push(this.channels[channel].note);
+    row.push(velocity);
+    row.push(KSH_CONSTANTS.DEFAULT_NOTE_DURATION_MS);
+    row.push(KSH_CONSTANTS.DEFAULT_MIDI_CHANNEL);
+    row.push(Math.max(0, delayMs));
+    row.push(channel + 1);
+    row.push(rowStep + 1);
+    row.push(cell.source + 1);
+    row.push(sourceStep + 1);
   };
 
   KickSnareHatEngine.prototype.syncNativePlaybackTable = function () {

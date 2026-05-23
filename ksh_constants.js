@@ -28,6 +28,7 @@ var ksh_constants = {
   RATES: ["4n", "4nt", "8n", "8nt", "16n", "16nt", "32n", "32nt"],
   DEFAULT_RATE: "16n",
   DEFAULT_NATIVE_TIMING: 1,
+  NATIVE_HIT_FIELD_COUNT: 9,
   PHASE_EARLY_MS_MIN: -80,
   PHASE_EARLY_MS_MAX: 80,
   DEFAULT_CELL: {

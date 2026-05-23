@@ -141,7 +141,11 @@ function validateNativeScheduler(patcher, errors) {
 	    "clear-delay-msg": "clear",
 	    "stop-notes-msg": "stop",
 	    "native-step-reset-msg": "set -1",
-	    "native-step-input-gate": "gate"
+	    "native-step-input-gate": "gate",
+	    "native-hit-iter": "zl.iter 9",
+	    "native-hit-unpack": "unpack i i i i f i i i i",
+	    "native-hit-ui-prep": "prepend note_hit",
+	    "native-hit-events": "s ksh_engine_events"
 	  };
   const expectedLines = [
     ["engine", 0, "note-unpack", 0],
@@ -167,7 +171,11 @@ function validateNativeScheduler(patcher, errors) {
 	    ["native-step-input-gate", 0, "native-step-change", 0],
 	    ["native-step-reset-msg", 0, "native-step-change", 0],
 	    ["selstop", 0, "native-step-reset-msg", 0],
-	    ["loadbang", 0, "native-step-reset-msg", 0]
+	    ["loadbang", 0, "native-step-reset-msg", 0],
+	    ["native-hit-iter", 0, "native-hit-unpack", 0],
+	    ["native-hit-unpack", 0, "note-delay", 0],
+	    ["native-hit-unpack", 5, "native-hit-ui-pack", 0],
+	    ["native-hit-ui-prep", 0, "native-hit-events", 0]
 	  ];
   const lines = patcher.lines || [];
 

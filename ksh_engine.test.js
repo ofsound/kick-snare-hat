@@ -1,6 +1,10 @@
 var assert = require("assert");
 var KickSnareHatEngine = require("./ksh_engine");
 
+function nativeHitRow(note, velocity, duration, midiCh, delayMs, uiChannel, generatedStep, source, sourceStep) {
+  return [note, velocity, duration, midiCh, delayMs, uiChannel, generatedStep, source, sourceStep];
+}
+
 function makeEngine(randomValues) {
   var notes = [];
   var index = 0;
@@ -591,8 +595,8 @@ function testNativePlaybackRowsIncludeDeterministicHitsAndSwing() {
 
   rows = engine.buildNativePlaybackRows();
 
-  assert.deepStrictEqual(rows[0], [36, 100, 100, 1, 0]);
-  assert.deepStrictEqual(rows[1], [36, 80, 100, 1, 62.5]);
+  assert.deepStrictEqual(rows[0], nativeHitRow(36, 100, 100, 1, 0, 1, 1, 1, 1));
+  assert.deepStrictEqual(rows[1], nativeHitRow(36, 80, 100, 1, 62.5, 1, 2, 1, 2));
 }
 
 function testNativePlaybackRowsPrecomputeCycleGates() {
@@ -606,7 +610,7 @@ function testNativePlaybackRowsPrecomputeCycleGates() {
   rows = engine.buildNativePlaybackRows();
 
   assert.strictEqual(engine.nativePlaybackStepCount, 3);
-  assert.deepStrictEqual(rows[0], [36, 100, 100, 1, 0]);
+  assert.deepStrictEqual(rows[0], nativeHitRow(36, 100, 100, 1, 0, 1, 1, 1, 1));
   assert.deepStrictEqual(rows[1], []);
   assert.deepStrictEqual(rows[2], []);
 }
@@ -623,14 +627,13 @@ function testNativePlaybackRowsUseLeastCommonCyclePeriod() {
   rows = engine.buildNativePlaybackRows();
 
   assert.strictEqual(engine.nativePlaybackStepCount, 6);
-  assert.deepStrictEqual(rows[0], [
-    engine.channels[0].note, 100, 100, 1, 0,
-    engine.channels[1].note, 90, 100, 1, 0
-  ]);
+  assert.deepStrictEqual(rows[0], nativeHitRow(engine.channels[0].note, 100, 100, 1, 0, 1, 1, 1, 1).concat(
+    nativeHitRow(engine.channels[1].note, 90, 100, 1, 0, 2, 1, 1, 1)
+  ));
   assert.deepStrictEqual(rows[1], []);
-  assert.deepStrictEqual(rows[2], [engine.channels[0].note, 100, 100, 1, 0]);
-  assert.deepStrictEqual(rows[3], [engine.channels[1].note, 90, 100, 1, 0]);
-  assert.deepStrictEqual(rows[4], [engine.channels[0].note, 100, 100, 1, 0]);
+  assert.deepStrictEqual(rows[2], nativeHitRow(engine.channels[0].note, 100, 100, 1, 0, 1, 1, 1, 1));
+  assert.deepStrictEqual(rows[3], nativeHitRow(engine.channels[1].note, 90, 100, 1, 0, 2, 1, 1, 1));
+  assert.deepStrictEqual(rows[4], nativeHitRow(engine.channels[0].note, 100, 100, 1, 0, 1, 1, 1, 1));
   assert.deepStrictEqual(rows[5], []);
 }
 
@@ -645,9 +648,9 @@ function testNativePlaybackRowsPrerollProbability() {
   rows = engine.buildNativePlaybackRows();
 
   assert.strictEqual(engine.nativePlaybackStepCount, 16);
-  assert.deepStrictEqual(rows[0], [36, 100, 100, 1, 0]);
+  assert.deepStrictEqual(rows[0], nativeHitRow(36, 100, 100, 1, 0, 1, 1, 1, 1));
   assert.deepStrictEqual(rows[1], []);
-  assert.deepStrictEqual(rows[2], [36, 100, 100, 1, 0]);
+  assert.deepStrictEqual(rows[2], nativeHitRow(36, 100, 100, 1, 0, 1, 1, 1, 1));
   assert.deepStrictEqual(rows[3], []);
 }
 
@@ -683,9 +686,9 @@ function testNativePlaybackRowsPrerollVelocityHumanize() {
   rows = engine.buildNativePlaybackRows();
 
   assert.strictEqual(engine.nativePlaybackStepCount, 16);
-  assert.deepStrictEqual(rows[0], [36, 80, 100, 1, 0]);
-  assert.deepStrictEqual(rows[1], [36, 120, 100, 1, 0]);
-  assert.deepStrictEqual(rows[2], [36, 100, 100, 1, 0]);
+  assert.deepStrictEqual(rows[0], nativeHitRow(36, 80, 100, 1, 0, 1, 1, 1, 1));
+  assert.deepStrictEqual(rows[1], nativeHitRow(36, 120, 100, 1, 0, 1, 1, 1, 1));
+  assert.deepStrictEqual(rows[2], nativeHitRow(36, 100, 100, 1, 0, 1, 1, 1, 1));
 }
 
 function testNativePlaybackRowsShareVariationExpansionForProbabilityAndVelocity() {
@@ -715,7 +718,7 @@ function testNativePlaybackRowsPrerollLateTimingHumanize() {
   rows = engine.buildNativePlaybackRows();
 
   assert.strictEqual(engine.nativePlaybackStepCount, 16);
-  assert.deepStrictEqual(rows[0], [36, 100, 100, 1, 25]);
+  assert.deepStrictEqual(rows[0], nativeHitRow(36, 100, 100, 1, 25, 1, 1, 1, 1));
 }
 
 function testNativePlaybackRowsPrerollEarlyTimingHumanize() {
@@ -732,7 +735,7 @@ function testNativePlaybackRowsPrerollEarlyTimingHumanize() {
   rows = engine.buildNativePlaybackRows();
 
   assert.strictEqual(engine.nativePlaybackStepCount, 32);
-  assert.deepStrictEqual(rows[0], [36, 100, 100, 1, 100]);
+  assert.deepStrictEqual(rows[0], nativeHitRow(36, 100, 100, 1, 100, 1, 2, 1, 2));
   assert.deepStrictEqual(rows[1], []);
 }
 
@@ -749,8 +752,27 @@ function testNativePlaybackRowsClampFirstStepEarlyTiming() {
 
   rows = engine.buildNativePlaybackRows();
 
-  assert.deepStrictEqual(rows[0], [36, 100, 100, 1, 0]);
-  assert.deepStrictEqual(rows[1], [36, 100, 100, 1, 100]);
+  assert.deepStrictEqual(rows[0], nativeHitRow(36, 100, 100, 1, 0, 1, 1, 1, 1));
+  assert.deepStrictEqual(rows[1], nativeHitRow(36, 100, 100, 1, 100, 1, 1, 1, 1));
+}
+
+function testNativePlaybackRowsIncludeNoteHitMetadata() {
+  var engine = makeEngine([0]);
+  var rows;
+  clearAll(engine);
+  engine.setStepCount(1);
+  engine.setChannelCount(1);
+  engine.setCell(0, 0, 0, 1, 100, 100, 1);
+  engine.generateWindow(0, 1, true);
+  engine.generated[0][0].sourceStep = 3;
+
+  rows = engine.buildNativePlaybackRows();
+
+  assert.strictEqual(rows[0].length, 9);
+  assert.strictEqual(rows[0][5], 1);
+  assert.strictEqual(rows[0][6], 1);
+  assert.strictEqual(rows[0][7], 1);
+  assert.strictEqual(rows[0][8], 4);
 }
 
 function testEngineDefaultsNativeTimingOn() {
@@ -1232,6 +1254,7 @@ testNativePlaybackRowsShareVariationExpansionForProbabilityAndVelocity();
 testNativePlaybackRowsPrerollLateTimingHumanize();
 testNativePlaybackRowsPrerollEarlyTimingHumanize();
 testNativePlaybackRowsClampFirstStepEarlyTiming();
+testNativePlaybackRowsIncludeNoteHitMetadata();
 testEngineDefaultsNativeTimingOn();
 testNativeTimingSuppressesJsLookaheadWhenSupported();
 testNativeTimingSupportsCycleGates();

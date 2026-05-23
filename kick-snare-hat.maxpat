@@ -2032,7 +2032,85 @@
             "",
             ""
           ],
-          "text": "zl.iter 5"
+          "text": "zl.iter 9"
+        }
+      },
+      {
+        "box": {
+          "id": "native-hit-unpack",
+          "maxclass": "newobj",
+          "numinlets": 1,
+          "numoutlets": 9,
+          "patching_rect": [
+            660,
+            1120,
+            150,
+            22
+          ],
+          "outlettype": [
+            "int",
+            "int",
+            "int",
+            "int",
+            "float",
+            "int",
+            "int",
+            "int",
+            "int"
+          ],
+          "text": "unpack i i i i f i i i i"
+        }
+      },
+      {
+        "box": {
+          "id": "native-hit-ui-pack",
+          "maxclass": "newobj",
+          "numinlets": 4,
+          "numoutlets": 1,
+          "patching_rect": [
+            820,
+            1120,
+            60,
+            22
+          ],
+          "outlettype": [
+            ""
+          ],
+          "text": "pack i i i i"
+        }
+      },
+      {
+        "box": {
+          "id": "native-hit-ui-prep",
+          "maxclass": "newobj",
+          "numinlets": 1,
+          "numoutlets": 1,
+          "patching_rect": [
+            820,
+            1160,
+            100,
+            22
+          ],
+          "outlettype": [
+            ""
+          ],
+          "text": "prepend note_hit"
+        }
+      },
+      {
+        "box": {
+          "id": "native-hit-events",
+          "maxclass": "newobj",
+          "numinlets": 1,
+          "numoutlets": 0,
+          "patching_rect": [
+            820,
+            1200,
+            128,
+            22
+          ],
+          "outlettype": [],
+          "text": "s ksh_engine_events"
         }
       },
       {
@@ -2764,7 +2842,139 @@
             0
           ],
           "destination": [
-            "note-unpack",
+            "native-hit-unpack",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "native-hit-unpack",
+            0
+          ],
+          "destination": [
+            "note-delay",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "native-hit-unpack",
+            1
+          ],
+          "destination": [
+            "note-delay",
+            1
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "native-hit-unpack",
+            2
+          ],
+          "destination": [
+            "note-delay",
+            2
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "native-hit-unpack",
+            3
+          ],
+          "destination": [
+            "note-delay",
+            3
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "native-hit-unpack",
+            4
+          ],
+          "destination": [
+            "note-delay",
+            4
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "native-hit-unpack",
+            5
+          ],
+          "destination": [
+            "native-hit-ui-pack",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "native-hit-unpack",
+            6
+          ],
+          "destination": [
+            "native-hit-ui-pack",
+            1
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "native-hit-unpack",
+            7
+          ],
+          "destination": [
+            "native-hit-ui-pack",
+            2
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "native-hit-unpack",
+            8
+          ],
+          "destination": [
+            "native-hit-ui-pack",
+            3
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "native-hit-ui-pack",
+            0
+          ],
+          "destination": [
+            "native-hit-ui-prep",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "native-hit-ui-prep",
+            0
+          ],
+          "destination": [
+            "native-hit-events",
             0
           ]
         }

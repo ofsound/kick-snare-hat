@@ -24,9 +24,10 @@ persist independent state.
   1 and fixed note duration; audition does not change engine state.
 - `current_step` is editor-only playback position feedback and is suppressed
   while the editor is inactive.
-- `note_hit <channel> <generated-step> <source> <source-step>` is emitted only
-  when a MIDI note is actually output so UIs can flash the affected cells
-  without polling or animation loops.
+- `note_hit <channel> <generated-step> <source> <source-step>` is emitted when a
+  MIDI note is actually output so UIs can flash the affected cells without
+  polling or animation loops. In native timing mode the Max patch forwards each
+  native coll hit to `ksh_engine_events` using metadata stored beside the note.
 
 ## UI requests
 
