@@ -323,6 +323,14 @@ function sourceLayerControlWidth() {
   return Math.ceil(ext[0]) + 8;
 }
 
+function phaseEarlyMs() {
+  return ksh_shared.phaseOffsetMs(state.phaseOffsetBeats, state.tempo);
+}
+
+function setPhaseEarlyMs(ms) {
+  send("phase_offset_beats", ksh_shared.phaseOffsetBeatsFromMs(ms, state.tempo));
+}
+
 function drawHeaderValueCell(id, label, value, x, y, w, h) {
   var active = headerValueDrag && headerValueDrag.id === id;
 
@@ -384,6 +392,8 @@ function makeState() {
     swing: 0,
     velocityHumanize: 0,
     timingHumanize: 0,
+    tempo: 120,
+    phaseOffsetBeats: 0,
     deviceActive: 1,
     lanes: lanes,
     sourceChannelMutes: makeSourceChannelMutes(),
@@ -440,7 +450,8 @@ function drawHeader() {
   var timingHumanizeX = rightHumanizeDividerX - dividerGap - sourceBtnW;
   var velocityHumanizeX = timingHumanizeX - groupedControlGap - sourceBtnW;
   var swingX = velocityHumanizeX - groupedControlGap - sourceBtnW;
-  var leftHumanizeDividerX = swingX - dividerGap - dividerW;
+  var phaseX = swingX - groupedControlGap - sourceBtnW;
+  var leftHumanizeDividerX = phaseX - dividerGap - dividerW;
   var layerMode = effectiveSourceLayerMode();
 
   ksh_shared.rect(0, 0, WIDTH, 58, colors.panel2);
@@ -475,6 +486,7 @@ function drawHeader() {
   ksh_shared.zone(hitZones, "source_pattern_clear", patternClearX, headerControlY, patternClearW, headerControlH);
   drawVerticalDivider(patternRightDividerX, 12, dividerW, 36);
   drawVerticalDivider(leftHumanizeDividerX, 12, dividerW, 36);
+  drawHeaderValueCell("phase_early_ms", "Phase", phaseEarlyMs(), phaseX, headerControlY, sourceBtnW, headerControlH);
   drawHeaderValueCell("swing", "Swing", state.swing, swingX, headerControlY, sourceBtnW, headerControlH);
   drawHeaderValueCell("velocity_humanize", "Vel %", state.velocityHumanize, velocityHumanizeX, headerControlY, sourceBtnW, headerControlH);
   drawHeaderValueCell("timing_humanize", "Time %", state.timingHumanize, timingHumanizeX, headerControlY, sourceBtnW, headerControlH);
@@ -1100,6 +1112,9 @@ function headerValue(id) {
   if (id === "refresh") {
     return state.refreshSteps;
   }
+  if (id === "phase_early_ms") {
+    return phaseEarlyMs();
+  }
   if (id === "swing") {
     return state.swing;
   }
@@ -1113,6 +1128,9 @@ function headerValue(id) {
 }
 
 function headerValueMin(id) {
+  if (id === "phase_early_ms") {
+    return ksh_shared.constants.PHASE_EARLY_MS_MIN;
+  }
   if (id === "swing" || id === "velocity_humanize" || id === "timing_humanize") {
     return 0;
   }
@@ -1125,6 +1143,9 @@ function headerValueMax(id) {
   }
   if (id === "refresh") {
     return state.stepCount;
+  }
+  if (id === "phase_early_ms") {
+    return ksh_shared.constants.PHASE_EARLY_MS_MAX;
   }
   return 100;
 }
@@ -1146,6 +1167,9 @@ function setHeaderValue(id, value) {
   } else if (id === "refresh" && state.refreshSteps !== value) {
     state.refreshSteps = value;
     send("refresh_steps", state.refreshSteps);
+  } else if (id === "phase_early_ms" && phaseEarlyMs() !== value) {
+    state.phaseOffsetBeats = ksh_shared.phaseOffsetBeatsFromMs(value, state.tempo);
+    send("phase_offset_beats", state.phaseOffsetBeats);
   } else if (id === "swing" && state.swing !== value) {
     state.swing = value;
     send("swing", state.swing);

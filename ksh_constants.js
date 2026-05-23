@@ -27,6 +27,8 @@ var ksh_constants = {
   DEFAULT_NOTE_DURATION_MS: 100,
   RATES: ["4n", "4nt", "8n", "8nt", "16n", "16nt", "32n", "32nt"],
   DEFAULT_RATE: "16n",
+  PHASE_EARLY_MS_MIN: -80,
+  PHASE_EARLY_MS_MAX: 80,
   DEFAULT_CELL: {
     enabled: 0,
     velocity: 100,

@@ -186,7 +186,6 @@ function testMaxWrapperBootsEngineAndExposesHandlers() {
   assert.strictEqual(typeof sb.timing_humanize, "function");
   assert.strictEqual(typeof sb.phase_offset_beats, "function");
   assert.strictEqual(typeof sb.device_active, "function");
-  assert.strictEqual(typeof sb.native_timing, "function");
   assert.strictEqual(typeof sb.editor_active, "function");
   assert.strictEqual(typeof sb.static_source, "function");
   assert.strictEqual(typeof sb.channel_loop_length, "function");
@@ -457,7 +456,7 @@ function testGetValueOfSetValueOfRoundtripsEngineState() {
   sb.device_active(0);
   sb.velocity_humanize(12);
   sb.timing_humanize(8);
-  sb.phase_offset_beats(0.5);
+  sb.phase_offset_beats(0.25);
   sb.mode("static");
   sb.static_source(4);
   sb.cell(1, 1, 1, 1, 64, 30, 1);
@@ -478,7 +477,7 @@ function testGetValueOfSetValueOfRoundtripsEngineState() {
   assert.strictEqual(parsed.deviceActive, 0);
   assert.strictEqual(parsed.velocityHumanize, 12);
   assert.strictEqual(parsed.timingHumanize, 8);
-  assert.strictEqual(parsed.phaseOffsetBeats, 0.5);
+  assert.strictEqual(parsed.phaseOffsetBeats, 0.25);
   assert.strictEqual(parsed.generationMode, "static");
   assert.strictEqual(parsed.staticSource, 3);
   assert.strictEqual(parsed.channels[0].label, "Sub");
@@ -496,7 +495,7 @@ function testGetValueOfSetValueOfRoundtripsEngineState() {
   assert.strictEqual(sb2.kshEngine.deviceActive, false);
   assert.strictEqual(sb2.kshEngine.velocityHumanize, 12);
   assert.strictEqual(sb2.kshEngine.timingHumanize, 8);
-  assert.strictEqual(sb2.kshEngine.phaseOffsetBeats, 0.5);
+  assert.strictEqual(sb2.kshEngine.phaseOffsetBeats, 0.25);
   assert.strictEqual(sb2.kshEngine.generationMode, "static");
   assert.strictEqual(sb2.kshEngine.staticSource, 3);
   assert.strictEqual(sb2.kshEngine.channels[0].label, "Sub");
@@ -706,18 +705,15 @@ function testEditorActiveEnablesCurrentStepEmission() {
     "current_step should fire while the editor is active");
 }
 
-function testLookaheadSchedulingStillEmitsCurrentStep() {
+function testStepEdgeEmitsCurrentStepForEditor() {
   var sb = makeMaxSandbox();
   var currentStepEvents;
   sb._clear();
   sb.editor_active(1);
   sb.steps(2);
   sb.channels(1);
-  sb.mode("per_channel");
-  sb.channel_lock(1, 1);
+  sb.mode("static");
   sb.rate("16n");
-  sb.tempo(120);
-  sb.timing_humanize(100);
   sb.cell(1, 1, 1, 1, 100, 100, 1);
   sb.cell(1, 1, 2, 1, 100, 100, 1);
   sb._flush();
@@ -725,12 +721,12 @@ function testLookaheadSchedulingStillEmitsCurrentStep() {
 
   sb.transport_position(0, 1);
   sb._clear();
-  sb.transport_position(0.12, 1);
+  sb.transport_position(0.25, 1);
 
   currentStepEvents = eventsOn(sb, "current_step");
   assert.ok(currentStepEvents.some(function (event) {
     return String(event.args[1]) === "2" || event.args[1] === 2;
-  }), "lookahead-scheduled step should still emit current_step for editor highlighting");
+  }), "step-edge transport should emit current_step for editor highlighting");
 }
 
 function testDeviceActiveSuppressesTransportOutputAndClearsScheduler() {
@@ -859,7 +855,7 @@ testPersistentMutationsNotifyPattrClients();
 testSetValueOfDoesNotNotifyPattrClients();
 testSaveEmbedsChunkedStateAndRestoresOnReload();
 testEditorActiveEnablesCurrentStepEmission();
-testLookaheadSchedulingStillEmitsCurrentStep();
+testStepEdgeEmitsCurrentStepForEditor();
 testDeviceActiveSuppressesTransportOutputAndClearsScheduler();
 testMessnamedFailuresAreSwallowed();
 

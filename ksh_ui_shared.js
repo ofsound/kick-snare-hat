@@ -343,6 +343,23 @@ ksh_shared.generationModeLabel = function (mode) {
   return "Stack";
 };
 
+ksh_shared.phaseOffsetMs = function (phaseOffsetBeats, tempo) {
+  tempo = parseFloat(tempo);
+  if (isNaN(tempo) || tempo <= 0) {
+    tempo = 120;
+  }
+  return Math.round(-phaseOffsetBeats * 60000 / tempo);
+};
+
+ksh_shared.phaseOffsetBeatsFromMs = function (msEarly, tempo) {
+  tempo = parseFloat(tempo);
+  if (isNaN(tempo) || tempo <= 0) {
+    tempo = 120;
+  }
+  msEarly = ksh_shared.clamp(msEarly, ksh_shared.constants.PHASE_EARLY_MS_MIN, ksh_shared.constants.PHASE_EARLY_MS_MAX);
+  return -msEarly * tempo / 60000;
+};
+
 ksh_shared.cycleGenerationMode = function (state) {
   if (state.generationMode === "stack") {
     state.generationMode = "per_channel";
@@ -404,6 +421,8 @@ ksh_shared.applyPersistenceState = function (state, payload) {
   if (payload.deviceActive !== undefined) {
     state.deviceActive = ksh_shared.toggleValue(payload.deviceActive);
   }
+  state.tempo = Math.max(20, Math.min(300, parseFloat(payload.tempo) || 120));
+  state.phaseOffsetBeats = parseFloat(payload.phaseOffsetBeats) || 0;
 
   for (source = 0; source < ksh_shared.SOURCE_COUNT; source += 1) {
     for (channel = 0; channel < ksh_shared.MAX_LANES; channel += 1) {
@@ -489,6 +508,12 @@ ksh_shared.applyEngineState = function (state, engineState) {
   if (engineState.deviceActive !== undefined) {
     state.deviceActive = ksh_shared.toggleValue(engineState.deviceActive);
   }
+  if (engineState.tempo !== undefined) {
+    state.tempo = Math.max(20, Math.min(300, parseFloat(engineState.tempo) || 120));
+  }
+  if (engineState.phaseOffsetBeats !== undefined) {
+    state.phaseOffsetBeats = parseFloat(engineState.phaseOffsetBeats) || 0;
+  }
 
   state.sourceChannelMutes = ksh_shared.makeSourceChannelMutes();
 
@@ -557,8 +582,10 @@ ksh_shared.applyStatusMessage = function (state, name, args) {
     state.timingHumanize = ksh_shared.clamp(args[0], 0, 100);
   } else if (name === "device_active") {
     state.deviceActive = ksh_shared.toggleValue(args[0]);
-  } else if (name === "native_timing") {
-    state.nativeTiming = ksh_shared.toggleValue(args[0]);
+  } else if (name === "phase_offset_beats") {
+    state.phaseOffsetBeats = parseFloat(args[0]) || 0;
+  } else if (name === "tempo") {
+    state.tempo = Math.max(20, Math.min(300, parseFloat(args[0]) || 120));
   } else if (name === "channel_label") {
     lane = ksh_shared.clamp(args[0] - 1, 0, ksh_shared.MAX_LANES - 1);
     args.shift();

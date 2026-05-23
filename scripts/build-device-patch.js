@@ -20,8 +20,7 @@ function line(src, outlet, dst, inlet) {
 function persistenceParameterRegistry() {
   return {
     "dirty-param": ["ksh_dirty_revision", "KSH Dirty", 0],
-    "pattern-store": ["ksh_pattern_data", "KSH Pattern", 0],
-    "native-timing-toggle": ["ksh_native_timing", "Native Timing", 0]
+    "pattern-store": ["ksh_pattern_data", "KSH Pattern", 0]
   };
 }
 
@@ -57,139 +56,6 @@ function liveToggleBox(id, varname, shortname, order, rect, options) {
       }
     }
   };
-}
-
-function nativeTimingBoxes() {
-  return [
-    liveToggleBox("native-timing-toggle", "ksh_native_timing", "Native", 3, [600.0, 1000.0, 58.0, 22.0], {
-      hidden: 1,
-      presentation: 0
-    }),
-    box("native-cmd-route", "newobj", "route native_timing", [520.0, 1040.0, 120.0, 22.0], {
-      numinlets: 1,
-      numoutlets: 2,
-      outlettype: ["", ""]
-    }),
-    box("native-timing-prep", "newobj", "prepend native_timing", [600.0, 1040.0, 140.0, 22.0], {
-      numinlets: 1,
-      numoutlets: 1,
-      outlettype: [""]
-    }),
-    box("native-meta-recv", "newobj", "r ksh_native_meta", [180.0, 1000.0, 120.0, 22.0], {
-      numinlets: 0,
-      numoutlets: 1,
-      outlettype: [""]
-    }),
-    box("native-meta-route", "newobj", "route meta", [180.0, 1040.0, 70.0, 22.0], {
-      numinlets: 1,
-      numoutlets: 2,
-      outlettype: ["", ""]
-    }),
-    box("native-meta-unpack", "newobj", "unpack f f i", [260.0, 1000.0, 80.0, 22.0], {
-      numinlets: 1,
-      numoutlets: 3,
-      outlettype: ["float", "float", "int"]
-    }),
-    box("native-bps", "newobj", "f 0.25", [260.0, 1040.0, 40.0, 22.0], {
-      numinlets: 1,
-      numoutlets: 1,
-      outlettype: ["float"]
-    }),
-    box("native-phase", "newobj", "f 0.", [260.0, 1080.0, 40.0, 22.0], {
-      numinlets: 1,
-      numoutlets: 1,
-      outlettype: ["float"]
-    }),
-    box("native-steps", "newobj", "i 16", [260.0, 1120.0, 40.0, 22.0], {
-      numinlets: 1,
-      numoutlets: 1,
-      outlettype: ["int"]
-    }),
-    box("native-step-expr", "newobj", "expr floor((($f1-$f2)/$f3)+0.000001)%$f4", [340.0, 1040.0, 220.0, 22.0], {
-      numinlets: 4,
-      numoutlets: 1,
-      outlettype: ["int"]
-    }),
-    box("native-step-change", "newobj", "change", [340.0, 1080.0, 50.0, 22.0], {
-      numinlets: 1,
-      numoutlets: 2,
-      outlettype: ["bang", "int"]
-    }),
-    box("native-transport-unpack", "newobj", "unpack s f i", [180.0, 1160.0, 90.0, 22.0], {
-      numinlets: 1,
-      numoutlets: 3,
-      outlettype: ["", "float", "int"]
-    }),
-    box("native-timing-gate-recv", "newobj", "r ksh_native_timing_gate", [480.0, 1040.0, 160.0, 22.0], {
-      numinlets: 0,
-      numoutlets: 1,
-      outlettype: ["int"]
-    }),
-    box("native-playing-gate", "newobj", "gate", [420.0, 1080.0, 40.0, 22.0], {
-      numinlets: 2,
-      numoutlets: 1,
-      outlettype: [""]
-    }),
-    box("native-mode-gate", "newobj", "gate", [480.0, 1080.0, 40.0, 22.0], {
-      numinlets: 2,
-      numoutlets: 1,
-      outlettype: [""]
-    }),
-    box("native-fire-recv", "newobj", "r ksh_native_fire_step", [540.0, 1040.0, 140.0, 22.0], {
-      numinlets: 0,
-      numoutlets: 1,
-      outlettype: ["int"]
-    }),
-    box("native-fire-prep", "newobj", "prepend play_step", [540.0, 1080.0, 110.0, 22.0], {
-      numinlets: 1,
-      numoutlets: 1,
-      outlettype: [""]
-    }),
-    box("native-step-js", "newobj", "js ksh_native_step.js", [660.0, 1080.0, 130.0, 22.0], {
-      numinlets: 1,
-      numoutlets: 1,
-      outlettype: [""]
-    }),
-    {
-      box: {
-        id: "native-playback-dict",
-        maxclass: "newobj",
-        text: "dict ksh_native_playback",
-        patching_rect: [840.0, 1080.0, 140.0, 22.0],
-        numinlets: 1,
-        numoutlets: 4,
-        outlettype: ["dictionary", "", "", ""]
-      }
-    }
-  ];
-}
-
-function nativeTimingLines() {
-  return [
-    line("native-timing-toggle", 0, "native-timing-prep", 0),
-    line("native-timing-prep", 0, "engine", 0),
-    line("enginecmds", 0, "native-cmd-route", 0),
-    line("native-cmd-route", 0, "native-timing-prep", 0),
-    line("native-cmd-route", 0, "native-timing-toggle", 0),
-    line("native-timing-gate-recv", 0, "native-mode-gate", 0),
-    line("native-meta-recv", 0, "native-meta-route", 0),
-    line("native-meta-route", 0, "native-meta-unpack", 0),
-    line("native-meta-unpack", 0, "native-bps", 0),
-    line("native-meta-unpack", 1, "native-phase", 0),
-    line("native-meta-unpack", 2, "native-steps", 0),
-    line("transportbeat", 1, "native-step-expr", 0),
-    line("native-bps", 0, "native-step-expr", 2),
-    line("native-phase", 0, "native-step-expr", 1),
-    line("native-steps", 0, "native-step-expr", 3),
-    line("native-step-expr", 0, "native-step-change", 0),
-    line("native-step-change", 0, "native-playing-gate", 1),
-    line("transportpos", 0, "native-transport-unpack", 0),
-    line("native-transport-unpack", 2, "native-playing-gate", 0),
-    line("note-delay", 3, "makenote", 3),
-    line("note-delay", 2, "makenote", 2),
-    line("note-delay", 1, "makenote", 1),
-    line("note-delay", 0, "makenote", 0)
-  ];
 }
 
 function editorDimensions(stepCount, laneCount) {
@@ -752,7 +618,6 @@ const patch = {
         numoutlets: 1,
         outlettype: [""]
       }),
-      ...nativeTimingBoxes(),
       box("tempo_observer", "newobj", "live.observer tempo", [880.0, 740.0, 130.0, 22.0], {
         numinlets: 1,
         numoutlets: 1,
@@ -801,7 +666,10 @@ const patch = {
       line("note-unpack", 2, "note-delay", 2),
       line("note-unpack", 1, "note-delay", 1),
       line("note-unpack", 0, "note-delay", 0),
-      ...nativeTimingLines(),
+      line("note-delay", 3, "makenote", 3),
+      line("note-delay", 2, "makenote", 2),
+      line("note-delay", 1, "makenote", 1),
+      line("note-delay", 0, "makenote", 0),
       line("makenote", 2, "noteout", 2),
       line("makenote", 1, "noteout", 1),
       line("makenote", 0, "noteout", 0),
@@ -831,8 +699,7 @@ const patch = {
       { name: "ksh_ui.js", bootpath: ".", type: "TEXT", implicit: 1 },
       { name: "ksh_compact_ui.js", bootpath: ".", type: "TEXT", implicit: 1 },
       { name: "ksh_ui_shared.js", bootpath: ".", type: "TEXT", implicit: 1 },
-      { name: "ksh_constants.js", bootpath: ".", type: "TEXT", implicit: 1 },
-      { name: "ksh_native_step.js", bootpath: ".", type: "TEXT", implicit: 1 }
+      { name: "ksh_constants.js", bootpath: ".", type: "TEXT", implicit: 1 }
     ],
     parameters: persistenceParameterRegistry()
   }

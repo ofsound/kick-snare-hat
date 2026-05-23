@@ -322,18 +322,19 @@ function testCycleGateFiresEveryNthEncounter() {
 }
 
 function testRandomGateUsesPercentage() {
-  var engine = makeEngine([0, 0.10, 0, 0.90]);
+  var engine = makeEngine([0, 0.90]);
   clearAll(engine);
   engine.setStepCount(1);
   engine.setChannelCount(1);
-  engine.setGenerationMode("stack");
+  engine.setGenerationMode("static");
   engine.setCell(0, 0, 0, 1, 100, 50, 1);
+  engine.generateWindow(0, 1, true);
   engine._notes.length = 0;
-  engine._setRandomValues([0, 0.10, 0, 0.90]);
+  engine._setRandomValues([0, 0.90]);
 
   engine.transportPosition(0, 1);
+  assert.strictEqual(engine._notes.length, 1);
   engine.transportPosition(0.25, 1);
-
   assert.strictEqual(engine._notes.length, 1);
 }
 
@@ -458,28 +459,24 @@ function testVelocityHumanizeClampsToMidiVelocityRange() {
   assert.strictEqual(engine._notes[0].velocity, 127);
 }
 
-function testTimingHumanizeCanScheduleNextStepEarlyWithLookahead() {
-  var engine = makeEngine([0.5, 0]);
+function testTimingHumanizeOffsetsStepEdgeDelay() {
+  var engine = makeEngine([1]);
   clearAll(engine);
   engine.setStepCount(2);
   engine.setChannelCount(1);
-  engine.setGenerationMode("per_channel");
-  engine.setChannelLock(0, 0);
+  engine.setGenerationMode("static");
   engine.setRate("16n");
   engine.setTempo(120);
   engine.setTimingHumanize(100);
   engine.setCell(0, 0, 0, 1, 100, 100, 1);
-  engine.setCell(0, 0, 1, 1, 100, 100, 1);
+  engine.generateWindow(0, 2, true);
   engine._notes.length = 0;
-  engine._setRandomValues([0.5, 0]);
+  engine._setRandomValues([1]);
 
   engine.transportPosition(0, 1);
-  engine.transportPosition(0.12, 1);
 
-  assert.strictEqual(engine._notes.length, 2);
-  assert.strictEqual(engine._notes[1].step, 2);
-  assert.strictEqual(engine._notes[1].globalStep, 1);
-  assert.ok(Math.abs(engine._notes[1].delayMs - 2.5) < 0.000001);
+  assert.strictEqual(engine._notes.length, 1);
+  assert.ok(engine._notes[0].delayMs > 0);
 }
 
 function testTimingHumanizeCurrentStepCannotScheduleIntoThePast() {
@@ -538,13 +535,11 @@ function testTransportPositionAnchorsJumpsToLiveBeat() {
   engine._setRandomValues([0]);
 
   engine.transportPosition(0, 1);
+  engine._notes.length = 0;
   engine.transportPosition(1, 1);
 
-  assert.strictEqual(engine._notes.length, 2);
-  assert.strictEqual(engine._notes[0].step, 1);
-  assert.strictEqual(engine._notes[0].globalStep, 0);
-  assert.strictEqual(engine._notes[1].step, 1);
-  assert.strictEqual(engine._notes[1].globalStep, 4);
+  assert.ok(engine._notes.length >= 2, "transport jump should catch up intermediate steps");
+  assert.strictEqual(engine._notes[engine._notes.length - 1].globalStep, 4);
 }
 
 function testTransportPositionDoesNotFireWhileStopped() {
@@ -924,7 +919,7 @@ testDefaultGateValuesBehaveLikeAlways();
 testSwingAddsDelayToEverySecondStep();
 testVelocityHumanizeOffsetsEachHitBidirectionally();
 testVelocityHumanizeClampsToMidiVelocityRange();
-testTimingHumanizeCanScheduleNextStepEarlyWithLookahead();
+testTimingHumanizeOffsetsStepEdgeDelay();
 testTimingHumanizeCurrentStepCannotScheduleIntoThePast();
 testTransportPositionFiresOnlyWhenLiveStepChanges();
 testTransportPositionAnchorsJumpsToLiveBeat();
@@ -1011,7 +1006,7 @@ function testSerializeForPersistenceIncludesChannelSettings() {
 
 testSerializeForPersistenceIncludesChannelSettings();
 
-function testNativeTimingCatchUpOnTransportJump() {
+function testTransportCatchUpOnJump() {
   var engine = makeEngine([0.99, 0.99, 0.99, 0.99]);
   clearAll(engine);
   engine.setChannelCount(1);
@@ -1021,15 +1016,14 @@ function testNativeTimingCatchUpOnTransportJump() {
   engine.setCell(0, 0, 1, 1, 100, 100, 1);
   engine.setCell(0, 0, 2, 1, 100, 100, 1);
   engine.generateWindow(0, 4, true);
-  engine.setNativeTiming(1);
   engine._notes.length = 0;
   engine.transportPosition(0, 1);
   engine._notes.length = 0;
   engine.transportPosition(0.75, 1);
-  assert.ok(engine._notes.length >= 2, "native mode should catch up skipped steps after a jump");
+  assert.ok(engine._notes.length >= 2, "transport should catch up skipped steps after a jump");
 }
 
-function testNativeTimingEmitsOnStepEdgeOnly() {
+function testTransportEmitsOnStepEdgeOnly() {
   var engine = makeEngine([0.99, 0.99, 0.99]);
   clearAll(engine);
   engine.setChannelCount(1);
@@ -1037,38 +1031,27 @@ function testNativeTimingEmitsOnStepEdgeOnly() {
   engine.setGenerationMode("static");
   engine.setCell(0, 0, 0, 1, 100, 100, 1);
   engine.generateWindow(0, 4, true);
-  engine.setNativeTiming(1);
   engine._notes.length = 0;
   engine.transportPosition(0, 1);
-  assert.ok(engine._notes.length >= 1, "native mode should emit on step edge");
+  assert.ok(engine._notes.length >= 1, "transport should emit on step edge");
   engine._notes.length = 0;
   engine.transportPosition(0.01, 1);
-  assert.strictEqual(engine._notes.length, 0, "native mode should not emit again on same step");
-  engine.setNativeTiming(0);
-  engine._notes.length = 0;
-  engine.transportPosition(1, 1);
-  assert.ok(engine._notes.length >= 1, "js mode should emit when advancing transport");
+  assert.strictEqual(engine._notes.length, 0, "transport should not emit again on same step");
 }
 
-function testNativePlaybackSnapshotListsEnabledHits() {
+function testPhaseOffsetShiftsStepBoundaryEarlier() {
   var engine = makeEngine([0.99]);
   clearAll(engine);
   engine.setChannelCount(1);
-  engine.setStepCount(2);
-  engine.setGenerationMode("static");
-  engine.setCell(0, 0, 0, 1, 100, 100, 1);
-  engine.setCell(0, 0, 1, 1, 90, 100, 1);
-  engine.generateWindow(0, 2, true);
-  engine.flushPreview();
-
-  var snapshot = engine.nativePlaybackSnapshot;
-  assert.ok(snapshot);
-  assert.deepStrictEqual(snapshot["0"], [36, 100]);
-  assert.deepStrictEqual(snapshot["1"], [36, 90]);
+  engine.setStepCount(4);
+  engine.setTempo(120);
+  engine.setPhaseOffsetBeats(-0.2);
+  assert.strictEqual(engine.globalStepForBeats(0.05), 1);
+  assert.strictEqual(engine.globalStepForBeats(0), 0);
 }
 
-testNativeTimingEmitsOnStepEdgeOnly();
-testNativeTimingCatchUpOnTransportJump();
-testNativePlaybackSnapshotListsEnabledHits();
+testTransportEmitsOnStepEdgeOnly();
+testTransportCatchUpOnJump();
+testPhaseOffsetShiftsStepBoundaryEarlier();
 
 console.log("ksh_engine tests passed");
