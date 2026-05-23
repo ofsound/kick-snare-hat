@@ -45,9 +45,12 @@ var KSH_EngineClass = null;
 (function (root) {
   var MAX_STEPS = KSH_CONSTANTS.MAX_STEPS;
   var MAX_LANES = KSH_CONSTANTS.MAX_LANES;
-  var DEFAULT_CHANNEL_COUNT = KSH_CONSTANTS.DEFAULT_CHANNEL_COUNT;
-  var DEFAULT_GENERATION_MODE = KSH_CONSTANTS.DEFAULT_GENERATION_MODE;
-  var SOURCE_COUNT = KSH_CONSTANTS.SOURCE_COUNT;
+	  var DEFAULT_CHANNEL_COUNT = KSH_CONSTANTS.DEFAULT_CHANNEL_COUNT;
+	  var DEFAULT_GENERATION_MODE = KSH_CONSTANTS.DEFAULT_GENERATION_MODE;
+	  var SOURCE_COUNT = KSH_CONSTANTS.SOURCE_COUNT;
+	  var NATIVE_PLAYBACK_MAX_ROWS = 2048;
+	  var NATIVE_PROBABILITY_MULTIPLIER = 16;
+	  var TIMING_HUMANIZE_NATIVE_SCALE = 0.2;
 
   function clamp(value, min, max) {
     value = parseInt(value, 10);
@@ -57,9 +60,28 @@ var KSH_EngineClass = null;
     return Math.max(min, Math.min(max, value));
   }
 
-  function mod(value, divisor) {
-    return ((value % divisor) + divisor) % divisor;
-  }
+	  function mod(value, divisor) {
+	    return ((value % divisor) + divisor) % divisor;
+	  }
+
+	  function gcd(a, b) {
+	    var t;
+
+	    a = Math.abs(parseInt(a, 10) || 0);
+	    b = Math.abs(parseInt(b, 10) || 0);
+	    while (b) {
+	      t = b;
+	      b = a % b;
+	      a = t;
+	    }
+	    return a || 1;
+	  }
+
+	  function lcm(a, b) {
+	    a = Math.max(1, parseInt(a, 10) || 1);
+	    b = Math.max(1, parseInt(b, 10) || 1);
+	    return (a / gcd(a, b)) * b;
+	  }
 
   function normalizeGenerationMode(mode) {
     mode = String(mode || "").toLowerCase();
@@ -185,6 +207,9 @@ var KSH_EngineClass = null;
     this.lateGraceMs = 2;
     this.phaseOffsetBeats = 0;
     this.transportPlaying = 0;
+    this.nativeTiming = false;
+    this.nativePlaybackStepCount = this.stepCount;
+    this.nativePlaybackRows = null;
     this.editorActive = false;
 
     this.channels = [];
@@ -196,6 +221,9 @@ var KSH_EngineClass = null;
     this.initChannels();
     this.initSources();
     this.generateWindow(0, this.stepCount);
+    this.syncNativePlaybackTable();
+    this.emitNativeMeta();
+    this.emitNativeTimingGate();
   }
 
   KickSnareHatEngine.prototype.initChannels = function () {
@@ -281,6 +309,8 @@ var KSH_EngineClass = null;
     if (this.transportPlaying && typeof cancelPendingNoteTasks === "function") {
       cancelPendingNoteTasks();
     }
+    this.syncNativePlaybackTable();
+    this.emitNativeMeta();
     this.status("rate " + this.rate);
   };
 
@@ -296,6 +326,8 @@ var KSH_EngineClass = null;
     if (this.transportPlaying && typeof cancelPendingNoteTasks === "function") {
       cancelPendingNoteTasks();
     }
+    this.syncNativePlaybackTable();
+    this.emitNativeMeta();
     this.status("tempo " + this.tempo);
   };
 
@@ -329,16 +361,21 @@ var KSH_EngineClass = null;
 
   KickSnareHatEngine.prototype.setSwing = function (amount) {
     this.swing = clamp(amount, 0, 100);
+    this.syncNativePlaybackTable();
     this.status("swing " + this.swing);
   };
 
   KickSnareHatEngine.prototype.setVelocityHumanize = function (amount) {
     this.velocityHumanize = clamp(amount, 0, 100);
+    this.syncNativePlaybackTable();
+    this.emitNativeTimingGate();
     this.status("velocity_humanize " + this.velocityHumanize);
   };
 
   KickSnareHatEngine.prototype.setTimingHumanize = function (amount) {
     this.timingHumanize = clamp(amount, 0, 100);
+    this.syncNativePlaybackTable();
+    this.emitNativeTimingGate();
     this.status("timing_humanize " + this.timingHumanize);
   };
 
@@ -352,6 +389,7 @@ var KSH_EngineClass = null;
     this.deviceActive = active;
     this.scheduledGlobalSteps = {};
     this.scheduledNoteKeys = {};
+    this.emitNativeTimingGate();
     if (!this.deviceActive) {
       if (typeof cancelPendingNoteTasks === "function") {
         cancelPendingNoteTasks();
@@ -374,7 +412,43 @@ var KSH_EngineClass = null;
     if (this.transportPlaying && typeof cancelPendingNoteTasks === "function") {
       cancelPendingNoteTasks();
     }
+    this.emitNativeMeta();
     this.status("phase_offset_beats " + this.phaseOffsetBeats);
+  };
+
+  KickSnareHatEngine.prototype.nativeTimingSupported = function () {
+    return this.nativePlaybackPeriod() > 0;
+  };
+
+  KickSnareHatEngine.prototype.nativeTimingActive = function () {
+    return this.nativeTiming && this.deviceActive && this.nativeTimingSupported();
+  };
+
+  KickSnareHatEngine.prototype.emitNativeMeta = function () {
+    if (typeof safeMessnamed !== "function") {
+      return;
+    }
+    safeMessnamed("ksh_native_meta", "meta", this.beatsPerStep(), this.phaseOffsetBeats, this.nativePlaybackStepCount || this.stepCount);
+  };
+
+  KickSnareHatEngine.prototype.emitNativeTimingGate = function () {
+    if (typeof safeMessnamed !== "function") {
+      return;
+    }
+    safeMessnamed("ksh_native_timing_gate", this.nativeTimingActive() ? 1 : 0);
+  };
+
+  KickSnareHatEngine.prototype.setNativeTiming = function (enabled) {
+    this.nativeTiming = normalizeToggle(enabled) ? true : false;
+    this.scheduledGlobalSteps = {};
+    this.scheduledNoteKeys = {};
+    if (typeof cancelPendingNoteTasks === "function") {
+      cancelPendingNoteTasks();
+    }
+    this.syncNativePlaybackTable();
+    this.emitNativeMeta();
+    this.emitNativeTimingGate();
+    this.status("native_timing " + (this.nativeTiming ? 1 : 0));
   };
 
   KickSnareHatEngine.prototype.setChannelLabel = function (channel, label) {
@@ -386,6 +460,7 @@ var KSH_EngineClass = null;
   KickSnareHatEngine.prototype.setChannelNote = function (channel, note) {
     channel = clamp(channel, 0, MAX_LANES - 1);
     this.channels[channel].note = clamp(note, 0, 127);
+    this.syncNativePlaybackTable();
     this.status("channel_note " + (channel + 1) + " " + this.channels[channel].note);
   };
 
@@ -781,6 +856,9 @@ var KSH_EngineClass = null;
 
   KickSnareHatEngine.prototype.markPreviewDirty = function (forceEmit) {
     this.previewDirty = true;
+    if (this.nativeTiming) {
+      this.syncNativePlaybackTable();
+    }
     if (forceEmit) {
       this.flushPreview();
     } else if (this.editorActive) {
@@ -847,6 +925,20 @@ var KSH_EngineClass = null;
     return (this.rng() * 2 - 1) * range;
   };
 
+  KickSnareHatEngine.prototype.nativeTimingHumanizeRangeMs = function () {
+    return this.stepIntervalMs * TIMING_HUMANIZE_NATIVE_SCALE * (this.timingHumanize / 100);
+  };
+
+  KickSnareHatEngine.prototype.nativeHumanizeTimingOffsetMs = function () {
+    var range = this.nativeTimingHumanizeRangeMs();
+
+    if (range <= 0) {
+      return 0;
+    }
+
+    return (this.rng() * 2 - 1) * range;
+  };
+
   KickSnareHatEngine.prototype.humanizeVelocity = function (velocity) {
     var range;
     var humanized;
@@ -868,6 +960,143 @@ var KSH_EngineClass = null;
     delayMs += this.swingDelayMsForStep(step);
     delayMs += this.humanizeTimingOffsetMs();
     return Math.max(0, delayMs);
+  };
+
+  KickSnareHatEngine.prototype.nativePlaybackPeriod = function () {
+    var period = 1;
+    var hasVariation = this.velocityHumanize > 0 || this.timingHumanize > 0;
+    var channel;
+    var step;
+    var cell;
+    var cycle;
+    var probability;
+
+    for (step = 0; step < this.stepCount; step += 1) {
+      for (channel = 0; channel < this.channelCount; channel += 1) {
+        cell = this.generated[channel][step];
+        if (cell && cell.enabled) {
+          cycle = clamp(cell.cycle, 1, 64);
+          probability = clamp(cell.probability, 0, 100);
+          period = lcm(period, cycle);
+          if (probability < 100) {
+            hasVariation = true;
+          }
+          if (period * this.stepCount > NATIVE_PLAYBACK_MAX_ROWS) {
+            return 0;
+          }
+        }
+      }
+    }
+
+    if (hasVariation) {
+      period *= NATIVE_PROBABILITY_MULTIPLIER;
+    }
+
+    return period * this.stepCount > NATIVE_PLAYBACK_MAX_ROWS ? 0 : period;
+  };
+
+	  KickSnareHatEngine.prototype.buildNativePlaybackRows = function () {
+	    var rows = [];
+	    var step;
+	    var rowStep;
+	    var targetStep;
+	    var channel;
+	    var cell;
+	    var row;
+	    var cyclePeriod;
+	    var cycleCounters = {};
+	    var key;
+	    var cycle;
+	    var probability;
+	    var velocity;
+	    var timingOffsetMs;
+	    var baseDelayMs;
+	    var targetPosition;
+	    var targetRowFloat;
+	    var targetRow;
+	    var targetDelayMs;
+
+	    cyclePeriod = this.nativePlaybackPeriod();
+	    if (cyclePeriod < 1) {
+	      cyclePeriod = 1;
+	    }
+
+	    this.nativePlaybackStepCount = this.stepCount * cyclePeriod;
+	    for (step = 0; step < this.nativePlaybackStepCount; step += 1) {
+	      rows[step] = [];
+	    }
+
+	    for (step = 0; step < this.nativePlaybackStepCount; step += 1) {
+	      rowStep = step % this.stepCount;
+	      for (channel = 0; channel < this.channelCount; channel += 1) {
+	        cell = this.generated[channel][rowStep];
+	        if (cell && cell.enabled) {
+          cycle = clamp(cell.cycle, 1, 64);
+          if (cycle > 1) {
+            key = this.cycleKey(cell.source, channel, typeof cell.sourceStep === "number" ? cell.sourceStep : rowStep);
+            if (cycleCounters[key] === undefined) {
+              cycleCounters[key] = 0;
+            } else {
+              cycleCounters[key] += 1;
+            }
+            if (cycleCounters[key] % cycle !== 0) {
+              continue;
+            }
+          }
+          probability = clamp(cell.probability, 0, 100);
+          if (probability <= 0) {
+            continue;
+          }
+	          if (probability < 100 && !(this.rng() * 100 < probability)) {
+	            continue;
+	          }
+	          velocity = this.humanizeVelocity(cell.velocity);
+	          baseDelayMs = this.swingDelayMsForStep(rowStep);
+	          timingOffsetMs = this.nativeHumanizeTimingOffsetMs();
+	          targetPosition = step + (baseDelayMs + timingOffsetMs) / this.stepIntervalMs;
+	          if (targetPosition < 0) {
+	            targetPosition = 0;
+	          }
+	          targetRowFloat = Math.floor(targetPosition);
+	          targetDelayMs = (targetPosition - targetRowFloat) * this.stepIntervalMs;
+	          targetRow = mod(targetRowFloat, this.nativePlaybackStepCount);
+	          row = rows[targetRow];
+	          row.push(this.channels[channel].note);
+	          row.push(velocity);
+	          row.push(KSH_CONSTANTS.DEFAULT_NOTE_DURATION_MS);
+	          row.push(KSH_CONSTANTS.DEFAULT_MIDI_CHANNEL);
+	          row.push(Math.max(0, targetDelayMs));
+	        }
+	      }
+	    }
+
+	    return rows;
+  };
+
+  KickSnareHatEngine.prototype.syncNativePlaybackTable = function () {
+    var rows;
+    var step;
+    var args;
+    var previousStepCount = this.nativePlaybackStepCount;
+
+    rows = this.buildNativePlaybackRows();
+    this.nativePlaybackRows = rows;
+
+    if (typeof safeMessnamed !== "function") {
+      return;
+    }
+
+    safeMessnamed("ksh_native_playback_commands", "clear");
+    for (step = 0; step < rows.length; step += 1) {
+      if (rows[step] && rows[step].length) {
+        args = ["ksh_native_playback_commands", "store", step].concat(rows[step]);
+        safeMessnamed.apply(this, args);
+      }
+    }
+    if (previousStepCount !== this.nativePlaybackStepCount) {
+      this.emitNativeMeta();
+    }
+    this.emitNativeTimingGate();
   };
 
   KickSnareHatEngine.prototype.pruneScheduledSteps = function (currentGlobalStep) {
@@ -1097,6 +1326,11 @@ var KSH_EngineClass = null;
     }
 
     this.reportTransportStep(globalStep);
+
+    if (this.nativeTimingActive()) {
+      return notes;
+    }
+
     this.pruneScheduledSteps(globalStep);
     scheduled = this.scheduleLookahead(songBeats, globalStep);
     for (i = 0; i < scheduled.length; i += 1) {
@@ -1165,6 +1399,7 @@ var KSH_EngineClass = null;
       velocityHumanize: this.velocityHumanize,
       timingHumanize: this.timingHumanize,
       deviceActive: this.deviceActive ? 1 : 0,
+      nativeTiming: this.nativeTiming ? 1 : 0,
       phaseOffsetBeats: this.phaseOffsetBeats,
       channels: this.channels,
       sourceChannelMutes: this.sourceChannelMutes,
@@ -1225,6 +1460,9 @@ var KSH_EngineClass = null;
     }
     if (state.deviceActive !== undefined) {
       this.deviceActive = normalizeToggle(state.deviceActive);
+    }
+    if (state.nativeTiming !== undefined) {
+      this.nativeTiming = normalizeToggle(state.nativeTiming) ? true : false;
     }
     this.phaseOffsetBeats = parseFloat(state.phaseOffsetBeats) || 0;
 
@@ -1324,6 +1562,7 @@ var KSH_EngineClass = null;
       velocityHumanize: this.velocityHumanize,
       timingHumanize: this.timingHumanize,
       deviceActive: this.deviceActive ? 1 : 0,
+      nativeTiming: this.nativeTiming ? 1 : 0,
       phaseOffsetBeats: this.phaseOffsetBeats,
       channels: channelsOut,
       sourceChannelMutes: mutes,
@@ -1354,6 +1593,7 @@ var KSH_EngineClass = null;
     this.velocityHumanize = clamp(state.velocityHumanize, 0, 100);
     this.timingHumanize = clamp(state.timingHumanize, 0, 100);
     this.deviceActive = normalizeToggle(state.deviceActive);
+    this.nativeTiming = normalizeToggle(state.nativeTiming);
     this.phaseOffsetBeats = parseFloat(state.phaseOffsetBeats) || 0;
     this.updateStepIntervalMs();
 
@@ -1932,6 +2172,7 @@ function emitFullState() {
   // the editor jsui to receive reliably over ksh_engine_events.
   var engine = ensureEngine();
   safeMessnamed("ksh_engine_events", "engine_state", JSON.stringify(engine.serializeForPersistence()));
+  engine.emitNativeTimingGate();
 }
 
 if (typeof module === "undefined" || !module.exports) {
@@ -2072,6 +2313,11 @@ function velocity_humanize(value) {
 
 function timing_humanize(value) {
   ensureEngine().setTimingHumanize(value);
+  markPersistentChange();
+}
+
+function native_timing(value) {
+  ensureEngine().setNativeTiming(value);
   markPersistentChange();
 }
 

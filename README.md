@@ -90,6 +90,7 @@ swing 0
 velocity_humanize 0
 timing_humanize 0
 device_active 1
+native_timing 0
 phase_offset_beats 0
 
 channel_label 1 1

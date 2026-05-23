@@ -395,6 +395,7 @@ function makeState() {
     tempo: 120,
     phaseOffsetBeats: 0,
     deviceActive: 1,
+    nativeTiming: 0,
     lanes: lanes,
     sourceChannelMutes: makeSourceChannelMutes(),
     sources: sources
@@ -422,6 +423,7 @@ function drawHeader() {
   var toggleGap = 6;
   var onX = WIDTH - 12 - toggleW;
   var dcX = onX - toggleGap - toggleW;
+  var nativeX = dcX - toggleGap - toggleW;
   var layerW = sourceLayerControlWidth();
   var dividerW = 2;
   var dividerGap = 12;
@@ -441,7 +443,7 @@ function drawHeader() {
   var patternRightDividerX = patternClearX + patternClearW + dividerGap;
   var patternTextY = headerControlY + headerControlH / 2 + 4;
   var patternIconY = headerControlY + headerControlH / 2;
-  var rightLayerDividerX = dcX - dividerGap - dividerW;
+  var rightLayerDividerX = nativeX - dividerGap - dividerW;
   var layerX = rightLayerDividerX - dividerGap - layerW;
   var leftLayerDividerX = layerX - dividerGap - dividerW;
   var refreshX = leftLayerDividerX - dividerGap - sourceBtnW;
@@ -499,6 +501,7 @@ function drawHeader() {
   ksh_shared.strokeRect(layerX, 18, layerW, 25, hoverLayerMode ? colors.amber : colors.strokeSoft, 1);
   ksh_shared.text(sourceLayerLabel(layerMode), layerX + layerW / 2, 18 + 16, 12, hoverLayerMode ? colors.amber : colors.text, "center");
   drawVerticalDivider(rightLayerDividerX, 12, dividerW, 36);
+  ksh_shared.button(hitZones, "native_timing", "Nat", nativeX, 18, toggleW, 25, state.nativeTiming);
   ksh_shared.button(hitZones, "dc_colors", "DC", dcX, 18, toggleW, 25, dcColors);
   ksh_shared.button(hitZones, "device_active", "ON", onX, 18, toggleW, 25, state.deviceActive);
 }
@@ -1344,6 +1347,9 @@ function onclick(x, y, button, cmd, shift, capslock, option, ctrl) {
     send("rate", state.rate);
   } else if (z.id === "dc_colors") {
     dcColors = dcColors ? 0 : 1;
+  } else if (z.id === "native_timing") {
+    state.nativeTiming = state.nativeTiming ? 0 : 1;
+    send("native_timing", state.nativeTiming);
   } else if (z.id === "device_active") {
     state.deviceActive = state.deviceActive ? 0 : 1;
     send("device_active", state.deviceActive);

@@ -58,6 +58,116 @@ function liveToggleBox(id, varname, shortname, order, rect, options) {
   };
 }
 
+function nativeTimingBoxes() {
+  return [
+    box("native-meta-recv", "newobj", "r ksh_native_meta", [180.0, 1000.0, 120.0, 22.0], {
+      numinlets: 0,
+      numoutlets: 1,
+      outlettype: [""]
+    }),
+    box("native-meta-route", "newobj", "route meta", [180.0, 1040.0, 70.0, 22.0], {
+      numinlets: 1,
+      numoutlets: 2,
+      outlettype: ["", ""]
+    }),
+    box("native-meta-unpack", "newobj", "unpack f f i", [260.0, 1000.0, 80.0, 22.0], {
+      numinlets: 1,
+      numoutlets: 3,
+      outlettype: ["float", "float", "int"]
+    }),
+    box("native-bps", "newobj", "f 0.25", [260.0, 1040.0, 40.0, 22.0], {
+      numinlets: 1,
+      numoutlets: 1,
+      outlettype: ["float"]
+    }),
+    box("native-phase", "newobj", "f 0.", [260.0, 1080.0, 40.0, 22.0], {
+      numinlets: 1,
+      numoutlets: 1,
+      outlettype: ["float"]
+    }),
+    box("native-steps", "newobj", "i 16", [260.0, 1120.0, 40.0, 22.0], {
+      numinlets: 1,
+      numoutlets: 1,
+      outlettype: ["int"]
+    }),
+    box("native-step-expr", "newobj", "expr floor((($f1-$f2)/$f3)+0.000001)%$f4", [340.0, 1040.0, 220.0, 22.0], {
+      numinlets: 4,
+      numoutlets: 1,
+      outlettype: ["int"]
+    }),
+    box("native-step-change", "newobj", "change", [340.0, 1080.0, 50.0, 22.0], {
+      numinlets: 1,
+      numoutlets: 2,
+      outlettype: ["bang", "int"]
+    }),
+    box("native-step-reset-msg", "message", "set -1", [340.0, 1120.0, 54.0, 22.0], {
+      numinlets: 2,
+      numoutlets: 1,
+      outlettype: [""]
+    }),
+    box("native-transport-unpack", "newobj", "unpack s f i", [180.0, 1160.0, 90.0, 22.0], {
+      numinlets: 1,
+      numoutlets: 3,
+      outlettype: ["", "float", "int"]
+    }),
+    box("native-timing-gate-recv", "newobj", "r ksh_native_timing_gate", [480.0, 1040.0, 160.0, 22.0], {
+      numinlets: 0,
+      numoutlets: 1,
+      outlettype: ["int"]
+    }),
+    box("native-playing-gate", "newobj", "gate", [420.0, 1080.0, 40.0, 22.0], {
+      numinlets: 2,
+      numoutlets: 1,
+      outlettype: [""]
+    }),
+    box("native-mode-gate", "newobj", "gate", [480.0, 1080.0, 40.0, 22.0], {
+      numinlets: 2,
+      numoutlets: 1,
+      outlettype: [""]
+    }),
+    box("native-playback-cmds", "newobj", "r ksh_native_playback_commands", [600.0, 1040.0, 190.0, 22.0], {
+      numinlets: 0,
+      numoutlets: 1,
+      outlettype: [""]
+    }),
+    box("native-playback-coll", "newobj", "coll ksh_native_playback", [600.0, 1080.0, 150.0, 22.0], {
+      numinlets: 1,
+      numoutlets: 4,
+      outlettype: ["", "", "", ""]
+    }),
+    box("native-hit-iter", "newobj", "zl.iter 5", [600.0, 1120.0, 62.0, 22.0], {
+      numinlets: 2,
+      numoutlets: 2,
+      outlettype: ["", ""]
+    })
+  ];
+}
+
+function nativeTimingLines() {
+  return [
+    line("native-meta-recv", 0, "native-meta-route", 0),
+    line("native-meta-route", 0, "native-meta-unpack", 0),
+    line("native-meta-unpack", 0, "native-bps", 0),
+    line("native-meta-unpack", 1, "native-phase", 0),
+    line("native-meta-unpack", 2, "native-steps", 0),
+    line("transportbeat", 1, "native-step-expr", 0),
+    line("native-phase", 0, "native-step-expr", 1),
+    line("native-bps", 0, "native-step-expr", 2),
+    line("native-steps", 0, "native-step-expr", 3),
+    line("native-step-expr", 0, "native-step-change", 0),
+    line("native-step-change", 0, "native-playing-gate", 1),
+    line("native-step-reset-msg", 0, "native-step-change", 0),
+    line("transportpos", 0, "native-transport-unpack", 0),
+    line("native-transport-unpack", 2, "native-playing-gate", 0),
+    line("native-playing-gate", 0, "native-mode-gate", 1),
+    line("native-timing-gate-recv", 0, "native-mode-gate", 0),
+    line("native-mode-gate", 0, "native-playback-coll", 0),
+    line("native-playback-cmds", 0, "native-playback-coll", 0),
+    line("native-playback-coll", 0, "native-hit-iter", 0),
+    line("native-hit-iter", 0, "note-unpack", 0)
+  ];
+}
+
 function editorDimensions(stepCount, laneCount) {
   const gridCellW = 25;
   const gridCellH = 22;
@@ -618,6 +728,7 @@ const patch = {
         numoutlets: 1,
         outlettype: [""]
       }),
+      ...nativeTimingBoxes(),
       box("tempo_observer", "newobj", "live.observer tempo", [880.0, 740.0, 130.0, 22.0], {
         numinlets: 1,
         numoutlets: 1,
@@ -666,6 +777,7 @@ const patch = {
       line("note-unpack", 2, "note-delay", 2),
       line("note-unpack", 1, "note-delay", 1),
       line("note-unpack", 0, "note-delay", 0),
+      ...nativeTimingLines(),
       line("note-delay", 3, "makenote", 3),
       line("note-delay", 2, "makenote", 2),
       line("note-delay", 1, "makenote", 1),
@@ -692,6 +804,8 @@ const patch = {
       line("tempoprep", 0, "engine", 0),
       line("observer", 0, "selstop", 0),
       line("selstop", 0, "resetmsg", 0),
+      line("selstop", 0, "native-step-reset-msg", 0),
+      line("loadbang", 0, "native-step-reset-msg", 0),
       line("resetmsg", 0, "engine", 0)
     ],
     dependency_cache: [

@@ -135,12 +135,13 @@ function validateNativeScheduler(patcher, errors) {
   const expectedText = {
     "note-unpack": "unpack i i i i f",
     "note-delay": "pipe 0 0 0 0 0.",
-    "makenote": "makenote 0 100 1 @repeatmode 1",
-    "schedcmds": "r ksh_scheduler_commands",
-    "route-scheduler-clear": "route clear",
-    "clear-delay-msg": "clear",
-    "stop-notes-msg": "stop"
-  };
+	    "makenote": "makenote 0 100 1 @repeatmode 1",
+	    "schedcmds": "r ksh_scheduler_commands",
+	    "route-scheduler-clear": "route clear",
+	    "clear-delay-msg": "clear",
+	    "stop-notes-msg": "stop",
+	    "native-step-reset-msg": "set -1"
+	  };
   const expectedLines = [
     ["engine", 0, "note-unpack", 0],
     ["note-unpack", 4, "note-delay", 4],
@@ -158,9 +159,12 @@ function validateNativeScheduler(patcher, errors) {
     ["schedcmds", 0, "route-scheduler-clear", 0],
     ["route-scheduler-clear", 0, "clear-delay-msg", 0],
     ["route-scheduler-clear", 0, "stop-notes-msg", 0],
-    ["clear-delay-msg", 0, "note-delay", 0],
-    ["stop-notes-msg", 0, "makenote", 0]
-  ];
+	    ["clear-delay-msg", 0, "note-delay", 0],
+	    ["stop-notes-msg", 0, "makenote", 0],
+	    ["native-step-reset-msg", 0, "native-step-change", 0],
+	    ["selstop", 0, "native-step-reset-msg", 0],
+	    ["loadbang", 0, "native-step-reset-msg", 0]
+	  ];
   const lines = patcher.lines || [];
 
   for (const id of Object.keys(expectedText)) {

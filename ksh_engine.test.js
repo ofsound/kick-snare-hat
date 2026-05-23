@@ -576,6 +576,262 @@ function testTransportLookaheadDropsStaleCurrentStep() {
   assert.strictEqual(engine._notes.length, 0);
 }
 
+function testNativePlaybackRowsIncludeDeterministicHitsAndSwing() {
+  var engine = makeEngine([0]);
+  var rows;
+  clearAll(engine);
+  engine.setStepCount(2);
+  engine.setChannelCount(1);
+  engine.setRate("16n");
+  engine.setTempo(120);
+  engine.setSwing(100);
+  engine.setCell(0, 0, 0, 1, 100, 100, 1);
+  engine.setCell(0, 0, 1, 1, 80, 100, 1);
+
+  rows = engine.buildNativePlaybackRows();
+
+  assert.deepStrictEqual(rows[0], [36, 100, 100, 1, 0]);
+  assert.deepStrictEqual(rows[1], [36, 80, 100, 1, 62.5]);
+}
+
+function testNativePlaybackRowsPrecomputeCycleGates() {
+  var engine = makeEngine([0]);
+  var rows;
+  clearAll(engine);
+  engine.setStepCount(1);
+  engine.setChannelCount(1);
+  engine.setCell(0, 0, 0, 1, 100, 100, 3);
+
+  rows = engine.buildNativePlaybackRows();
+
+  assert.strictEqual(engine.nativePlaybackStepCount, 3);
+  assert.deepStrictEqual(rows[0], [36, 100, 100, 1, 0]);
+  assert.deepStrictEqual(rows[1], []);
+  assert.deepStrictEqual(rows[2], []);
+}
+
+function testNativePlaybackRowsUseLeastCommonCyclePeriod() {
+  var engine = makeEngine([0]);
+  var rows;
+  clearAll(engine);
+  engine.setStepCount(1);
+  engine.setChannelCount(2);
+  engine.setCell(0, 0, 0, 1, 100, 100, 2);
+  engine.setCell(0, 1, 0, 1, 90, 100, 3);
+
+  rows = engine.buildNativePlaybackRows();
+
+  assert.strictEqual(engine.nativePlaybackStepCount, 6);
+  assert.deepStrictEqual(rows[0], [
+    engine.channels[0].note, 100, 100, 1, 0,
+    engine.channels[1].note, 90, 100, 1, 0
+  ]);
+  assert.deepStrictEqual(rows[1], []);
+  assert.deepStrictEqual(rows[2], [engine.channels[0].note, 100, 100, 1, 0]);
+  assert.deepStrictEqual(rows[3], [engine.channels[1].note, 90, 100, 1, 0]);
+  assert.deepStrictEqual(rows[4], [engine.channels[0].note, 100, 100, 1, 0]);
+  assert.deepStrictEqual(rows[5], []);
+}
+
+function testNativePlaybackRowsPrerollProbability() {
+  var engine = makeEngine([0.1, 0.9, 0.2, 0.8]);
+  var rows;
+  clearAll(engine);
+  engine.setStepCount(1);
+  engine.setChannelCount(1);
+  engine.setCell(0, 0, 0, 1, 100, 50, 1);
+
+  rows = engine.buildNativePlaybackRows();
+
+  assert.strictEqual(engine.nativePlaybackStepCount, 16);
+  assert.deepStrictEqual(rows[0], [36, 100, 100, 1, 0]);
+  assert.deepStrictEqual(rows[1], []);
+  assert.deepStrictEqual(rows[2], [36, 100, 100, 1, 0]);
+  assert.deepStrictEqual(rows[3], []);
+}
+
+function testNativePlaybackRowsEvaluateCycleBeforeProbability() {
+  var randomCalls = 0;
+  var engine = new KickSnareHatEngine({
+    rng: function () {
+      randomCalls += 1;
+      return 0;
+    }
+  });
+  engine._notes = [];
+  clearAll(engine);
+  engine.setStepCount(1);
+  engine.setChannelCount(1);
+  engine.setCell(0, 0, 0, 1, 100, 50, 2);
+
+  engine.buildNativePlaybackRows();
+
+  assert.strictEqual(engine.nativePlaybackStepCount, 32);
+  assert.strictEqual(randomCalls, 16);
+}
+
+function testNativePlaybackRowsPrerollVelocityHumanize() {
+  var engine = makeEngine([0, 1, 0.5]);
+  var rows;
+  clearAll(engine);
+  engine.setStepCount(1);
+  engine.setChannelCount(1);
+  engine.setVelocityHumanize(20);
+  engine.setCell(0, 0, 0, 1, 100, 100, 1);
+
+  rows = engine.buildNativePlaybackRows();
+
+  assert.strictEqual(engine.nativePlaybackStepCount, 16);
+  assert.deepStrictEqual(rows[0], [36, 80, 100, 1, 0]);
+  assert.deepStrictEqual(rows[1], [36, 120, 100, 1, 0]);
+  assert.deepStrictEqual(rows[2], [36, 100, 100, 1, 0]);
+}
+
+function testNativePlaybackRowsShareVariationExpansionForProbabilityAndVelocity() {
+  var engine = makeEngine([0, 0, 0, 0]);
+  clearAll(engine);
+  engine.setStepCount(1);
+  engine.setChannelCount(1);
+  engine.setVelocityHumanize(20);
+  engine.setCell(0, 0, 0, 1, 100, 50, 1);
+
+  engine.buildNativePlaybackRows();
+
+  assert.strictEqual(engine.nativePlaybackStepCount, 16);
+}
+
+function testNativePlaybackRowsPrerollLateTimingHumanize() {
+  var engine = makeEngine([1]);
+  var rows;
+  clearAll(engine);
+  engine.setStepCount(1);
+  engine.setChannelCount(1);
+  engine.setRate("16n");
+  engine.setTempo(120);
+  engine.setTimingHumanize(100);
+  engine.setCell(0, 0, 0, 1, 100, 100, 1);
+
+  rows = engine.buildNativePlaybackRows();
+
+  assert.strictEqual(engine.nativePlaybackStepCount, 16);
+  assert.deepStrictEqual(rows[0], [36, 100, 100, 1, 25]);
+}
+
+function testNativePlaybackRowsPrerollEarlyTimingHumanize() {
+  var engine = makeEngine([0]);
+  var rows;
+  clearAll(engine);
+  engine.setStepCount(2);
+  engine.setChannelCount(1);
+  engine.setRate("16n");
+  engine.setTempo(120);
+  engine.setTimingHumanize(100);
+  engine.setCell(0, 0, 1, 1, 100, 100, 1);
+
+  rows = engine.buildNativePlaybackRows();
+
+  assert.strictEqual(engine.nativePlaybackStepCount, 32);
+  assert.deepStrictEqual(rows[0], [36, 100, 100, 1, 100]);
+  assert.deepStrictEqual(rows[1], []);
+}
+
+function testNativePlaybackRowsClampFirstStepEarlyTiming() {
+  var engine = makeEngine([0]);
+  var rows;
+  clearAll(engine);
+  engine.setStepCount(2);
+  engine.setChannelCount(1);
+  engine.setRate("16n");
+  engine.setTempo(120);
+  engine.setTimingHumanize(100);
+  engine.setCell(0, 0, 0, 1, 100, 100, 1);
+
+  rows = engine.buildNativePlaybackRows();
+
+  assert.deepStrictEqual(rows[0], [36, 100, 100, 1, 0]);
+  assert.deepStrictEqual(rows[1], [36, 100, 100, 1, 100]);
+}
+
+function testNativeTimingSuppressesJsLookaheadWhenSupported() {
+  var engine = makeEngine([0]);
+  clearAll(engine);
+  engine.setStepCount(4);
+  engine.setChannelCount(1);
+  engine.setRate("16n");
+  engine.setCell(0, 0, 0, 1, 100, 100, 1);
+  engine.setNativeTiming(1);
+  engine._notes.length = 0;
+
+  engine.transportPosition(0, 1);
+
+  assert.strictEqual(engine.nativeTimingActive(), true);
+  assert.strictEqual(engine._notes.length, 0);
+}
+
+function testNativeTimingSupportsCycleGates() {
+  var engine = makeEngine([0]);
+  clearAll(engine);
+  engine.setStepCount(1);
+  engine.setChannelCount(1);
+  engine.setCell(0, 0, 0, 1, 100, 100, 2);
+  engine.setNativeTiming(1);
+  engine._notes.length = 0;
+
+  engine.transportPosition(0, 1);
+
+  assert.strictEqual(engine.nativeTimingActive(), true);
+  assert.strictEqual(engine._notes.length, 0);
+}
+
+function testNativeTimingSupportsProbabilityPreroll() {
+  var engine = makeEngine([0]);
+  clearAll(engine);
+  engine.setStepCount(4);
+  engine.setChannelCount(1);
+  engine.setRate("16n");
+  engine.setCell(0, 0, 0, 1, 100, 50, 1);
+  engine.setNativeTiming(1);
+  engine._notes.length = 0;
+  engine._setRandomValues([0]);
+
+  engine.transportPosition(0, 1);
+
+  assert.strictEqual(engine.nativeTimingActive(), true);
+  assert.strictEqual(engine._notes.length, 0);
+}
+
+function testNativeTimingSupportsVelocityHumanizePreroll() {
+  var engine = makeEngine([0]);
+  clearAll(engine);
+  engine.setStepCount(4);
+  engine.setChannelCount(1);
+  engine.setVelocityHumanize(20);
+  engine.setCell(0, 0, 0, 1, 100, 100, 1);
+  engine.setNativeTiming(1);
+  engine._notes.length = 0;
+
+  engine.transportPosition(0, 1);
+
+  assert.strictEqual(engine.nativeTimingActive(), true);
+  assert.strictEqual(engine._notes.length, 0);
+}
+
+function testNativeTimingSupportsTimingHumanizePreroll() {
+  var engine = makeEngine([0]);
+  clearAll(engine);
+  engine.setStepCount(4);
+  engine.setChannelCount(1);
+  engine.setTimingHumanize(20);
+  engine.setCell(0, 0, 0, 1, 100, 100, 1);
+  engine.setNativeTiming(1);
+  engine._notes.length = 0;
+
+  engine.transportPosition(0, 1);
+
+  assert.strictEqual(engine.nativeTimingActive(), true);
+  assert.strictEqual(engine._notes.length, 0);
+}
+
 function testTransportPositionDoesNotFireWhileStopped() {
   var engine = makeEngine([0]);
   clearAll(engine);
@@ -959,6 +1215,21 @@ testTransportPositionFiresOnlyWhenLiveStepChanges();
 testTransportPositionDropsMissedStepsOnJump();
 testTransportLookaheadQueuesFutureStepWithDelay();
 testTransportLookaheadDropsStaleCurrentStep();
+testNativePlaybackRowsIncludeDeterministicHitsAndSwing();
+testNativePlaybackRowsPrecomputeCycleGates();
+testNativePlaybackRowsUseLeastCommonCyclePeriod();
+testNativePlaybackRowsPrerollProbability();
+testNativePlaybackRowsEvaluateCycleBeforeProbability();
+testNativePlaybackRowsPrerollVelocityHumanize();
+testNativePlaybackRowsShareVariationExpansionForProbabilityAndVelocity();
+testNativePlaybackRowsPrerollLateTimingHumanize();
+testNativePlaybackRowsPrerollEarlyTimingHumanize();
+testNativePlaybackRowsClampFirstStepEarlyTiming();
+testNativeTimingSuppressesJsLookaheadWhenSupported();
+testNativeTimingSupportsCycleGates();
+testNativeTimingSupportsProbabilityPreroll();
+testNativeTimingSupportsVelocityHumanizePreroll();
+testNativeTimingSupportsTimingHumanizePreroll();
 testTransportPositionDoesNotFireWhileStopped();
 testDeviceInactiveSuppressesTransportAndAudition();
 testDeserializeAcceptsUILaneSchema();

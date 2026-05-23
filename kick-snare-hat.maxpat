@@ -1721,6 +1721,304 @@
       },
       {
         "box": {
+          "id": "native-meta-recv",
+          "maxclass": "newobj",
+          "numinlets": 0,
+          "numoutlets": 1,
+          "patching_rect": [
+            180,
+            1000,
+            120,
+            22
+          ],
+          "outlettype": [
+            ""
+          ],
+          "text": "r ksh_native_meta"
+        }
+      },
+      {
+        "box": {
+          "id": "native-meta-route",
+          "maxclass": "newobj",
+          "numinlets": 1,
+          "numoutlets": 2,
+          "patching_rect": [
+            180,
+            1040,
+            70,
+            22
+          ],
+          "outlettype": [
+            "",
+            ""
+          ],
+          "text": "route meta"
+        }
+      },
+      {
+        "box": {
+          "id": "native-meta-unpack",
+          "maxclass": "newobj",
+          "numinlets": 1,
+          "numoutlets": 3,
+          "patching_rect": [
+            260,
+            1000,
+            80,
+            22
+          ],
+          "outlettype": [
+            "float",
+            "float",
+            "int"
+          ],
+          "text": "unpack f f i"
+        }
+      },
+      {
+        "box": {
+          "id": "native-bps",
+          "maxclass": "newobj",
+          "numinlets": 1,
+          "numoutlets": 1,
+          "patching_rect": [
+            260,
+            1040,
+            40,
+            22
+          ],
+          "outlettype": [
+            "float"
+          ],
+          "text": "f 0.25"
+        }
+      },
+      {
+        "box": {
+          "id": "native-phase",
+          "maxclass": "newobj",
+          "numinlets": 1,
+          "numoutlets": 1,
+          "patching_rect": [
+            260,
+            1080,
+            40,
+            22
+          ],
+          "outlettype": [
+            "float"
+          ],
+          "text": "f 0."
+        }
+      },
+      {
+        "box": {
+          "id": "native-steps",
+          "maxclass": "newobj",
+          "numinlets": 1,
+          "numoutlets": 1,
+          "patching_rect": [
+            260,
+            1120,
+            40,
+            22
+          ],
+          "outlettype": [
+            "int"
+          ],
+          "text": "i 16"
+        }
+      },
+      {
+        "box": {
+          "id": "native-step-expr",
+          "maxclass": "newobj",
+          "numinlets": 4,
+          "numoutlets": 1,
+          "patching_rect": [
+            340,
+            1040,
+            220,
+            22
+          ],
+          "outlettype": [
+            "int"
+          ],
+          "text": "expr floor((($f1-$f2)/$f3)+0.000001)%$f4"
+        }
+      },
+      {
+        "box": {
+          "id": "native-step-change",
+          "maxclass": "newobj",
+          "numinlets": 1,
+          "numoutlets": 2,
+          "patching_rect": [
+            340,
+            1080,
+            50,
+            22
+          ],
+          "outlettype": [
+            "bang",
+            "int"
+          ],
+          "text": "change"
+        }
+      },
+      {
+        "box": {
+          "id": "native-step-reset-msg",
+          "maxclass": "message",
+          "numinlets": 2,
+          "numoutlets": 1,
+          "patching_rect": [
+            340,
+            1120,
+            54,
+            22
+          ],
+          "outlettype": [
+            ""
+          ],
+          "text": "set -1"
+        }
+      },
+      {
+        "box": {
+          "id": "native-transport-unpack",
+          "maxclass": "newobj",
+          "numinlets": 1,
+          "numoutlets": 3,
+          "patching_rect": [
+            180,
+            1160,
+            90,
+            22
+          ],
+          "outlettype": [
+            "",
+            "float",
+            "int"
+          ],
+          "text": "unpack s f i"
+        }
+      },
+      {
+        "box": {
+          "id": "native-timing-gate-recv",
+          "maxclass": "newobj",
+          "numinlets": 0,
+          "numoutlets": 1,
+          "patching_rect": [
+            480,
+            1040,
+            160,
+            22
+          ],
+          "outlettype": [
+            "int"
+          ],
+          "text": "r ksh_native_timing_gate"
+        }
+      },
+      {
+        "box": {
+          "id": "native-playing-gate",
+          "maxclass": "newobj",
+          "numinlets": 2,
+          "numoutlets": 1,
+          "patching_rect": [
+            420,
+            1080,
+            40,
+            22
+          ],
+          "outlettype": [
+            ""
+          ],
+          "text": "gate"
+        }
+      },
+      {
+        "box": {
+          "id": "native-mode-gate",
+          "maxclass": "newobj",
+          "numinlets": 2,
+          "numoutlets": 1,
+          "patching_rect": [
+            480,
+            1080,
+            40,
+            22
+          ],
+          "outlettype": [
+            ""
+          ],
+          "text": "gate"
+        }
+      },
+      {
+        "box": {
+          "id": "native-playback-cmds",
+          "maxclass": "newobj",
+          "numinlets": 0,
+          "numoutlets": 1,
+          "patching_rect": [
+            600,
+            1040,
+            190,
+            22
+          ],
+          "outlettype": [
+            ""
+          ],
+          "text": "r ksh_native_playback_commands"
+        }
+      },
+      {
+        "box": {
+          "id": "native-playback-coll",
+          "maxclass": "newobj",
+          "numinlets": 1,
+          "numoutlets": 4,
+          "patching_rect": [
+            600,
+            1080,
+            150,
+            22
+          ],
+          "outlettype": [
+            "",
+            "",
+            "",
+            ""
+          ],
+          "text": "coll ksh_native_playback"
+        }
+      },
+      {
+        "box": {
+          "id": "native-hit-iter",
+          "maxclass": "newobj",
+          "numinlets": 2,
+          "numoutlets": 2,
+          "patching_rect": [
+            600,
+            1120,
+            62,
+            22
+          ],
+          "outlettype": [
+            "",
+            ""
+          ],
+          "text": "zl.iter 5"
+        }
+      },
+      {
+        "box": {
           "id": "tempo_observer",
           "maxclass": "newobj",
           "numinlets": 1,
@@ -2192,6 +2490,246 @@
       {
         "patchline": {
           "source": [
+            "native-meta-recv",
+            0
+          ],
+          "destination": [
+            "native-meta-route",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "native-meta-route",
+            0
+          ],
+          "destination": [
+            "native-meta-unpack",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "native-meta-unpack",
+            0
+          ],
+          "destination": [
+            "native-bps",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "native-meta-unpack",
+            1
+          ],
+          "destination": [
+            "native-phase",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "native-meta-unpack",
+            2
+          ],
+          "destination": [
+            "native-steps",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "transportbeat",
+            1
+          ],
+          "destination": [
+            "native-step-expr",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "native-phase",
+            0
+          ],
+          "destination": [
+            "native-step-expr",
+            1
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "native-bps",
+            0
+          ],
+          "destination": [
+            "native-step-expr",
+            2
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "native-steps",
+            0
+          ],
+          "destination": [
+            "native-step-expr",
+            3
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "native-step-expr",
+            0
+          ],
+          "destination": [
+            "native-step-change",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "native-step-change",
+            0
+          ],
+          "destination": [
+            "native-playing-gate",
+            1
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "native-step-reset-msg",
+            0
+          ],
+          "destination": [
+            "native-step-change",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "transportpos",
+            0
+          ],
+          "destination": [
+            "native-transport-unpack",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "native-transport-unpack",
+            2
+          ],
+          "destination": [
+            "native-playing-gate",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "native-playing-gate",
+            0
+          ],
+          "destination": [
+            "native-mode-gate",
+            1
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "native-timing-gate-recv",
+            0
+          ],
+          "destination": [
+            "native-mode-gate",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "native-mode-gate",
+            0
+          ],
+          "destination": [
+            "native-playback-coll",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "native-playback-cmds",
+            0
+          ],
+          "destination": [
+            "native-playback-coll",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "native-playback-coll",
+            0
+          ],
+          "destination": [
+            "native-hit-iter",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "native-hit-iter",
+            0
+          ],
+          "destination": [
+            "note-unpack",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
             "note-delay",
             3
           ],
@@ -2497,6 +3035,30 @@
           ],
           "destination": [
             "resetmsg",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "selstop",
+            0
+          ],
+          "destination": [
+            "native-step-reset-msg",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "loadbang",
+            0
+          ],
+          "destination": [
+            "native-step-reset-msg",
             0
           ]
         }

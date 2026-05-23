@@ -14,7 +14,7 @@ persist independent state.
 - `preview <json>` sends `snapshot()` output for the generated grid and current
   visible dimensions.
 - Status selectors such as `steps`, `channels`, `refresh_steps`, `mode`, `rate`,
-  `swing`, `velocity_humanize`, `timing_humanize`, `device_active`, `phase_offset_beats`,
+  `swing`, `velocity_humanize`, `timing_humanize`, `device_active`, `native_timing`, `phase_offset_beats`,
   `channel_label`, `channel_note`, `channel_lock`, `static_source`, and
   `source_channel_mute` are incremental UI hints emitted by setters.
   `channel_loop_length <channel> <steps>` sets the per-channel source row loop
@@ -34,6 +34,10 @@ persist independent state.
 - `request_state` asks for `engine_state` only.
 - `device_active 0|1` toggles transport note output and clears pending scheduler
   output when disabled.
+- `native_timing 0|1` toggles the experimental Max-native playback-table path.
+  Cycle, probability, velocity humanize, and timing humanize values are
+  precomputed into the playback table. Native timing humanize uses a subtler
+  range than the JS fallback and moves early hits into earlier table rows.
 - `velocity_humanize <0-100>` offsets emitted velocities per hit by a signed
   percentage of the source-cell velocity.
 - `timing_humanize <0-100>` offsets emitted note timing per hit by a signed
