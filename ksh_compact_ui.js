@@ -65,18 +65,8 @@ function makeState() {
     staticSource: 0,
     rate: "16n",
     swing: 0,
-    tempo: 120,
-    phaseOffsetBeats: 0,
     lanes: lanes
   };
-}
-
-function phaseEarlyMs() {
-  return ksh_shared.phaseOffsetMs(state.phaseOffsetBeats, state.tempo);
-}
-
-function setPhaseEarlyMs(ms) {
-  send("phase_offset_beats", ksh_shared.phaseOffsetBeatsFromMs(ms, state.tempo));
 }
 
 function paint() {
@@ -86,37 +76,9 @@ function paint() {
   drawPreview();
 }
 
-function phaseEarlyMsLabel() {
-  var ms = phaseEarlyMs();
-
-  if (ms > 0) {
-    return "+" + ms;
-  }
-  return String(ms);
-}
-
-function drawCompactPhaseControl(x, y, w) {
-  var rowH = 22;
-  var btnW = 22;
-  var valueW = w - btnW * 2;
-  var msLabel = phaseEarlyMsLabel();
-
-  ksh_shared.text("Phase", x, y, 10, colors.muted);
-  y += 14;
-  ksh_shared.button(hitZones, "phase_early_ms_dec", "-", x, y, btnW, rowH, false);
-  ksh_shared.rect(x + btnW, y, valueW, rowH, colors.panel2);
-  ksh_shared.strokeRect(x + btnW, y, valueW, rowH, colors.strokeSoft, 1);
-  ksh_shared.text(msLabel + "ms", x + btnW + valueW / 2, y + rowH / 2 + 4, 11, colors.text, "center");
-  ksh_shared.button(hitZones, "phase_early_ms_inc", "+", x + w - btnW, y, btnW, rowH, false);
-}
-
 function drawActionColumn() {
-  var x = 14;
-  var controlW = ACTION_COLUMN_WIDTH - x * 2;
-
   ksh_shared.rect(0, 0, ACTION_COLUMN_WIDTH, HEIGHT, colors.panel2);
-  ksh_shared.button(hitZones, "open_editor", "Edit", x, 18, controlW, 25, true);
-  drawCompactPhaseControl(x, 52, controlW);
+  ksh_shared.button(hitZones, "open_editor", "Edit", 14, 18, 58, 25, true);
 }
 
 function drawPreview() {
@@ -216,10 +178,6 @@ function onclick(x, y, button, cmd, shift) {
 
   if (z.id === "open_editor") {
     send("open_editor");
-  } else if (z.id === "phase_early_ms_inc") {
-    setPhaseEarlyMs(phaseEarlyMs() + (shift ? 5 : 1));
-  } else if (z.id === "phase_early_ms_dec") {
-    setPhaseEarlyMs(phaseEarlyMs() - (shift ? 5 : 1));
   }
   mgraphics.redraw();
 }
