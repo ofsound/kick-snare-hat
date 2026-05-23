@@ -315,8 +315,8 @@ const patch = {
       box("engine", "newobj", "js ksh_engine.js", [540.0, 800.0, 120.0, 22.0], {
         varname: "ksh_engine",
         numinlets: 1,
-        numoutlets: 2,
-        outlettype: ["", ""]
+        numoutlets: 1,
+        outlettype: [""]
       }),
       box("note-unpack", "newobj", "unpack i i i i f", [540.0, 840.0, 112.0, 22.0], {
         numinlets: 1,

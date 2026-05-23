@@ -6,8 +6,11 @@ persist independent state.
 
 ## Engine events
 
-- `engine_state <json>` sends `serialize()` output: global settings, channel
-  metadata, and source cells. It does not include the generated preview grid.
+- `engine_state <json>` sends compact `serializeForPersistence()` output (`v:1`:
+  globals, channel metadata, sparse source cells, mutes). Same shape as the
+  `ksh_pattern_data` Live parameter. It does not include the generated preview
+  grid. (Full `serialize()` is not sent over `messnamed`—it is too large for the
+  editor `jsui`.)
 - `preview <json>` sends `snapshot()` output for the generated grid and current
   visible dimensions.
 - Status selectors such as `steps`, `channels`, `refresh_steps`, `mode`, `rate`,
@@ -41,6 +44,9 @@ persist independent state.
   the editor mirrors it as the visible source pattern.
 - Compact and editor UIs call `sync_all` during init/load/open paths so a newly
   visible UI catches up to the persisted engine state.
+- After a set reload, the patch runs `restore_pattern_store`; on success the
+  engine emits compact `engine_state` and `ksh_ui_commands init`. UIs hydrate via
+  `ksh_ui_shared.applyPersistenceState()` when `engine_state` has `v:1`.
 
 ## Compact vs editor
 

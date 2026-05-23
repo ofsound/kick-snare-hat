@@ -11,7 +11,7 @@ Use this before and during feature branches. It is intentionally limited to deci
 - [ ] Clarify the product behavior in Ableton terms before coding. If multiple interpretations exist, ask.
 - [ ] Identify whether the feature touches engine logic, Max message handlers, UI state/painting, persistence, patch wiring, or generated device artifacts.
 - [ ] For new cell fields, rates, limits, or shared validation, update `ksh_constants.js` first.
-- [ ] For new persisted fields, plan `serialize()`, `deserialize()`, and any necessary `normalizeIncomingState()` migration.
+- [ ] For new persisted fields, plan `serializeForPersistence()` / `deserializeForPersistence()` (Live saves), `serialize()` / `deserialize()` (runtime/tests), and any necessary `normalizeIncomingState()` migration.
 - [ ] For UI-facing changes, review [ui-sync.md](./ui-sync.md) so the feature uses `engine_state`, `preview`, status selectors, and optimistic editor edits correctly.
 
 ---
@@ -22,7 +22,7 @@ Use this before and during feature branches. It is intentionally limited to deci
 
 - [ ] Keep Max-facing source/channel/step indexes 1-based; keep engine internals 0-based.
 - [ ] Add or extend `ksh_engine.test.js` for generation, persistence, and deterministic RNG behavior.
-- [ ] Touch `ksh_engine.max.test.js` when Max handlers, wrapper plumbing, `getvalueof`, or `setvalueof` change.
+- [ ] Touch `ksh_engine.max.test.js` when Max handlers, wrapper plumbing, `pattern_data`, `restore_pattern_store`, or legacy `getvalueof` / `setvalueof` change.
 - [ ] Emit a status selector when UIs need incremental updates.
 - [ ] Use `emitFullState()` for load/reset/restore/sync paths, not hot cell or transport paths.
 - [ ] For interactive source-cell edits, rely on `generatedCellForSourceEdit()` and `markPreviewDirty()` unless the product behavior requires a full re-roll.

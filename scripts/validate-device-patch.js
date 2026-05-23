@@ -208,8 +208,8 @@ function validatePersistence(patcher, errors) {
     errors.push("root: engine js object should not define Live valueof parameter attributes");
   }
 
-  if (engine.numoutlets < 2) {
-    errors.push("root: engine js object must expose outlet 1 for Live-set persistence");
+  if (engine.numoutlets < 1) {
+    errors.push("root: engine js object must expose outlet 0 for MIDI notes");
   }
 
   if (!dirtyParam) {
@@ -269,7 +269,7 @@ function validatePersistence(patcher, errors) {
   }
 
   if (hasLine(patcher, "engine", 1, "pattern-store", 0)) {
-    errors.push("root: engine must write pattern-store via text message, not a patch cord");
+    errors.push("root: engine must write pattern-store via js set message, not outlet 1 or a patch cord");
   }
 
   if (hasLine(patcher, "pattern-store-prep", 0, "pattern-store", 0)) {

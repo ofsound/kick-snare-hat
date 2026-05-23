@@ -1414,14 +1414,11 @@ function pushPatternToStore() {
           json = encodeURIComponent(json);
         }
         store.message("set", json);
-        return;
       }
     } catch (pushError) {
       KSH_CONSTANTS.debugPost("pattern-store set failed", pushError);
     }
   }
-
-  safeOutlet.apply(this, [1].concat(encodeStateJson(json)));
 }
 
 function markPersistentChange() {

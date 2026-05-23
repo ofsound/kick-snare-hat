@@ -14,9 +14,10 @@ alwaysApply: false
 
 ## State and persistence
 
-- `serialize()` / `deserialize()` / `snapshot()` are the contract for `pattrstorage` and UI mirrors.
+- **Live sets:** `serializeForPersistence()` / `deserializeForPersistence()` compact `v:1` JSON in `textedit` `ksh_pattern_data`; `pushPatternToStore()` uses `set` + URI encoding.
+- **Runtime / tests:** `serialize()` / `deserialize()` / `snapshot()` for full engine state; `getvalueof` / `setvalueof` / `save()` + `embedded_state_*` are legacy/test/device-embed paths—not wired for `.als` recall in the current patch.
 - `normalizeIncomingState()` accepts legacy UI shapes (`lanes` → `channels`, nested `state`).
-- UI sync: `emitFullState()` → `messnamed("ksh_engine_events", "engine_state", ...)`. Preview grid: `"preview"`.
+- UI sync: `emitFullState()` → compact persistence JSON on `engine_state` (full `serialize()` is too large for `messnamed` to the editor). Preview grid: `"preview"`.
 
 ## Max inlet handlers
 

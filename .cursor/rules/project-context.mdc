@@ -16,7 +16,10 @@ alwaysApply: true
 - `ksh_compact_ui.js` — Live device strip UI
 - `ksh_ui.js` — editor subpatcher UI
 - `ksh_ui_shared.js` — shared drawing/state helpers (`include("ksh_ui_shared.js")`)
+- `ksh_constants.js` — shared limits and normalization
 - `Kick-Snare-Hat.amxd` — loadable device (JS must sit beside it in User Library)
+
+**Persistence:** `textedit` `ksh_pattern_data` (compact `v:1` JSON) saves with the Live set; see `README.md` § Live set persistence.
 
 Patch shell: `kick-snare-hat.maxpat` (generated/edited via `scripts/build-device-patch.js`).
 

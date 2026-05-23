@@ -15,7 +15,7 @@ For per-feature workflow, use [feature-prep-checklist.md](./feature-prep-checkli
 When adding a persisted field, rate, limit, or cell property:
 
 1. Update `ksh_constants.js` first if normalization/defaults are shared.
-2. Add engine state, setter logic, serialization, deserialization, and focused `ksh_engine.test.js` coverage.
+2. Add engine state, setter logic, `serializeForPersistence()` / `deserializeForPersistence()` (Live), `serialize()` / `deserialize()` (runtime), and focused `ksh_engine.test.js` coverage.
 3. Add the Max-facing handler in `ksh_engine.js`, keeping source/channel/step indexes 1-based at the message boundary.
 4. Add UI state/controls only when the feature is user-facing.
 5. Update README message docs and `ksh_engine.max.test.js` when handlers or Max wrapper behavior change.
@@ -24,7 +24,7 @@ When adding a persisted field, rate, limit, or cell property:
 
 The engine is the source of truth. UIs mirror `engine_state` and `preview`, then send commands back through the named-message bus.
 
-- `engine_state` is serialized pattern/global state. It does not include the generated grid.
+- `engine_state` is compact `serializeForPersistence()` JSON (`v:1`). It does not include the generated grid.
 - `preview` is generated-grid state from `snapshot()`.
 - Editor source-cell edits are optimistic: the editor updates local `state.sources`, sends `cell`, and does not wait for an engine `cell` echo.
 - Hot-path cell edits should rely on `generatedCellForSourceEdit()` plus `markPreviewDirty()`, not full `emitFullState()`.
@@ -33,9 +33,11 @@ See [ui-sync.md](./ui-sync.md) before changing message flow.
 
 ### Persistence recovery
 
-`setvalueof` guards malformed JSON and restores the last good engine state. `normalizeIncomingState()` accepts legacy `laneCount` / `lanes` shapes and maps them to `channelCount` / `channels`.
+Live sets store compact JSON on `textedit` `ksh_pattern_data`. The engine writes with `set` + URI encoding and recalls via `restore_pattern_store` → `pattern_data`. `persistencePayloadLooksLikeJson()` rejects empty values and the literal `get` token from old bad wiring.
 
-New persisted fields should be added to `serialize()` and `deserialize()`. Only extend `normalizeIncomingState()` when a legacy shape or migration actually exists.
+`setvalueof` / chunked `getvalueof` / `save()` + `embedded_state_*` remain in `ksh_engine.js` for Max wrapper tests and optional device-embed saves; they are **not** wired in the current patch for `.als` recall. `normalizeIncomingState()` accepts legacy `laneCount` / `lanes` shapes and maps them to `channelCount` / `channels`.
+
+New Live-persisted fields belong in `serializeForPersistence()` / `deserializeForPersistence()`. Extend full `serialize()` / `deserialize()` when runtime or tests need them. Only extend `normalizeIncomingState()` when a legacy shape or migration actually exists.
 
 ### Debug visibility
 
@@ -72,6 +74,7 @@ These are not blockers for feature work:
 | Throttle `preview` JSON during playback | Current limits are small; profile in Live before optimizing. |
 | Automated `jsui` tests | Setup cost is high; engine + Max VM tests cover the core logic. |
 | Rename all UI `lane*` internals to `channel*` | Cosmetic unless already editing those paths. |
+| Trim legacy `getvalueof` / outlet chunking / unused second engine outlet | Live path is `ksh_pattern_data` only; keep until tests and embed `save()` path are re-audited. |
 
 ---
 

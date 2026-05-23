@@ -28,7 +28,7 @@ of using unconstrained randomness.
 - Floating editor subpatcher opened from the compact UI, with source dropdown, all-lane source grid editor, generated grid preview, lane labels, lane note/lock controls, and per-cell velocity/probability/cycle controls.
 - Source Pattern layer modes for velocity, cycle, and probability via buttons, number keys `1`/`2`/`3`, Shift hover for cycle, and Option hover for probability.
 - Source Pattern row labels can mute a source/channel row or reset it to blank defaults.
-- Hidden `textedit` Live parameter `ksh_pattern_data` stores compact pattern JSON with the set; UIs mirror via `engine_state` / `preview` events.
+- Live set persistence: all four source patterns, globals, and channel metadata save with the Ableton set (see [Live set persistence](#live-set-persistence)).
 - Per-source cell values:
   - enabled
   - velocity
@@ -49,6 +49,28 @@ of using unconstrained randomness.
 - `scripts/build-device-patch.js`: regenerates the `.maxpat` and `.amxd` shell.
 - `scripts/validate-device-patch.js`: checks patch wiring and `.amxd` embedding.
 - `docs/ui-sync.md`: documents the UI ↔ engine event contract.
+
+## Live set persistence
+
+Pattern and settings are stored in a hidden Live parameter, not in the UIs or a separate `pattrstorage` blob.
+
+| Piece | Role |
+| --- | --- |
+| `textedit` `ksh_pattern_data` | Live-automatable parameter; holds URI-encoded compact JSON (`v:1`) |
+| `ksh_engine.js` | Writes the store on edits (`serializeForPersistence()`), restores on load |
+| Compact / editor UIs | Mirror engine via `engine_state` and `preview`; not the source of truth |
+
+**Save path:** each persistent edit calls `pushPatternToStore()`, which sends `set <uri-encoded-json>` directly to the `textedit` box (one atom—JSON must not travel on a `prepend set` patch cord or spaces split the payload).
+
+**Restore path:** after the set loads, `restore_pattern_store` retries reading the parameter (LiveAPI, pattr, then `textedit` attrs) for up to ~20s, then applies the payload through `pattern_data` (not `setvalueof`, which breaks on Live’s atom lists). UIs are initialized with `ksh_ui_commands init` after a successful restore.
+
+**UI sync:** `engine_state` carries the same compact `v:1` JSON as the store (full `serialize()` is too large for `messnamed` to the editor `jsui`). `preview` still carries the generated grid only.
+
+**After device updates:** replace the device instance in a set once patch wiring changes; old embedded patches will not pick up new restore lines. Run `node scripts/sync-user-library.js` (or `build-device-patch.js`) so Live loads the matching `.js` files beside the `.amxd`.
+
+Malformed or empty store values (`get`, non-JSON) are ignored so a bad recall does not wipe the current pattern.
+
+**Legacy (not used for Live set recall in the current patch):** `getvalueof` / `setvalueof` (chunked full `serialize()`), `save()` / `embedded_state_*` (device embed), and the engine’s second outlet were earlier persistence experiments—kept for Max wrapper tests and guards only.
 
 ## Max `js` messages
 
@@ -92,12 +114,15 @@ reset
 sync_all
 request_state
 snapshot
+
+pattern_data <json-or-uri-encoded-json>
+restore_pattern_store
 ```
 
 ## Adding a parameter
 
 1. Add shared defaults or normalization to `ksh_constants.js` first when the parameter affects cells, rates, limits, or UI/engine validation.
-2. Add engine state, setter logic, serialization, deserialization, and focused coverage in `ksh_engine.test.js`.
+2. Add engine state, setter logic, `serialize()` / `deserialize()`, `serializeForPersistence()` / `deserializeForPersistence()` (for Live saves), and focused coverage in `ksh_engine.test.js`.
 3. Add the Max `js` message handler in `ksh_engine.js`, keeping Max-facing indexes 1-based when the parameter addresses channels, sources, or steps.
 4. Make the setter emit a status selector if the UIs need an incremental update; see `docs/ui-sync.md` for the event contract.
 5. Add UI controls or state handling in `ksh_compact_ui.js`, `ksh_ui.js`, or `ksh_ui_shared.js` only when the parameter is user-facing.
@@ -134,6 +159,8 @@ node scripts/sync-user-library.js --watch
 Override the destination folder with `KSH_ABLETON_DEST` if needed.
 
 ## Using in Live
+
+Save the set after editing a pattern; reopening the project should restore the compact preview and editor grids. If persistence fails after a device upgrade, confirm `ksh_pattern_data` in the set contains `v:1` JSON (not the literal token `get`) and that you replaced the device with a freshly synced build.
 
 Place `Kick-Snare-Hat.amxd` in the same folder as `ksh_engine.js`, `ksh_compact_ui.js`,
 `ksh_ui.js`, `ksh_ui_shared.js`, and `ksh_constants.js`, then load the device from Ableton’s browser

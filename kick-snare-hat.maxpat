@@ -861,7 +861,7 @@
           "id": "engine",
           "maxclass": "newobj",
           "numinlets": 1,
-          "numoutlets": 2,
+          "numoutlets": 1,
           "patching_rect": [
             540,
             800,
@@ -870,7 +870,6 @@
           ],
           "varname": "ksh_engine",
           "outlettype": [
-            "",
             ""
           ],
           "text": "js ksh_engine.js"
