@@ -1068,6 +1068,37 @@ function sourceStepFromX(x) {
   );
 }
 
+function applyPaintCellProperties(cell, paintCell) {
+  var changed = false;
+
+  if (cell.enabled !== 1) {
+    cell.enabled = 1;
+    changed = true;
+  }
+  if (cell.velocity !== paintCell.velocity) {
+    cell.velocity = paintCell.velocity;
+    changed = true;
+  }
+  if (cell.probability !== paintCell.probability) {
+    cell.probability = paintCell.probability;
+    changed = true;
+  }
+  if (cell.cycle !== paintCell.cycle) {
+    cell.cycle = paintCell.cycle;
+    changed = true;
+  }
+  if (cell.cycleOffset !== paintCell.cycleOffset) {
+    cell.cycleOffset = paintCell.cycleOffset;
+    changed = true;
+  }
+  if (cell.cycleInverted !== paintCell.cycleInverted) {
+    cell.cycleInverted = paintCell.cycleInverted;
+    changed = true;
+  }
+
+  return changed;
+}
+
 function applySourcePaintRange(fromStep, toStep) {
   var lo;
   var hi;
@@ -1088,8 +1119,13 @@ function applySourcePaintRange(fromStep, toStep) {
 
   for (step = lo; step <= hi; step += 1) {
     cell = state.sources[selectedSource][velocityDrag.lane][step];
-    if (cell.enabled !== velocityDrag.paintEnabled) {
-      cell.enabled = velocityDrag.paintEnabled;
+    if (velocityDrag.paintEnabled) {
+      if (applyPaintCellProperties(cell, velocityDrag.paintCell)) {
+        sendCell(selectedSource, velocityDrag.lane, step);
+        changed = true;
+      }
+    } else if (cell.enabled !== 0) {
+      cell.enabled = 0;
       sendCell(selectedSource, velocityDrag.lane, step);
       changed = true;
     }
@@ -1119,6 +1155,7 @@ function beginSourceCellInteraction(z, x, y, layerMode) {
     startProbability: cell.probability,
     startCycle: cell.cycle,
     startCycleOffset: cell.cycleOffset,
+    paintCell: ksh_shared.cloneCell(cell),
     layerMode: layerMode,
     valueMode: valueMode,
     paintEnabled: cell.enabled ? 0 : 1,
