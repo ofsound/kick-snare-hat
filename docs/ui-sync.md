@@ -16,10 +16,13 @@ For native transport playback, coll scheduling, and patch wiring, see
 - Status selectors (`steps`, `channels`, `refresh_steps`, `mode`, `rate`,
   `swing`, `velocity_humanize`, `timing_humanize`, `device_active`,
   `native_timing`, `phase_offset_beats`, `channel_label`, `channel_note`,
-  `channel_lock`, `static_source`, `source_channel_mute`, …) are incremental
-  UI hints from setters.
+  `channel_lock`, `channel_playback_mode`, `static_source`,
+  `source_channel_mute`, …) are incremental UI hints from setters.
 - `channel_loop_length <channel> <steps>` — per-channel source row loop length,
   clamped to the global step count.
+- `channel_playback_mode <channel> normal|reverse|boomerang` — per-channel
+  playback traversal over the active loop length. Reverse mirrors transport
+  position through the active length; boomerang repeats endpoints.
 - `channel_audition <channel>` — one-shot MIDI for the lane pitch (editor row
   click). Fixed MIDI channel 1 and note duration; does not mutate pattern state.
 - `current_step` — editor playhead while the editor subpatcher is active;
@@ -48,6 +51,8 @@ For native transport playback, coll scheduling, and patch wiring, see
 - `phase_offset_beats <float>` — shifts the transport step phase (native `expr`
   and engine `globalStepForBeats`).
 - `channel_audition <channel>` — preview lane pitch once.
+- `channel_playback_mode <channel> normal|reverse|boomerang` — editor row
+  `N/R/B` toggle. The compact view does not expose this control.
 - `static_source <source>` — static mode source selection (editor source tabs).
 - Compact and editor call `sync_all` on init/load/open.
 - After set reload, `restore_pattern_store` → `pattern_data` → compact
@@ -67,6 +72,8 @@ For native transport playback, coll scheduling, and patch wiring, see
 - Source messages: `cell <source> <channel> <step> …`, `source_channel_mute`,
   `source_channel_reset` (reset triggers full `engine_state`).
 - `channel_loop_length <channel> <steps>` — channel-global loop across sources.
+- `channel_playback_mode <channel> normal|reverse|boomerang` — channel-global
+  playback direction over the active loop length.
 - MIDI note-on pitches 0-3 → `static_source 1-4` in the patch shell.
 
 ## Naming

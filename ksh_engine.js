@@ -98,6 +98,10 @@ var KSH_EngineClass = null;
     return KSH_CONSTANTS.normalizeRate(rate);
   }
 
+  function normalizeChannelPlaybackMode(mode) {
+    return KSH_CONSTANTS.normalizeChannelPlaybackMode(mode);
+  }
+
   function normalizeToggle(value) {
     value = String(value).toLowerCase();
     return !(value === "0" || value === "false" || value === "off");
@@ -237,7 +241,8 @@ var KSH_EngineClass = null;
         label: defaultLabels[i],
         note: defaultNotes[i],
         lock: -1,
-        loopLength: this.stepCount
+        loopLength: this.stepCount,
+        playbackMode: KSH_CONSTANTS.DEFAULT_CHANNEL_PLAYBACK_MODE
       };
     }
   };
@@ -481,6 +486,13 @@ var KSH_EngineClass = null;
     this.channels[channel].loopLength = clamp(loopLength, 1, this.stepCount);
     this.recomposeWindow(0, this.stepCount, true);
     this.status("channel_loop_length " + (channel + 1) + " " + this.channels[channel].loopLength);
+  };
+
+  KickSnareHatEngine.prototype.setChannelPlaybackMode = function (channel, mode) {
+    channel = clamp(channel, 0, MAX_LANES - 1);
+    this.channels[channel].playbackMode = normalizeChannelPlaybackMode(mode);
+    this.syncNativePlaybackTable();
+    this.status("channel_playback_mode " + (channel + 1) + " " + this.channels[channel].playbackMode);
   };
 
   KickSnareHatEngine.prototype.auditionChannel = function (channel) {
@@ -1022,12 +1034,22 @@ var KSH_EngineClass = null;
 
   KickSnareHatEngine.prototype.nativePlaybackPeriod = function () {
     var period = 1;
+    var baseRows = this.stepCount;
     var hasVariation = this.velocityHumanize > 0 || this.timingHumanize > 0;
     var channel;
     var step;
     var cell;
     var cycle;
     var probability;
+    var loopLength;
+
+    for (channel = 0; channel < this.channelCount; channel += 1) {
+      loopLength = clamp(this.channels[channel].loopLength, 1, this.stepCount);
+      if (this.channels[channel].playbackMode === "boomerang") {
+        baseRows = lcm(baseRows, loopLength * 2);
+      }
+    }
+    period = baseRows / this.stepCount;
 
     for (step = 0; step < this.stepCount; step += 1) {
       for (channel = 0; channel < this.channelCount; channel += 1) {
@@ -1053,10 +1075,34 @@ var KSH_EngineClass = null;
     return period * this.stepCount > NATIVE_PLAYBACK_MAX_ROWS ? 0 : period;
   };
 
+  KickSnareHatEngine.prototype.playbackStepForChannel = function (channel, playbackIndex) {
+    var loopLength;
+    var mode;
+    var activeIndex;
+
+    channel = clamp(channel, 0, MAX_LANES - 1);
+    loopLength = clamp(this.channels[channel].loopLength, 1, this.stepCount);
+    mode = normalizeChannelPlaybackMode(this.channels[channel].playbackMode);
+    playbackIndex = Math.floor(parseFloat(playbackIndex) || 0);
+
+    if (mode === "reverse") {
+      activeIndex = mod(playbackIndex, loopLength);
+      return loopLength - 1 - activeIndex;
+    }
+
+    if (mode === "boomerang") {
+      activeIndex = mod(playbackIndex, loopLength * 2);
+      return activeIndex < loopLength ? activeIndex : loopLength * 2 - 1 - activeIndex;
+    }
+
+    return mod(playbackIndex, this.stepCount);
+  };
+
 	  KickSnareHatEngine.prototype.buildNativePlaybackRows = function () {
 	    var rows = [];
 	    var step;
 	    var rowStep;
+	    var playbackStep;
 	    var targetStep;
 	    var channel;
 	    var cell;
@@ -1089,13 +1135,14 @@ var KSH_EngineClass = null;
 	    for (step = 0; step < this.nativePlaybackStepCount; step += 1) {
 	      rowStep = step % this.stepCount;
 	      for (channel = 0; channel < this.channelCount; channel += 1) {
-	        cell = this.generated[channel][rowStep];
+	        playbackStep = this.playbackStepForChannel(channel, step);
+	        cell = this.generated[channel][playbackStep];
 	        if (cell && cell.enabled) {
           cycle = clamp(cell.cycle, 1, 64);
           cycleOffset = normalizeCycleOffset(cell.cycleOffset, cycle);
           cycleInverted = normalizeCycleInverted(cell.cycleInverted, cycle);
           if (cycle > 1) {
-            key = this.cycleKey(cell.source, channel, typeof cell.sourceStep === "number" ? cell.sourceStep : rowStep);
+            key = this.cycleKey(cell.source, channel, typeof cell.sourceStep === "number" ? cell.sourceStep : playbackStep);
             if (cycleCounters[key] === undefined) {
               cycleCounters[key] = 0;
             } else {
@@ -1123,7 +1170,7 @@ var KSH_EngineClass = null;
 	          targetDelayMs = (targetPosition - targetRowFloat) * this.stepIntervalMs;
 	          targetRow = mod(targetRowFloat, this.nativePlaybackStepCount);
 	          row = rows[targetRow];
-	          this.appendNativeHit(row, channel, rowStep, cell, velocity, targetDelayMs);
+	          this.appendNativeHit(row, channel, playbackStep, cell, velocity, targetDelayMs);
 	        }
 	      }
 	    }
@@ -1263,6 +1310,8 @@ var KSH_EngineClass = null;
     var note;
     var baseDelayMs;
     var reportStep;
+    var playbackIndex;
+    var playbackStep;
 
     if (!this.deviceActive) {
       return notes;
@@ -1279,9 +1328,11 @@ var KSH_EngineClass = null;
       this.reportPlayingStep();
     }
 
+    playbackIndex = typeof globalStep === "number" ? globalStep : step;
     for (channel = 0; channel < this.channelCount; channel += 1) {
-      cell = this.generated[channel][step];
-      if (this.shouldFire(cell, channel, step)) {
+      playbackStep = this.playbackStepForChannel(channel, playbackIndex);
+      cell = this.generated[channel][playbackStep];
+      if (this.shouldFire(cell, channel, playbackStep)) {
         if (typeof globalStep === "number") {
           if (this.scheduledNoteKeys[globalStep + ":" + channel]) {
             continue;
@@ -1290,7 +1341,7 @@ var KSH_EngineClass = null;
         }
         note = {
           lane: channel + 1,
-          step: step + 1,
+          step: playbackStep + 1,
           globalStep: typeof globalStep === "number" ? globalStep : null,
           pitch: this.channels[channel].note,
           velocity: this.humanizeVelocity(cell.velocity),
@@ -1306,11 +1357,11 @@ var KSH_EngineClass = null;
           "note_hit " +
           (channel + 1) +
           " " +
-          (step + 1) +
+          (playbackStep + 1) +
           " " +
           (cell.source + 1) +
           " " +
-          ((typeof cell.sourceStep === "number" ? cell.sourceStep : step) + 1)
+          ((typeof cell.sourceStep === "number" ? cell.sourceStep : playbackStep) + 1)
         );
       }
     }
@@ -1424,7 +1475,8 @@ var KSH_EngineClass = null;
         label: this.channels[ch].label,
         note: this.channels[ch].note,
         lock: this.channels[ch].lock,
-        loopLength: this.channels[ch].loopLength
+        loopLength: this.channels[ch].loopLength,
+        playbackMode: normalizeChannelPlaybackMode(this.channels[ch].playbackMode)
       });
       generated[ch] = [];
       for (st = 0; st < this.stepCount; st += 1) {
@@ -1555,6 +1607,9 @@ var KSH_EngineClass = null;
         if (incomingChannel.loopLength !== undefined) {
           this.channels[channel].loopLength = clamp(incomingChannel.loopLength, 1, this.stepCount);
         }
+        if (incomingChannel.playbackMode !== undefined) {
+          this.channels[channel].playbackMode = normalizeChannelPlaybackMode(incomingChannel.playbackMode);
+        }
       }
     }
 
@@ -1617,7 +1672,8 @@ var KSH_EngineClass = null;
         this.channels[channel].label,
         this.channels[channel].note,
         this.channels[channel].lock,
-        this.channels[channel].loopLength
+        this.channels[channel].loopLength,
+        normalizeChannelPlaybackMode(this.channels[channel].playbackMode)
       ]);
     }
 
@@ -1688,6 +1744,7 @@ var KSH_EngineClass = null;
         this.channels[channel].note = clamp(channelsIn[channel][1], 0, 127);
         this.channels[channel].lock = clamp(channelsIn[channel][2], -1, SOURCE_COUNT - 1);
         this.channels[channel].loopLength = clamp(channelsIn[channel][3], 1, this.stepCount);
+        this.channels[channel].playbackMode = normalizeChannelPlaybackMode(channelsIn[channel][4]);
       }
       this.channels[channel].loopLength = clamp(this.channels[channel].loopLength, 1, this.stepCount);
     }
@@ -2437,6 +2494,11 @@ function channel_lock(channel, lock) {
 
 function channel_loop_length(channel, loopLength) {
   ensureEngine().setChannelLoopLength(zeroBased(channel), loopLength);
+  markPersistentChange();
+}
+
+function channel_playback_mode(channel, mode) {
+  ensureEngine().setChannelPlaybackMode(zeroBased(channel), mode);
   markPersistentChange();
 }
 

@@ -22,7 +22,7 @@ When `native_timing` is **off**, the engine schedules notes in JavaScript (`sche
 
 ## Playback table
 
-`buildNativePlaybackRows()` fills one sparse row per native playback index. Row count is `stepCount × cyclePeriod`, where `cyclePeriod` is the least common multiple of active per-cell cycle lengths (with extra expansion when probability &lt; 100%). The table is capped at **2048** rows; above that, native timing is treated as unsupported and the gate stays closed.
+`buildNativePlaybackRows()` fills one sparse row per native playback index. Row count is `stepCount × cyclePeriod`, where `cyclePeriod` is the least common multiple of active per-cell cycle lengths plus any per-channel boomerang period needed to represent the active loop length (with extra expansion when probability &lt; 100%). The table is capped at **2048** rows; above that, native timing is treated as unsupported and the gate stays closed.
 
 Each stored hit is a flat list of **9** fields (`KSH_CONSTANTS.NATIVE_HIT_FIELD_COUNT`):
 
@@ -34,13 +34,18 @@ Each stored hit is a flat list of **9** fields (`KSH_CONSTANTS.NATIVE_HIT_FIELD_
 | 3 | MIDI channel | fixed device channel (1) |
 | 4 | delay ms | `pipe` delay for swing / timing humanize |
 | 5 | UI channel | 1-based lane index for `note_hit` |
-| 6 | UI generated step | 1-based generated-grid step |
+| 6 | UI generated step | 1-based generated-grid step after per-channel playback mapping |
 | 7 | UI source | 1-based source pattern |
-| 8 | UI source step | 1-based source-grid step |
+| 8 | UI source step | 1-based source-grid step after per-channel playback mapping |
 
 Swing and timing humanize are applied when the table is built: early hits are placed on earlier row indices with a positive `pipe` delay. Timing humanize in native mode uses `stepIntervalMs × 0.2 × (timingHumanize / 100)` as its maximum ± offset in milliseconds.
 
 Velocity humanize is rolled into stored velocities at table build time. Cycle gates and probability are resolved when the table is built (probability uses a 16× row expansion when any cell has probability &lt; 100%).
+
+Per-channel playback mode is also resolved when rows are built. `normal`
+preserves the current generated step order, `reverse` mirrors the transport
+position through the channel loop length, and `boomerang` plays forward then
+backward with repeated endpoints.
 
 The engine pushes rows with:
 

@@ -388,6 +388,32 @@ ksh_shared.defaultCell = function () {
   return ksh_shared.constants.defaultCell();
 };
 
+ksh_shared.normalizeChannelPlaybackMode = function (mode) {
+  return ksh_shared.constants.normalizeChannelPlaybackMode(mode);
+};
+
+ksh_shared.channelPlaybackModeLabel = function (mode) {
+  mode = ksh_shared.normalizeChannelPlaybackMode(mode);
+  if (mode === "reverse") {
+    return "R";
+  }
+  if (mode === "boomerang") {
+    return "B";
+  }
+  return "N";
+};
+
+ksh_shared.nextChannelPlaybackMode = function (mode) {
+  mode = ksh_shared.normalizeChannelPlaybackMode(mode);
+  if (mode === "normal") {
+    return "reverse";
+  }
+  if (mode === "reverse") {
+    return "boomerang";
+  }
+  return "normal";
+};
+
 ksh_shared.cloneCell = function (cell) {
   return ksh_shared.constants.cloneCell(cell);
 };
@@ -456,8 +482,10 @@ ksh_shared.applyPersistenceState = function (state, payload) {
       state.lanes[channel].note = ksh_shared.clamp(channelsIn[channel][1], 0, 127);
       state.lanes[channel].lock = ksh_shared.clamp(channelsIn[channel][2], -1, ksh_shared.SOURCE_COUNT - 1);
       state.lanes[channel].loopLength = ksh_shared.clamp(channelsIn[channel][3], 1, state.stepCount);
+      state.lanes[channel].playbackMode = ksh_shared.normalizeChannelPlaybackMode(channelsIn[channel][4]);
     }
     state.lanes[channel].loopLength = ksh_shared.clamp(state.lanes[channel].loopLength, 1, state.stepCount);
+    state.lanes[channel].playbackMode = ksh_shared.normalizeChannelPlaybackMode(state.lanes[channel].playbackMode);
   }
 
   mutesIn = payload.sourceChannelMutes || [];
@@ -550,6 +578,7 @@ ksh_shared.applyEngineState = function (state, engineState) {
       state.lanes[lane].loopLength = channels[lane].loopLength === undefined
         ? state.stepCount
         : ksh_shared.clamp(channels[lane].loopLength, 1, state.stepCount);
+      state.lanes[lane].playbackMode = ksh_shared.normalizeChannelPlaybackMode(channels[lane].playbackMode);
     }
   }
 
@@ -623,6 +652,9 @@ ksh_shared.applyStatusMessage = function (state, name, args) {
   } else if (name === "channel_loop_length") {
     lane = ksh_shared.clamp(args[0] - 1, 0, ksh_shared.MAX_LANES - 1);
     state.lanes[lane].loopLength = ksh_shared.clamp(args[1], 1, state.stepCount);
+  } else if (name === "channel_playback_mode") {
+    lane = ksh_shared.clamp(args[0] - 1, 0, ksh_shared.MAX_LANES - 1);
+    state.lanes[lane].playbackMode = ksh_shared.normalizeChannelPlaybackMode(args[1]);
   } else if (name === "source_channel_mute") {
     lane = ksh_shared.clamp(args[1] - 1, 0, ksh_shared.MAX_LANES - 1);
     if (!state.sourceChannelMutes) {

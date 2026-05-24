@@ -23,6 +23,7 @@ var ksh_constants = {
   SOURCE_COUNT: 4,
   DEFAULT_CHANNEL_LABELS: ["1", "2", "3", "4", "5", "6", "7", "8"],
   DEFAULT_CHANNEL_NOTES: [36, 37, 38, 39, 40, 41, 42, 43],
+  DEFAULT_CHANNEL_PLAYBACK_MODE: "normal",
   DEFAULT_MIDI_CHANNEL: 1,
   DEFAULT_NOTE_DURATION_MS: 100,
   RATES: ["4n", "4nt", "8n", "8nt", "16n", "16nt", "32n", "32nt"],
@@ -83,6 +84,16 @@ var ksh_constants = {
     }
 
     return this.DEFAULT_RATE;
+  },
+  normalizeChannelPlaybackMode: function (mode) {
+    mode = String(mode || "").toLowerCase();
+    if (mode === "r" || mode === "rev" || mode === "reverse") {
+      return "reverse";
+    }
+    if (mode === "b" || mode === "boom" || mode === "boomerang") {
+      return "boomerang";
+    }
+    return this.DEFAULT_CHANNEL_PLAYBACK_MODE;
   },
   debugPost: function (context, error) {
     var message;

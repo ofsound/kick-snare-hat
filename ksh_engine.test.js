@@ -7,6 +7,7 @@ function nativeHitRow(note, velocity, duration, midiCh, delayMs, uiChannel, gene
 
 function makeEngine(randomValues) {
   var notes = [];
+  var statuses = [];
   var index = 0;
   var engine = new KickSnareHatEngine({
     rng: function () {
@@ -16,10 +17,14 @@ function makeEngine(randomValues) {
     },
     emitNote: function (note) {
       notes.push(note);
+    },
+    emitStatus: function (message) {
+      statuses.push(String(message));
     }
   });
 
   engine._notes = notes;
+  engine._statuses = statuses;
   engine._setRandomValues = function (values) {
     randomValues = values;
     index = 0;
@@ -40,6 +45,9 @@ function clearAll(engine) {
     }
   }
   engine._notes.length = 0;
+  if (engine._statuses) {
+    engine._statuses.length = 0;
+  }
   engine.setNativeTiming(0);
   engine.reset();
 }
@@ -846,6 +854,80 @@ function testNativePlaybackRowsIncludeNoteHitMetadata() {
   assert.strictEqual(rows[0][8], 4);
 }
 
+function testReversePlaybackMirrorsTransportPositionAcrossActiveLength() {
+  var engine = makeEngine([0]);
+  clearAll(engine);
+  engine.setStepCount(4);
+  engine.setChannelCount(1);
+  engine.setGenerationMode("static");
+  engine.setChannelPlaybackMode(0, "reverse");
+  engine.setCell(0, 0, 0, 1, 10, 100, 1);
+  engine.setCell(0, 0, 1, 1, 20, 100, 1);
+  engine.setCell(0, 0, 2, 1, 30, 100, 1);
+  engine.setCell(0, 0, 3, 1, 40, 100, 1);
+  engine.generateWindow(0, 4, true);
+  engine._notes.length = 0;
+  engine._statuses.length = 0;
+
+  engine.transportPosition(0, 1);
+  engine.transportPosition(0.25, 1);
+
+  assert.strictEqual(engine._notes[0].velocity, 40);
+  assert.strictEqual(engine._notes[0].step, 4);
+  assert.strictEqual(engine._notes[1].velocity, 30);
+  assert.strictEqual(engine._notes[1].step, 3);
+  assert.ok(engine._statuses.indexOf("note_hit 1 4 1 4") >= 0);
+  assert.ok(engine._statuses.indexOf("note_hit 1 3 1 3") >= 0);
+}
+
+function testBoomerangPlaybackRepeatsEndpointsAcrossActiveLength() {
+  var engine = makeEngine([0]);
+  clearAll(engine);
+  engine.setStepCount(4);
+  engine.setChannelCount(1);
+  engine.setGenerationMode("static");
+  engine.setChannelLoopLength(0, 3);
+  engine.setChannelPlaybackMode(0, "boomerang");
+  engine.setCell(0, 0, 0, 1, 10, 100, 1);
+  engine.setCell(0, 0, 1, 1, 20, 100, 1);
+  engine.setCell(0, 0, 2, 1, 30, 100, 1);
+  engine.generateWindow(0, 4, true);
+  engine._notes.length = 0;
+
+  engine.transportPosition(0, 1);
+  engine.transportPosition(0.25, 1);
+  engine.transportPosition(0.5, 1);
+  engine.transportPosition(0.75, 1);
+  engine.transportPosition(1, 1);
+  engine.transportPosition(1.25, 1);
+
+  assert.deepStrictEqual(engine._notes.map(function (note) { return note.step; }), [1, 2, 3, 3, 2, 1]);
+  assert.deepStrictEqual(engine._notes.map(function (note) { return note.velocity; }), [10, 20, 30, 30, 20, 10]);
+}
+
+function testNativePlaybackRowsApplyPlaybackModesToMetadata() {
+  var engine = makeEngine([0]);
+  var rows;
+  clearAll(engine);
+  engine.setStepCount(4);
+  engine.setChannelCount(1);
+  engine.setGenerationMode("static");
+  engine.setChannelLoopLength(0, 3);
+  engine.setChannelPlaybackMode(0, "boomerang");
+  engine.setCell(0, 0, 0, 1, 10, 100, 1);
+  engine.setCell(0, 0, 1, 1, 20, 100, 1);
+  engine.setCell(0, 0, 2, 1, 30, 100, 1);
+  engine.generateWindow(0, 4, true);
+
+  rows = engine.buildNativePlaybackRows();
+
+  assert.strictEqual(engine.nativePlaybackStepCount, 12);
+  assert.deepStrictEqual(rows[0], nativeHitRow(36, 10, 100, 1, 0, 1, 1, 1, 1));
+  assert.deepStrictEqual(rows[2], nativeHitRow(36, 30, 100, 1, 0, 1, 3, 1, 3));
+  assert.deepStrictEqual(rows[3], nativeHitRow(36, 30, 100, 1, 0, 1, 3, 1, 3));
+  assert.deepStrictEqual(rows[5], nativeHitRow(36, 10, 100, 1, 0, 1, 1, 1, 1));
+}
+
 function testEngineDefaultsNativeTimingOn() {
   var engine = makeEngine([0]);
   assert.strictEqual(engine.nativeTiming, true);
@@ -1363,6 +1445,9 @@ testNativePlaybackRowsPrerollLateTimingHumanize();
 testNativePlaybackRowsPrerollEarlyTimingHumanize();
 testNativePlaybackRowsClampFirstStepEarlyTiming();
 testNativePlaybackRowsIncludeNoteHitMetadata();
+testReversePlaybackMirrorsTransportPositionAcrossActiveLength();
+testBoomerangPlaybackRepeatsEndpointsAcrossActiveLength();
+testNativePlaybackRowsApplyPlaybackModesToMetadata();
 testEngineDefaultsNativeTimingOn();
 testNativeTimingSuppressesJsLookaheadWhenSupported();
 testNativeTimingSupportsCycleGates();
@@ -1431,6 +1516,7 @@ function testSerializeForPersistenceIncludesChannelSettings() {
   engine.channels[1].note = 38;
   engine.channels[0].loopLength = 16;
   engine.channels[1].lock = 2;
+  engine.channels[1].playbackMode = "boomerang";
   engine.setGenerationMode("static");
   engine.setCell(0, 0, 0, 1, 100, 100, 1);
   engine.setCell(1, 1, 4, 1, 80, 50, 4, 3, 1);
@@ -1444,6 +1530,7 @@ function testSerializeForPersistenceIncludesChannelSettings() {
   assert.strictEqual(restored.channels[1].note, 38);
   assert.strictEqual(restored.channels[0].loopLength, 16);
   assert.strictEqual(restored.channels[1].lock, 2);
+  assert.strictEqual(restored.channels[1].playbackMode, "boomerang");
   assert.strictEqual(restored.generationMode, "static");
   assert.strictEqual(restored.sources[0][0][0].enabled, 1);
   assert.strictEqual(restored.sources[1][1][4].enabled, 1);

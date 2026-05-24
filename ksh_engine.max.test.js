@@ -192,6 +192,7 @@ function testMaxWrapperBootsEngineAndExposesHandlers() {
   assert.strictEqual(typeof sb.editor_active, "function");
   assert.strictEqual(typeof sb.static_source, "function");
   assert.strictEqual(typeof sb.channel_loop_length, "function");
+  assert.strictEqual(typeof sb.channel_playback_mode, "function");
   assert.strictEqual(typeof sb.source_channel_mute, "function");
   assert.strictEqual(typeof sb.source_channel_reset, "function");
 }
@@ -204,6 +205,7 @@ function testStatusMessagesEmitUiSelectors() {
   var staticSourceEvent;
   var muteEvent;
   var loopLengthEvent;
+  var playbackModeEvent;
 
   sb._clear();
   sb.steps(8);
@@ -211,6 +213,7 @@ function testStatusMessagesEmitUiSelectors() {
   sb.static_source(3);
   sb.channel_lock(1, 2);
   sb.channel_loop_length(1, 5);
+  sb.channel_playback_mode(1, "boomerang");
   sb.velocity_humanize(12);
   sb.timing_humanize(8);
   sb.native_timing(1);
@@ -223,6 +226,7 @@ function testStatusMessagesEmitUiSelectors() {
   staticSourceEvent = lastEventOn(sb, "static_source");
   muteEvent = lastEventOn(sb, "source_channel_mute");
   loopLengthEvent = lastEventOn(sb, "channel_loop_length");
+  playbackModeEvent = lastEventOn(sb, "channel_playback_mode");
 
   assert.ok(stepsEvent, "steps should emit a direct UI selector");
   assert.deepStrictEqual(stepsEvent.args, ["steps", "8"]);
@@ -238,6 +242,8 @@ function testStatusMessagesEmitUiSelectors() {
   assert.deepStrictEqual(muteEvent.args, ["source_channel_mute", "2", "1", "1"]);
   assert.ok(loopLengthEvent, "channel_loop_length should emit a direct UI selector");
   assert.deepStrictEqual(loopLengthEvent.args, ["channel_loop_length", "1", "5"]);
+  assert.ok(playbackModeEvent, "channel_playback_mode should emit a direct UI selector");
+  assert.deepStrictEqual(playbackModeEvent.args, ["channel_playback_mode", "1", "boomerang"]);
   assert.deepStrictEqual(lastEventOn(sb, "velocity_humanize").args, ["velocity_humanize", "12"]);
   assert.deepStrictEqual(lastEventOn(sb, "timing_humanize").args, ["timing_humanize", "8"]);
   assert.strictEqual(eventsOn(sb, "status").length, 0,
@@ -543,6 +549,7 @@ function testGetValueOfSetValueOfRoundtripsEngineState() {
   sb.channel_label(1, "Sub");
   sb.channel_note(2, 50);
   sb.channel_loop_length(1, 5);
+  sb.channel_playback_mode(1, "reverse");
   sb._flush();
 
   var serialized = sb.getvalueof();
@@ -562,6 +569,7 @@ function testGetValueOfSetValueOfRoundtripsEngineState() {
   assert.strictEqual(parsed.staticSource, 3);
   assert.strictEqual(parsed.channels[0].label, "Sub");
   assert.strictEqual(parsed.channels[0].loopLength, 5);
+  assert.strictEqual(parsed.channels[0].playbackMode, "reverse");
   assert.strictEqual(parsed.channels[1].note, 50);
 
   // Roundtrip into a fresh sandbox to prove the wire format is reloadable.
@@ -580,6 +588,7 @@ function testGetValueOfSetValueOfRoundtripsEngineState() {
   assert.strictEqual(sb2.kshEngine.staticSource, 3);
   assert.strictEqual(sb2.kshEngine.channels[0].label, "Sub");
   assert.strictEqual(sb2.kshEngine.channels[0].loopLength, 5);
+  assert.strictEqual(sb2.kshEngine.channels[0].playbackMode, "reverse");
   assert.strictEqual(sb2.kshEngine.channels[1].note, 50);
   assert.strictEqual(sb2.kshEngine.sources[0][0][0].enabled, 1);
   assert.strictEqual(sb2.kshEngine.sources[0][0][0].probability, 30);
@@ -703,12 +712,16 @@ function testPersistentMutationsNotifyPattrClients() {
   assert.strictEqual(sb._notifications(), 2,
     "channel metadata edits should notify pattr clients");
 
-  sb.swing(25);
+  sb.channel_playback_mode(1, "reverse");
   assert.strictEqual(sb._notifications(), 3,
+    "channel playback mode edits should notify pattr clients");
+
+  sb.swing(25);
+  assert.strictEqual(sb._notifications(), 4,
     "global settings edits should notify pattr clients");
 
   sb.source_channel_reset(1, 1);
-  assert.strictEqual(sb._notifications(), 4,
+  assert.strictEqual(sb._notifications(), 5,
     "source/channel resets should notify pattr clients");
 }
 

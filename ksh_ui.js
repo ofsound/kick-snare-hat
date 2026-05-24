@@ -25,10 +25,11 @@ var EDITOR_LAYOUT = {
   RIGHT_MARGIN: 14,
   PATTERN_MIN_RIGHT_PAD: 0,
   ROW_CONTROLS_X: 20,
-  ROW_LABEL_W: 56,
+  ROW_LABEL_W: 38,
   ROW_NOTE_W: 24,
   ROW_LOOP_W: 28,
   ROW_LOCK_W: 28,
+  ROW_PLAYBACK_MODE_W: 18,
   ROW_SHIFT_W: 10,
   ROW_MUTE_W: 18,
   ROW_CONTROL_GAP: 6,
@@ -53,7 +54,7 @@ function rowControlsRight(scale) {
     EDITOR_LAYOUT.ROW_LABEL_W * scale +
     EDITOR_LAYOUT.ROW_CONTROL_GAP * scale +
     EDITOR_LAYOUT.ROW_NOTE_W * scale / 2 +
-    step * 4.5 +
+    step * 5.4 +
     EDITOR_LAYOUT.ROW_MUTE_W * scale / 2;
 }
 
@@ -396,7 +397,8 @@ function makeState() {
       label: ksh_shared.defaultLabels[i],
       note: ksh_shared.defaultNotes[i],
       lock: -1,
-      loopLength: 16
+      loopLength: 16,
+      playbackMode: ksh_shared.constants.DEFAULT_CHANNEL_PLAYBACK_MODE
     };
   }
 
@@ -584,6 +586,7 @@ function drawSourceRowControls(layout, lane, y, cellH, muted, scale) {
   var noteW = EDITOR_LAYOUT.ROW_NOTE_W * scale;
   var loopW = EDITOR_LAYOUT.ROW_LOOP_W * scale;
   var lockW = EDITOR_LAYOUT.ROW_LOCK_W * scale;
+  var playbackModeW = EDITOR_LAYOUT.ROW_PLAYBACK_MODE_W * scale;
   var shiftW = EDITOR_LAYOUT.ROW_SHIFT_W * scale;
   var muteW = EDITOR_LAYOUT.ROW_MUTE_W * scale;
   var x = layout.rowControlsX;
@@ -591,11 +594,13 @@ function drawSourceRowControls(layout, lane, y, cellH, muted, scale) {
   var noteCenterX = noteX + noteW / 2;
   var lockX = noteCenterX + controlStep - lockW / 2;
   var loopX = noteCenterX + controlStep * 2 - loopW / 2;
-  var shiftLeftX = noteCenterX + controlStep * 3 - shiftW / 2;
-  var shiftRightX = noteCenterX + controlStep * 3.5 - shiftW / 2;
-  var muteX = noteCenterX + controlStep * 4.5 - muteW / 2;
+  var playbackModeX = noteCenterX + controlStep * 3 - playbackModeW / 2;
+  var shiftLeftX = noteCenterX + controlStep * 3.9 - shiftW / 2;
+  var shiftRightX = noteCenterX + controlStep * 4.4 - shiftW / 2;
+  var muteX = noteCenterX + controlStep * 5.4 - muteW / 2;
   var textY = rowHeaderTextY(y, cellH);
   var lockLabel = state.lanes[lane].lock < 0 ? "R" : "S" + (state.lanes[lane].lock + 1);
+  var playbackModeLabel = ksh_shared.channelPlaybackModeLabel(state.lanes[lane].playbackMode);
   var loopActive = rowLoopDrag && rowLoopDrag.lane === lane;
   var zoneY = y + 2 * scale;
   var zoneH = cellH - 4 * scale;
@@ -605,6 +610,7 @@ function drawSourceRowControls(layout, lane, y, cellH, muted, scale) {
   ksh_shared.text(String(state.lanes[lane].note), noteCenterX, textY, ROW_HEADER_FONT_SIZE, muted ? colors.muted : colors.blue, "center");
   ksh_shared.text("L" + state.lanes[lane].loopLength, loopX + loopW / 2, textY, ROW_HEADER_FONT_SIZE, loopActive ? colors.amber : muted ? colors.muted : colors.blue, "center");
   ksh_shared.text(lockLabel, lockX + lockW / 2, textY, ROW_HEADER_FONT_SIZE, muted ? colors.muted : colors.blue, "center");
+  ksh_shared.text(playbackModeLabel, playbackModeX + playbackModeW / 2, textY, ROW_HEADER_FONT_SIZE, muted ? colors.muted : colors.amber, "center");
   drawShiftArrow(shiftLeftX + shiftW / 2, iconY, -1);
   drawShiftArrow(shiftRightX + shiftW / 2, iconY, 1);
   drawMuteCircle(muteX + muteW / 2, iconY, ROW_HEADER_ICON_RADIUS, muted);
@@ -613,6 +619,7 @@ function drawSourceRowControls(layout, lane, y, cellH, muted, scale) {
   ksh_shared.zone(hitZones, "lane_note", noteX, zoneY, noteW, zoneH, { lane: lane });
   ksh_shared.zone(hitZones, "lane_loop_length", loopX, zoneY, loopW, zoneH, { lane: lane });
   ksh_shared.zone(hitZones, "lane_lock", lockX, zoneY, lockW, zoneH, { lane: lane });
+  ksh_shared.zone(hitZones, "lane_playback_mode", playbackModeX, zoneY, playbackModeW, zoneH, { lane: lane });
   ksh_shared.zone(hitZones, "source_row_shift", shiftLeftX, zoneY, shiftW, zoneH, { lane: lane, direction: -1 });
   ksh_shared.zone(hitZones, "source_row_shift", shiftRightX, zoneY, shiftW, zoneH, { lane: lane, direction: 1 });
   ksh_shared.zone(hitZones, "source_row_mute", muteX, y, muteW, cellH, { lane: lane });
@@ -770,6 +777,10 @@ function sendSourceChannelMute(source, lane) {
 
 function sendChannelLoopLength(lane) {
   send("channel_loop_length", lane + 1, state.lanes[lane].loopLength);
+}
+
+function sendChannelPlaybackMode(lane) {
+  send("channel_playback_mode", lane + 1, state.lanes[lane].playbackMode);
 }
 
 function selectSource(source) {
@@ -1507,6 +1518,10 @@ function onclick(x, y, button, cmd, shift, capslock, option, ctrl) {
       state.lanes[selectedLane].lock = -1;
     }
     sendLane(selectedLane);
+  } else if (z.id === "lane_playback_mode") {
+    selectedLane = z.data.lane;
+    state.lanes[selectedLane].playbackMode = ksh_shared.nextChannelPlaybackMode(state.lanes[selectedLane].playbackMode);
+    sendChannelPlaybackMode(selectedLane);
   }
 
   mgraphics.redraw();

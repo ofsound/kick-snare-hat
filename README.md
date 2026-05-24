@@ -93,6 +93,8 @@ channel_audition 1
 channel_lock 1 random
 channel_lock 1 2
 channel_loop_length 1 8
+channel_playback_mode 1 reverse
+channel_playback_mode 1 boomerang
 
 cell 1 1 1 1 100 100 1 0 0
 cell 1 1 5 1 90 60 1 0 0
