@@ -769,6 +769,72 @@ function testSetValueOfUnwrapsTexteditAndLiveParameterWrapper() {
   assert.strictEqual(sb.kshEngine.channels[0].note, 36);
 }
 
+function testPatternRestoreEmitsNativeMetaForPersistedClock() {
+  var sb = makeMaxSandbox();
+  var payload = JSON.stringify({
+    v: 1,
+    stepCount: 16,
+    channelCount: 1,
+    refreshSteps: 1,
+    generationMode: "static",
+    staticSource: 0,
+    rate: "8n",
+    tempo: 120,
+    swing: 0,
+    velocityHumanize: 0,
+    timingHumanize: 0,
+    deviceActive: 1,
+    nativeTiming: 1,
+    phaseOffsetBeats: 0.125,
+    channels: [["1", 36, -1, 16]],
+    sourceChannelMutes: [[0], [0], [0], [0]],
+    cells: [[0, 0, 0, 1, 100, 100, 1]]
+  });
+  var metaMessages;
+
+  sb._clear();
+  sb.pattern_data(payload);
+
+  metaMessages = sb._named().filter(function (m) {
+    return m.bus === "ksh_native_meta" && m.args[0] === "meta";
+  });
+  assert.ok(metaMessages.some(function (m) {
+    return m.args[1] === 0.5 && m.args[2] === 0.125 && m.args[3] === 16;
+  }), "persisted restore should resend native clock metadata after applying state");
+}
+
+function testRestorePatternStoreResyncsNativeSchedulerBeforeRetry() {
+  var sb = makeMaxSandbox();
+  var named;
+
+  sb.steps(4);
+  sb.channels(1);
+  sb.mode("static");
+  sb.cell(1, 1, 1, 1, 90, 100, 1);
+  sb._clear();
+
+  sb.restore_pattern_store();
+
+  named = sb._named();
+  assert.ok(named.some(function (m) {
+    return m.bus === "ksh_native_playback_commands" && m.args[0] === "clear";
+  }), "restore startup should clear and replay the native coll table");
+  assert.ok(named.some(function (m) {
+    return m.bus === "ksh_native_playback_commands"
+      && m.args[0] === "store"
+      && m.args[1] === 0;
+  }), "restore startup should replay first-step native hits");
+  assert.ok(named.some(function (m) {
+    return m.bus === "ksh_native_step_reset" && m.args[0] === "set" && m.args[1] === -1;
+  }), "restore startup should prime native change memory before first play");
+  assert.ok(named.some(function (m) {
+    return m.bus === "ksh_native_meta" && m.args[0] === "meta";
+  }), "restore startup should resend native clock metadata");
+  assert.ok(named.some(function (m) {
+    return m.bus === "ksh_native_timing_gate" && m.args[0] === 1;
+  }), "restore startup should reopen the native gate when the table is supported");
+}
+
 function testPersistentMutationsNotifyPattrClients() {
   var sb = makeMaxSandbox();
   var dirtyTicks;
@@ -974,6 +1040,8 @@ testSetValueOfRejectsEmptyOrNonPersistencePayload();
 testSetValueOfRejectsMalformedJsonWithoutChangingState();
 testSetValueOfAppliesValidPartialState();
 testSetValueOfUnwrapsTexteditAndLiveParameterWrapper();
+testPatternRestoreEmitsNativeMetaForPersistedClock();
+testRestorePatternStoreResyncsNativeSchedulerBeforeRetry();
 
 function testRestorePatternStoreReadsPattrAndInitsUi() {
   var sb = makeMaxSandbox();

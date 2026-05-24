@@ -2244,6 +2244,10 @@ function scheduleRestoreAttempt() {
 }
 
 function restore_pattern_store() {
+  var engine = ensureEngine();
+  engine.syncNativePlaybackTable();
+  engine.emitNativeMeta();
+  engine.emitNativeTimingGate();
   cancelRestoreTask();
   kshRestoreAttempt = 0;
   kshRestoreFinished = false;
@@ -2335,6 +2339,8 @@ function applySerializedState(value, emitPreview) {
     kshRestoreApplied = true;
   }
 
+  engine.emitNativeMeta();
+  engine.emitNativeTimingGate();
   emitFullState();
   snapshot();
   return true;
