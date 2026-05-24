@@ -193,9 +193,11 @@ var LANE_RENAME_MS = 450;
 var velocityDrag = null;
 var headerValueDrag = null;
 var rowLoopDrag = null;
+var sourceMuteDrag = null;
 var VELOCITY_DRAG_THRESHOLD = 4;
 var HEADER_VALUE_DRAG_SCALE = 4;
 var SOURCE_PAINT_DRAG_THRESHOLD = 4;
+var SOURCE_MUTE_DRAG_X_PAD = 40;
 var VELOCITY_DRAG_SCALE = 2;
 var PROBABILITY_DRAG_SCALE = 2;
 var CYCLE_DRAG_SCALE = 4;
@@ -921,12 +923,14 @@ function handleSourceRowMuteClick(z, button) {
   var now = Date.now();
 
   if (button === 0) {
+    endSourceRowMuteInteraction();
     return;
   }
 
   if (sourceRowResetTap.lane === lane && now - sourceRowResetTap.at <= LANE_RENAME_MS) {
     sourceRowResetTap.lane = -1;
     sourceRowResetTap.at = 0;
+    sourceMuteDrag = null;
     resetSourceChannelRow(selectedSource, lane);
     mgraphics.redraw();
     return;
@@ -934,9 +938,78 @@ function handleSourceRowMuteClick(z, button) {
 
   sourceRowResetTap.lane = lane;
   sourceRowResetTap.at = now;
+  beginSourceRowMuteInteraction(lane);
+}
+
+function beginSourceRowMuteInteraction(lane) {
+  var paintMuted;
+
   selectedLane = lane;
-  state.sourceChannelMutes[selectedSource][selectedLane] = state.sourceChannelMutes[selectedSource][selectedLane] ? 0 : 1;
-  sendSourceChannelMute(selectedSource, selectedLane);
+  paintMuted = state.sourceChannelMutes[selectedSource][selectedLane] ? 0 : 1;
+  sourceMuteDrag = {
+    source: selectedSource,
+    paintMuted: paintMuted,
+    touched: []
+  };
+  setSourceRowMuteForDrag(lane);
+}
+
+function setSourceRowMuteForDrag(lane) {
+  var source;
+
+  if (!sourceMuteDrag || sourceMuteDrag.touched[lane]) {
+    return;
+  }
+
+  source = sourceMuteDrag.source;
+  sourceMuteDrag.touched[lane] = 1;
+  selectedLane = lane;
+  if (state.sourceChannelMutes[source][lane] === sourceMuteDrag.paintMuted) {
+    return;
+  }
+
+  state.sourceChannelMutes[source][lane] = sourceMuteDrag.paintMuted;
+  sendSourceChannelMute(source, lane);
+  mgraphics.redraw();
+}
+
+function sourceRowMuteDragLaneAt(x, y) {
+  var i;
+  var z;
+
+  for (i = hitZones.length - 1; i >= 0; i -= 1) {
+    z = hitZones[i];
+    if (
+      z.id === "source_row_mute" &&
+      y >= z.y &&
+      y <= z.y + z.h &&
+      x >= z.x - SOURCE_MUTE_DRAG_X_PAD &&
+      x <= z.x + z.w + SOURCE_MUTE_DRAG_X_PAD
+    ) {
+      return z.data.lane;
+    }
+  }
+
+  return -1;
+}
+
+function applySourceRowMuteDrag(x, y) {
+  var lane;
+
+  if (!sourceMuteDrag) {
+    return;
+  }
+
+  lane = sourceRowMuteDragLaneAt(x, y);
+  if (lane < 0 || lane >= state.laneCount) {
+    return;
+  }
+
+  setSourceRowMuteForDrag(lane);
+}
+
+function endSourceRowMuteInteraction() {
+  sourceMuteDrag = null;
 }
 
 function sync_all() {
@@ -950,6 +1023,7 @@ function sync_all() {
   laneRenameTap.at = 0;
   sourceRowResetTap.lane = -1;
   sourceRowResetTap.at = 0;
+  sourceMuteDrag = null;
   send("label_edit_hide");
   send("sync_all");
   mgraphics.redraw();
@@ -1442,6 +1516,7 @@ function onclick(x, y, button, cmd, shift, capslock, option, ctrl) {
       endSourceCellInteraction();
       endHeaderValueInteraction();
       endRowLoopInteraction();
+      endSourceRowMuteInteraction();
     }
     mgraphics.redraw();
     return;
@@ -1452,6 +1527,9 @@ function onclick(x, y, button, cmd, shift, capslock, option, ctrl) {
   }
   if (button === 0 && rowLoopDrag && z.id !== "lane_loop_length") {
     endRowLoopInteraction();
+  }
+  if (button === 0 && sourceMuteDrag) {
+    endSourceRowMuteInteraction();
   }
 
   if (z.id === "source_pick") {
@@ -1538,6 +1616,14 @@ function ondrag(x, y, button) {
     if (rowLoopDrag) {
       endRowLoopInteraction();
     }
+    if (sourceMuteDrag) {
+      endSourceRowMuteInteraction();
+    }
+    return;
+  }
+
+  if (sourceMuteDrag) {
+    applySourceRowMuteDrag(x, y);
     return;
   }
 
@@ -1564,6 +1650,7 @@ function onidle(x, y, button, cmd, shift, capslock, option, ctrl) {
 
 function onidleout(x, y, button, cmd, shift, capslock, option, ctrl) {
   setHoverLayerMode(null);
+  endSourceRowMuteInteraction();
 }
 
 function onkeydown(keycode, textcharacter, updown, cmd, shift, capslock, option, ctrl) {

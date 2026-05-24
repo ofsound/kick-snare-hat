@@ -214,6 +214,7 @@ var KSH_EngineClass = null;
     this.nativeTiming = !!KSH_CONSTANTS.DEFAULT_NATIVE_TIMING;
     this.nativePlaybackStepCount = this.stepCount;
     this.nativePlaybackRows = null;
+    this.nativeTransportRefreshInProgress = false;
     this.editorActive = false;
 
     this.channels = [];
@@ -1192,16 +1193,39 @@ var KSH_EngineClass = null;
     row.push(sourceStep + 1);
   };
 
+  KickSnareHatEngine.prototype.currentNativePlaybackStep = function () {
+    if (!this.transportPlaying || this.lastReportedGlobalStep === null || this.lastReportedGlobalStep === undefined) {
+      return -1;
+    }
+    return mod(this.lastReportedGlobalStep, this.nativePlaybackStepCount || this.stepCount);
+  };
+
+  KickSnareHatEngine.prototype.primeNativeStepChange = function () {
+    if (typeof safeMessnamed !== "function") {
+      return;
+    }
+    safeMessnamed("ksh_native_step_reset", "set", this.currentNativePlaybackStep());
+  };
+
   KickSnareHatEngine.prototype.syncNativePlaybackTable = function () {
     var rows;
     var step;
     var args;
     var previousStepCount = this.nativePlaybackStepCount;
+    var canSend = typeof safeMessnamed === "function";
+    var suppressCurrentStep = !this.nativeTransportRefreshInProgress;
+
+    if (canSend && this.nativeTiming) {
+      safeMessnamed("ksh_native_timing_gate", 0);
+      if (suppressCurrentStep && this.transportPlaying && typeof cancelPendingNoteTasks === "function") {
+        cancelPendingNoteTasks();
+      }
+    }
 
     rows = this.buildNativePlaybackRows();
     this.nativePlaybackRows = rows;
 
-    if (typeof safeMessnamed !== "function") {
+    if (!canSend) {
       return;
     }
 
@@ -1214,6 +1238,9 @@ var KSH_EngineClass = null;
     }
     if (previousStepCount !== this.nativePlaybackStepCount) {
       this.emitNativeMeta();
+    }
+    if (suppressCurrentStep) {
+      this.primeNativeStepChange();
     }
     this.emitNativeTimingGate();
   };
@@ -1236,7 +1263,12 @@ var KSH_EngineClass = null;
 
   KickSnareHatEngine.prototype.prepareStepForPlayback = function (step) {
     if (step % this.refreshSteps === 0) {
-      this.generateWindow(step, this.refreshSteps, false);
+      this.nativeTransportRefreshInProgress = true;
+      try {
+        this.generateWindow(step, this.refreshSteps, false);
+      } finally {
+        this.nativeTransportRefreshInProgress = false;
+      }
     }
   };
 
@@ -1390,6 +1422,7 @@ var KSH_EngineClass = null;
     var notes = [];
     var discontinuity;
     var previousGlobalStep;
+    var stepChanged;
     var scheduled;
     var i;
 
@@ -1437,6 +1470,7 @@ var KSH_EngineClass = null;
     globalStep = this.globalStepForBeats(songBeats);
     step = mod(globalStep, this.stepCount);
     previousGlobalStep = this.lastReportedGlobalStep;
+    stepChanged = previousGlobalStep !== globalStep;
     discontinuity = previousGlobalStep !== null && globalStep !== previousGlobalStep && globalStep !== previousGlobalStep + 1;
 
     if (discontinuity) {
@@ -1451,6 +1485,9 @@ var KSH_EngineClass = null;
     this.reportTransportStep(globalStep);
 
     if (this.nativeTimingActive()) {
+      if (stepChanged) {
+        this.prepareStepForPlayback(step);
+      }
       return notes;
     }
 

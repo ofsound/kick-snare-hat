@@ -462,6 +462,87 @@ function testNativeCycleChangeEmitsUpdatedTableLengthMeta() {
   }), "cycle edits should update native clock table length metadata");
 }
 
+function testNativeTableSwapClosesGateAndPrimesCurrentStep() {
+  var sb = makeMaxSandbox();
+  var named;
+  var gateCloseIndex;
+  var schedulerClearIndex;
+  var tableClearIndex;
+  var resetIndex;
+  var gateOpenIndex;
+
+  sb._clear();
+  sb.steps(4);
+  sb.channels(1);
+  sb.mode("static");
+  sb.cell(1, 1, 1, 1, 90, 100, 1);
+  sb.cell(2, 1, 1, 1, 80, 100, 1);
+  sb.native_timing(1);
+  sb.transport_position(0, 1);
+  sb._clear();
+
+  sb.static_source(2);
+
+  named = sb._named();
+  gateCloseIndex = named.findIndex(function (m) {
+    return m.bus === "ksh_native_timing_gate" && m.args[0] === 0;
+  });
+  schedulerClearIndex = named.findIndex(function (m) {
+    return m.bus === "ksh_scheduler_commands" && m.args[0] === "clear";
+  });
+  tableClearIndex = named.findIndex(function (m) {
+    return m.bus === "ksh_native_playback_commands" && m.args[0] === "clear";
+  });
+  resetIndex = named.findIndex(function (m) {
+    return m.bus === "ksh_native_step_reset" && m.args[0] === "set" && m.args[1] === 0;
+  });
+  gateOpenIndex = named.findIndex(function (m) {
+    return m.bus === "ksh_native_timing_gate" && m.args[0] === 1;
+  });
+
+  assert.ok(gateCloseIndex >= 0, "native table swaps should close the patch MIDI gate first");
+  assert.ok(schedulerClearIndex > gateCloseIndex,
+    "native table swaps during playback should clear pending delayed notes after gate close");
+  assert.ok(tableClearIndex > schedulerClearIndex,
+    "native table rows should be cleared only after the MIDI gate is closed");
+  assert.ok(resetIndex > tableClearIndex,
+    "native table swaps should prime change memory to the current playback row");
+  assert.ok(gateOpenIndex > resetIndex,
+    "native MIDI gate should reopen only after change memory is primed");
+}
+
+function testNativeTransportRefreshDoesNotSuppressCurrentStep() {
+  var sb = makeMaxSandbox();
+  var named;
+  var schedulerClears;
+  var stepResets;
+
+  sb._clear();
+  sb.steps(4);
+  sb.channels(1);
+  sb.refresh_steps(1);
+  sb.mode("stack");
+  sb.cell(1, 1, 1, 1, 90, 100, 1);
+  sb.native_timing(1);
+  sb.transport_position(0, 1);
+  sb._clear();
+
+  sb.transport_position(0.25, 1);
+
+  named = sb._named();
+  schedulerClears = named.filter(function (m) {
+    return m.bus === "ksh_scheduler_commands" && m.args[0] === "clear";
+  });
+  stepResets = named.filter(function (m) {
+    return m.bus === "ksh_native_step_reset";
+  });
+
+  assert.strictEqual(schedulerClears.length, 0,
+    "transport refresh table swaps should not clear pending delayed notes");
+  assert.strictEqual(stepResets.length, 0,
+    "transport refresh table swaps should not prime away the current step edge");
+}
+
 function testResetClearsNativeScheduler() {
   var sb = makeMaxSandbox();
   sb._clear();
@@ -884,6 +965,8 @@ testTransportPositionEmitsNativeSchedulerEvent();
 testTransportLookaheadEmitsDelayedNativeSchedulerEvent();
 testNativeTimingSyncsPlaybackTableAndSuppressesJsNotes();
 testNativeCycleChangeEmitsUpdatedTableLengthMeta();
+testNativeTableSwapClosesGateAndPrimesCurrentStep();
+testNativeTransportRefreshDoesNotSuppressCurrentStep();
 testResetClearsNativeScheduler();
 testStoppedTransportClearsSchedulerOnceNotPerTick();
 testGetValueOfSetValueOfRoundtripsEngineState();

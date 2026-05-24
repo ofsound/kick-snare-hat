@@ -49,6 +49,7 @@ See `docs/native-timing.md`. Required boxes/lines include:
 - `r ksh_native_meta` → `route meta` → bps / phase / step count for step `expr`
 - `transportbeat` → `native-step-expr` → `native-step-input-gate` (playing) → `change` → gates → `coll ksh_native_playback`
 - `native-step-reset-msg` → `change` ← stop + `loadbang`
+- `r ksh_native_step_reset` → `change` for table-swap priming
 - `r ksh_native_playback_commands` → coll
 - `r ksh_native_timing_gate` → `native-mode-gate`
 - coll → `zl.iter 9` → `unpack i i i i f i i i i` → `pipe` / `makenote` / `noteout` and `prepend note_hit` → `s ksh_engine_events`

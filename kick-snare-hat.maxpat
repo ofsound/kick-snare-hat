@@ -1905,6 +1905,24 @@
       },
       {
         "box": {
+          "id": "native-step-reset-recv",
+          "maxclass": "newobj",
+          "numinlets": 0,
+          "numoutlets": 1,
+          "patching_rect": [
+            420,
+            1120,
+            150,
+            22
+          ],
+          "outlettype": [
+            ""
+          ],
+          "text": "r ksh_native_step_reset"
+        }
+      },
+      {
+        "box": {
           "id": "native-transport-unpack",
           "maxclass": "newobj",
           "numinlets": 1,
@@ -2743,6 +2761,18 @@
         "patchline": {
           "source": [
             "native-step-reset-msg",
+            0
+          ],
+          "destination": [
+            "native-step-change",
+            0
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "native-step-reset-recv",
             0
           ],
           "destination": [

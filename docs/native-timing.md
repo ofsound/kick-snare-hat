@@ -10,7 +10,7 @@ For the UI ↔ engine message contract, see [ui-sync.md](./ui-sync.md).
 
 | Layer | Role |
 | --- | --- |
-| `ksh_engine.js` | Builds the playback table, publishes clock metadata, opens or closes the native patch gate, handles `transport_position` for editor step feedback, and serves pattern persistence. |
+| `ksh_engine.js` | Builds the playback table, publishes clock metadata, opens or closes the native patch gate, handles `transport_position` for editor step feedback and refresh-window generation, and serves pattern persistence. |
 | Max patch (`scripts/build-device-patch.js`) | Derives the current playback row from `plugsync~`, looks up `coll ksh_native_playback`, outputs MIDI through `pipe` / `makenote`, and sends `note_hit` to `ksh_engine_events`. |
 | UIs | **Nat** toggle in the editor (`native_timing` message). Compact and editor listen for `note_hit` to flash cells. |
 
@@ -53,6 +53,15 @@ The engine pushes rows with:
 - `messnamed("ksh_native_playback_commands", "store", <rowIndex>, ...fields)`
 
 Any edit that changes generated output while `native_timing` is on triggers `syncNativePlaybackTable()`.
+During interactive table swaps, the engine closes `ksh_native_timing_gate`,
+clears the shared note scheduler if transport is running, publishes the new rows
+and metadata, primes the patch `change` object with the current native row via
+`ksh_native_step_reset set <row>`, then reopens the gate if native timing is
+still supported. This can drop pending delayed notes during an edit, but it
+prevents metadata or row-table updates from producing out-of-time MIDI edges.
+Transport-driven refresh-window swaps also close the gate while rows are
+replaced, but they do not clear pending delayed notes or prime away the current
+step.
 
 ---
 
@@ -97,6 +106,7 @@ pack → prepend note_hit → s ksh_engine_events
 `transport_position` still runs for:
 
 - `current_step` (editor playhead when the editor is active)
+- Refresh-window generation (`stack` / `per_channel`) and native table rebuilds on new refresh-boundary steps
 - Transport stop → engine `reset` and scheduler clear on the playing→stopped transition
 - No per-step `emitNote` / `note_hit` from `fireStep` (the patch owns note output)
 
@@ -112,6 +122,7 @@ Regenerate from `scripts/build-device-patch.js`; `scripts/validate-device-patch.
 - `transportbeat` → step `expr` → `native-step-input-gate` → `change`
 - `transportpos` → `unpack` → `is_playing` → input gate and playing gate
 - `native-step-reset-msg` (`set -1`) ← `sel 0` (stop) and `loadbang`
+- `r ksh_native_step_reset` → `change` for table-swap priming
 - `r ksh_native_playback_commands` → `coll ksh_native_playback`
 - `r ksh_native_timing_gate` → `native-mode-gate`
 - `zl.iter 9` → `unpack i i i i f i i i i` → MIDI + `note_hit` send

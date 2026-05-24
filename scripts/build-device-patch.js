@@ -110,6 +110,11 @@ function nativeTimingBoxes() {
       numoutlets: 1,
       outlettype: [""]
     }),
+    box("native-step-reset-recv", "newobj", "r ksh_native_step_reset", [420.0, 1120.0, 150.0, 22.0], {
+      numinlets: 0,
+      numoutlets: 1,
+      outlettype: [""]
+    }),
     box("native-transport-unpack", "newobj", "unpack s f i", [180.0, 1160.0, 90.0, 22.0], {
       numinlets: 1,
       numoutlets: 3,
@@ -184,6 +189,7 @@ function nativeTimingLines() {
     line("native-step-input-gate", 0, "native-step-change", 0),
     line("native-step-change", 0, "native-playing-gate", 1),
     line("native-step-reset-msg", 0, "native-step-change", 0),
+    line("native-step-reset-recv", 0, "native-step-change", 0),
     line("transportpos", 0, "native-transport-unpack", 0),
     line("native-transport-unpack", 2, "native-playing-gate", 0),
     line("native-playing-gate", 0, "native-mode-gate", 1),
