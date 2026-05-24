@@ -23,11 +23,11 @@ Use this before and during feature branches.
 
 - [ ] Keep Max-facing source/channel/step indexes 1-based; engine internals 0-based.
 - [ ] Add or extend `ksh_engine.test.js` for generation, native rows, persistence, and deterministic RNG.
-- [ ] Touch `ksh_engine.max.test.js` when Max handlers, `native_timing`, `pattern_data`, or `restore_pattern_store` change.
+- [ ] Touch `ksh_engine.max.test.js` when Max handlers, `pattern_data`, or `restore_pattern_store` change.
 - [ ] Emit a status selector when UIs need incremental updates.
 - [ ] Use `emitFullState()` for load/reset/restore/sync paths, not hot cell or transport paths.
 - [ ] For source-cell edits, use `generatedCellForSourceEdit()` and `markPreviewDirty()` unless a full re-roll is required.
-- [ ] When native timing is on, call `syncNativePlaybackTable()` after changes that affect generated hits; extend `appendNativeHit()` if the coll row shape changes.
+- [ ] Call `syncNativePlaybackTable()` after changes that affect generated hits; extend `appendNativeHit()` if the coll row shape changes.
 
 ### UI
 
@@ -69,16 +69,15 @@ Docs-only edits do not require Ableton sync.
 
 ## Manual Live smoke test
 
-Run when a feature touches UI behavior, persistence, native timing, patch wiring, or device load.
+Run when a feature touches UI behavior, persistence, native playback, patch wiring, or device load.
 
 - [ ] Load the synced device in Ableton Live 12.4+.
 - [ ] Confirm the compact UI loads, resizes, and sends mode/steps/lanes/refresh/rate/swing changes.
-- [ ] Open the editor; confirm resize, source grid edits, layer modes, and **Nat** toggle.
-- [ ] With **Nat** on (default): transport play fires MIDI; source-layer text flashes on hits; compact preview flashes on hits; first step on play from bar 1 fires once per active lane.
-- [ ] With **Nat** off: transport plays via engine scheduling; `note_hit` flashes fire from `fireStep()`.
+- [ ] Open the editor; confirm resize, source grid edits, layer modes, phase, and device on/off controls.
+- [ ] Transport play fires MIDI through native playback; source-layer text flashes on hits; compact preview flashes on hits; first step on play from bar 1 fires once per active lane.
 - [ ] Confirm `current_step` / playhead feedback in the editor while playing.
 - [ ] Confirm lane note/lock, humanize, swing, and phase offset affect output as expected.
-- [ ] Save/reload; confirm patterns, `native_timing`, channel metadata, and globals restore.
+- [ ] Save/reload; confirm patterns, channel metadata, and globals restore.
 
 ---
 

@@ -18,13 +18,12 @@ using unconstrained randomness.
 - MIDI input notes 0, 1, 2, and 3 select source patterns 1-4.
 - Refresh interval is measured in sequencer steps.
 - Live transport-position timing: host beat position drives the current step, with engine `reset` on Live transport stop.
-- **Native timing (default):** the engine precomputes hits into a Max `coll`; the patch fires MIDI on step edges and sends `note_hit` events for UI cell flashes. See [docs/native-timing.md](docs/native-timing.md).
-- **Nat toggle** in the editor (`native_timing 0|1`, default on). When off, the engine schedules notes in JavaScript with transport lookahead.
-- Internal swing delay applied per hit (native table row + `pipe` delay, or engine scheduling when native is off).
-- Device-wide velocity and timing humanize. Velocity humanize offsets each hit from its cell velocity. Timing humanize range is ±50% of the step interval at `100%` on the engine path; native table builds use a subtler fixed scale (see [docs/native-timing.md](docs/native-timing.md)).
+- Native playback: the engine precomputes hits into a Max `coll`; the patch fires MIDI on step edges and sends `note_hit` events for UI cell flashes. See [docs/native-timing.md](docs/native-timing.md).
+- Internal swing delay applied per hit through the native table row and shared `pipe`.
+- Device-wide velocity and timing humanize. Velocity humanize offsets each hit from its cell velocity. Timing humanize is precomputed into native playback rows (see [docs/native-timing.md](docs/native-timing.md)).
 - Live tempo from `live_set` drives step interval via `live.observer tempo`.
 - Compact Presentation UI for the Live device strip with mode, steps, lanes, refresh, rate, swing, generated preview, and editor launch controls.
-- Floating editor subpatcher with source dropdown, source grid, generated preview, lane note/lock controls, per-cell velocity/probability/cycle/cycle-offset controls, phase offset, device on/off, and **Nat**.
+- Floating editor subpatcher with source dropdown, source grid, generated preview, lane note/lock controls, per-cell velocity/probability/cycle/cycle-offset controls, phase offset, and device on/off.
 - Source Pattern layer modes for velocity, cycle, and probability (buttons and number keys `1`/`2`/`3`, Shift/Option hover).
 - Source row mute and reset.
 - Live set persistence for source patterns, globals, and channel metadata ([Live set persistence](#live-set-persistence)).
@@ -36,7 +35,7 @@ using unconstrained randomness.
 - `ksh_compact_ui.js`: compact Live device-strip `jsui`.
 - `ksh_ui.js`: floating editor `jsui`.
 - `ksh_ui_shared.js`: shared drawing and state-sync helpers.
-- `ksh_constants.js`: shared limits, defaults (`DEFAULT_NATIVE_TIMING`), and normalization.
+- `ksh_constants.js`: shared limits, defaults, and normalization.
 - `kick-snare-hat.maxpat`: Max patch shell (generated from `scripts/build-device-patch.js`).
 - `Kick-Snare-Hat.amxd`: loadable Max for Live device.
 - `ksh_engine.test.js`: Node tests for generation and native playback tables.
@@ -52,7 +51,7 @@ Pattern and settings live in a hidden Live parameter, not in the UIs.
 
 | Piece | Role |
 | --- | --- |
-| `textedit` `ksh_pattern_data` | Live-automatable parameter; URI-encoded compact JSON (`v:1`), includes `nativeTiming` |
+| `textedit` `ksh_pattern_data` | Live-automatable parameter; URI-encoded compact JSON (`v:1`) |
 | `ksh_engine.js` | Writes on edit (`serializeForPersistence()`), restores on load |
 | Compact / editor UIs | Mirror `engine_state` and `preview`; not the source of truth |
 
@@ -65,6 +64,8 @@ Pattern and settings live in a hidden Live parameter, not in the UIs.
 After device or patch updates, replace the device instance in a set and run `node scripts/sync-user-library.js` (or `build-device-patch.js`) so Live loads matching `.js` files beside the `.amxd`.
 
 Malformed or empty store values are ignored so a bad recall does not wipe the pattern.
+
+Old saved sets may still contain a legacy `nativeTiming` field. It is ignored on restore and is not written by new saves; transport playback is always native playback.
 
 ## Max `js` messages
 
@@ -84,7 +85,6 @@ swing 0
 velocity_humanize 0
 timing_humanize 0
 device_active 1
-native_timing 1
 phase_offset_beats 0
 
 channel_label 1 Kick
@@ -118,7 +118,7 @@ pattern_data <json-or-uri-encoded-json>
 restore_pattern_store
 ```
 
-`native_timing` rebuilds the native playback `coll`, updates `ksh_native_timing_gate`, and emits a `native_timing` status selector for the UIs.
+Transport playback always uses the native `coll` path. Pattern, timing, phase, and humanize edits rebuild the native playback table and update `ksh_native_timing_gate` as needed.
 
 ## Adding a parameter
 
@@ -159,7 +159,7 @@ Override the destination with `KSH_ABLETON_DEST`.
 
 ## Using in Live
 
-Save the set after editing; reopening should restore patterns and settings including `native_timing`. If persistence fails after an upgrade, confirm `ksh_pattern_data` holds `v:1` JSON and the device was replaced with a freshly synced build.
+Save the set after editing; reopening should restore patterns, channel metadata, and globals. If persistence fails after an upgrade, confirm `ksh_pattern_data` holds `v:1` JSON and the device was replaced with a freshly synced build.
 
 Place `Kick-Snare-Hat.amxd` beside `ksh_engine.js`, `ksh_compact_ui.js`, `ksh_ui.js`, `ksh_ui_shared.js`, and `ksh_constants.js`, then load from the browser or drag onto a MIDI track.
 

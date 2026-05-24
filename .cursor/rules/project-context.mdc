@@ -40,7 +40,7 @@ Patch shell: `kick-snare-hat.maxpat` (generated/edited via `scripts/build-device
 - Prefer **channel** in engine/API; UI code may still say **lane** in labels—keep schema compatibility (`normalizeIncomingState` handles legacy `lane` keys).
 - Generation modes: `stack` | `per_channel` | `static`
 - Gate modes: `always` | `random` | `cycle`
-- Native timing: default on (`native_timing` / editor **Nat**); precomputed `coll` + patch step edges; `note_hit` for UI flashes
+- Native playback: precomputed `coll` + patch step edges; `note_hit` for UI flashes. There is no supported non-native transport playback mode.
 
 ## Editing discipline
 

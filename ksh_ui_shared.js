@@ -461,9 +461,6 @@ ksh_shared.applyPersistenceState = function (state, payload) {
   if (payload.deviceActive !== undefined) {
     state.deviceActive = ksh_shared.toggleValue(payload.deviceActive);
   }
-  if (payload.nativeTiming !== undefined) {
-    state.nativeTiming = ksh_shared.toggleValue(payload.nativeTiming);
-  }
   state.tempo = Math.max(20, Math.min(300, parseFloat(payload.tempo) || 120));
   state.phaseOffsetBeats = parseFloat(payload.phaseOffsetBeats) || 0;
 
@@ -555,9 +552,6 @@ ksh_shared.applyEngineState = function (state, engineState) {
   if (engineState.deviceActive !== undefined) {
     state.deviceActive = ksh_shared.toggleValue(engineState.deviceActive);
   }
-  if (engineState.nativeTiming !== undefined) {
-    state.nativeTiming = ksh_shared.toggleValue(engineState.nativeTiming);
-  }
   if (engineState.tempo !== undefined) {
     state.tempo = Math.max(20, Math.min(300, parseFloat(engineState.tempo) || 120));
   }
@@ -633,8 +627,6 @@ ksh_shared.applyStatusMessage = function (state, name, args) {
     state.timingHumanize = ksh_shared.clamp(args[0], 0, 100);
   } else if (name === "device_active") {
     state.deviceActive = ksh_shared.toggleValue(args[0]);
-  } else if (name === "native_timing") {
-    state.nativeTiming = ksh_shared.toggleValue(args[0]);
   } else if (name === "phase_offset_beats") {
     state.phaseOffsetBeats = parseFloat(args[0]) || 0;
   } else if (name === "tempo") {

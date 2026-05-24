@@ -10,7 +10,7 @@ Architecture priorities and non-blocking risks for Kick Snare Hat feature work.
 
 ### Shared schema
 
-`ksh_constants.js` is the single source of truth for device limits, cell defaults, `DEFAULT_NATIVE_TIMING`, `NATIVE_HIT_FIELD_COUNT`, `normalizeRate`, and related helpers.
+`ksh_constants.js` is the single source of truth for device limits, cell defaults, `NATIVE_HIT_FIELD_COUNT`, `normalizeRate`, and related helpers.
 
 When adding a persisted field, rate, limit, or cell property:
 
@@ -21,15 +21,15 @@ When adding a persisted field, rate, limit, or cell property:
 5. Add UI only when user-facing.
 6. Update README, [native-timing.md](./native-timing.md) when wire formats change, and `ksh_engine.max.test.js` when wrapper behavior changes.
 
-### Native timing
+### Native playback
 
-Default transport playback is documented in [native-timing.md](./native-timing.md). The engine owns table content and gate state; the patch owns step edges and MIDI/`note_hit` output. Features that add per-hit behavior should decide whether values belong in the 9-field coll row, in `buildNativePlaybackRows()`, or in engine-only transport logic.
+Transport playback is documented in [native-timing.md](./native-timing.md). The engine owns table content and gate state; the patch owns step edges and MIDI/`note_hit` output. Features that add per-hit behavior should decide whether values belong in the 9-field coll row or in `buildNativePlaybackRows()`.
 
 ### UI and engine sync
 
 The engine is the source of truth. UIs mirror `engine_state` and `preview`.
 
-- `engine_state` — compact `v:1` JSON (includes `nativeTiming`); not the generated grid.
+- `engine_state` — compact `v:1` JSON; not the generated grid. Legacy `nativeTiming` values may appear in old saves but are ignored and not re-saved.
 - `preview` — generated grid from `snapshot()`.
 - Editor source edits are optimistic (`cell` without echo).
 - Hot paths use `generatedCellForSourceEdit()` + `markPreviewDirty()`, not `emitFullState()`.
@@ -62,7 +62,7 @@ Before large UI-facing features, confirm in Ableton Live 12.4+ (see [feature-pre
 
 - Compact and editor load and resize.
 - Source grid editing and preview updates.
-- Native timing on/off, `note_hit` flashes, first-step-on-play.
+- Native playback, `note_hit` flashes, first-step-on-play.
 - Transport playhead and save/reload.
 
 ### Deferred cleanup

@@ -1,6 +1,6 @@
-# Native timing
+# Native playback
 
-Native timing is the default transport playback path. The engine precomputes MIDI hits into a Max `coll`; the patch schedules notes on transport step edges and forwards UI flash events to the UIs.
+Native playback is the transport playback path. The engine precomputes MIDI hits into a Max `coll`; the patch schedules notes on transport step edges and forwards UI flash events to the UIs.
 
 For the UI ↔ engine message contract, see [ui-sync.md](./ui-sync.md).
 
@@ -12,17 +12,15 @@ For the UI ↔ engine message contract, see [ui-sync.md](./ui-sync.md).
 | --- | --- |
 | `ksh_engine.js` | Builds the playback table, publishes clock metadata, opens or closes the native patch gate, handles `transport_position` for editor step feedback and refresh-window generation, and serves pattern persistence. |
 | Max patch (`scripts/build-device-patch.js`) | Derives the current playback row from `plugsync~`, looks up `coll ksh_native_playback`, outputs MIDI through `pipe` / `makenote`, and sends `note_hit` to `ksh_engine_events`. |
-| UIs | **Nat** toggle in the editor (`native_timing` message). Compact and editor listen for `note_hit` to flash cells. |
+| UIs | Compact and editor listen for `note_hit` to flash cells. There is no playback-mode toggle. |
 
-`native_timing` defaults to **on** (`KSH_CONSTANTS.DEFAULT_NATIVE_TIMING`). It is stored in compact `v:1` persistence JSON.
-
-When `native_timing` is **off**, the engine schedules notes in JavaScript (`scheduleLookahead` / `fireStep`) and emits them on the `js` outlet into the same `note-unpack` → `pipe` → `makenote` chain.
+Old saved sets may contain a legacy `nativeTiming` field. The engine ignores it on restore and does not write it back.
 
 ---
 
 ## Playback table
 
-`buildNativePlaybackRows()` fills one sparse row per native playback index. Row count is `stepCount × cyclePeriod`, where `cyclePeriod` is the least common multiple of active per-cell cycle lengths plus any per-channel boomerang period needed to represent the active loop length (with extra expansion when probability &lt; 100%). The table is capped at **2048** rows; above that, native timing is treated as unsupported and the gate stays closed.
+`buildNativePlaybackRows()` fills one sparse row per native playback index. Row count is `stepCount × cyclePeriod`, where `cyclePeriod` is the least common multiple of active per-cell cycle lengths plus any per-channel boomerang period needed to represent the active loop length (with extra expansion when probability &lt; 100%). The table is capped at **2048** rows; above that, native playback is treated as unsupported and the gate stays closed.
 
 Each stored hit is a flat list of **9** fields (`KSH_CONSTANTS.NATIVE_HIT_FIELD_COUNT`):
 
@@ -38,7 +36,7 @@ Each stored hit is a flat list of **9** fields (`KSH_CONSTANTS.NATIVE_HIT_FIELD_
 | 7 | UI source | 1-based source pattern |
 | 8 | UI source step | 1-based source-grid step after per-channel playback mapping |
 
-Swing and timing humanize are applied when the table is built: early hits are placed on earlier row indices with a positive `pipe` delay. Timing humanize in native mode uses `stepIntervalMs × 0.2 × (timingHumanize / 100)` as its maximum ± offset in milliseconds.
+Swing and timing humanize are applied when the table is built: early hits are placed on earlier row indices with a positive `pipe` delay. Timing humanize uses `stepIntervalMs × 0.2 × (timingHumanize / 100)` as its maximum ± offset in milliseconds.
 
 Velocity humanize is rolled into stored velocities at table build time. Cycle gates and probability are resolved when the table is built (probability uses a 16× row expansion when any cell has probability &lt; 100%).
 
@@ -52,12 +50,12 @@ The engine pushes rows with:
 - `messnamed("ksh_native_playback_commands", "clear")`
 - `messnamed("ksh_native_playback_commands", "store", <rowIndex>, ...fields)`
 
-Any edit that changes generated output while `native_timing` is on triggers `syncNativePlaybackTable()`.
+Any edit that changes generated output triggers `syncNativePlaybackTable()`.
 During interactive table swaps, the engine closes `ksh_native_timing_gate`,
 clears the shared note scheduler if transport is running, publishes the new rows
 and metadata, primes the patch `change` object with the current native row via
-`ksh_native_step_reset set <row>`, then reopens the gate if native timing is
-still supported. This can drop pending delayed notes during an edit, but it
+`ksh_native_step_reset set <row>`, then reopens the gate if native playback is
+supported. This can drop pending delayed notes during an edit, but it
 prevents metadata or row-table updates from producing out-of-time MIDI edges.
 Transport-driven refresh-window swaps also close the gate while rows are
 replaced, but they do not clear pending delayed notes or prime away the current
@@ -94,7 +92,7 @@ expr floor(((beat - phase) / beatsPerStep) + 0.000001) % stepCount
 - A bang from `change` on a new step index looks up the current row in
   `coll ksh_native_playback`.
 
-**Gate** (`messnamed("ksh_native_timing_gate", 0|1)`): the engine sets `1` only when `native_timing`, `device_active`, and a supported table size are all true.
+**Gate** (`messnamed("ksh_native_timing_gate", 0|1)`): the engine sets `1` only when `device_active` and a supported table size are both true.
 
 **MIDI output path:**
 
@@ -110,14 +108,14 @@ pack → prepend note_hit → s ksh_engine_events
 
 ---
 
-## Engine transport while native is active
+## Engine Transport
 
 `transport_position` still runs for:
 
 - `current_step` (editor playhead when the editor is active)
 - Refresh-window generation (`stack` / `per_channel`) and native table rebuilds on new refresh-boundary steps
 - Transport stop → engine `reset` and scheduler clear on the playing→stopped transition
-- No per-step `emitNote` / `note_hit` from `fireStep` (the patch owns note output)
+- No per-step `emitNote` / `note_hit` from the engine during transport playback; the patch owns note output
 
 Auditions and other one-shot notes still use the engine outlet into the shared `pipe` / `makenote` path.
 
@@ -141,5 +139,5 @@ Regenerate from `scripts/build-device-patch.js`; `scripts/validate-device-patch.
 
 ## Tests
 
-- `ksh_engine.test.js` — `buildNativePlaybackRows()`, metadata fields, `nativeTimingActive()`, transport suppression when native is on.
-- `ksh_engine.max.test.js` — `native_timing` handler, coll `store` messages, timing gate, `note_hit` from engine outlet when native is off.
+- `ksh_engine.test.js` — `buildNativePlaybackRows()`, metadata fields, native playback gating, transport suppression from the JS outlet, and legacy `nativeTiming` compatibility.
+- `ksh_engine.max.test.js` — coll `store` messages, timing gate, native table swaps, and transport suppression from the JS outlet.

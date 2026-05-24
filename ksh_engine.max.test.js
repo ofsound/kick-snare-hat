@@ -186,7 +186,7 @@ function testMaxWrapperBootsEngineAndExposesHandlers() {
   assert.strictEqual(typeof sb.duration_ms, "undefined");
   assert.strictEqual(typeof sb.velocity_humanize, "function");
   assert.strictEqual(typeof sb.timing_humanize, "function");
-  assert.strictEqual(typeof sb.native_timing, "function");
+  assert.strictEqual(typeof sb.native_timing, "undefined");
   assert.strictEqual(typeof sb.phase_offset_beats, "function");
   assert.strictEqual(typeof sb.device_active, "function");
   assert.strictEqual(typeof sb.editor_active, "function");
@@ -216,7 +216,6 @@ function testStatusMessagesEmitUiSelectors() {
   sb.channel_playback_mode(1, "boomerang");
   sb.velocity_humanize(12);
   sb.timing_humanize(8);
-  sb.native_timing(1);
   sb.phase_offset_beats(0.125);
   sb.source_channel_mute(2, 1, 1);
 
@@ -235,7 +234,6 @@ function testStatusMessagesEmitUiSelectors() {
     "channel_lock status should use Max/UI-facing 1-based source indices");
   assert.ok(phaseEvent, "phase_offset_beats should emit a direct UI selector");
   assert.deepStrictEqual(phaseEvent.args, ["phase_offset_beats", "0.125"]);
-  assert.deepStrictEqual(lastEventOn(sb, "native_timing").args, ["native_timing", "1"]);
   assert.ok(staticSourceEvent, "static_source should emit a direct UI selector");
   assert.deepStrictEqual(staticSourceEvent.args, ["static_source", "3"]);
   assert.ok(muteEvent, "source_channel_mute should emit a direct UI selector");
@@ -363,9 +361,8 @@ function testChannelAuditionEmitsNoteToOutlet() {
   assert.deepStrictEqual(midiNotesOn(sb)[0].args, [50, 100, 100, 1, 0]);
 }
 
-function testTransportPositionEmitsNativeSchedulerEvent() {
+function testTransportPositionDoesNotEmitOutletMidi() {
   var sb = makeMaxSandbox();
-  var hitEvents;
 
   sb._clear();
   sb.steps(4);
@@ -373,25 +370,20 @@ function testTransportPositionEmitsNativeSchedulerEvent() {
   sb.rate("16n");
   sb.tempo(120);
   sb.cell(1, 1, 1, 1, 90, 100, 1);
-  sb.native_timing(0);
   sb._flush();
   sb._clear();
 
   sb.transport_position(0, 1);
 
-  var emitted = midiNotesOn(sb);
-  assert.strictEqual(emitted.length, 1, "should emit one raw note event");
-  assert.deepStrictEqual(emitted[0].args, [36, 90, 100, 1, 0],
-    "raw note event should be pitch velocity duration channel delay");
+  assert.strictEqual(midiNotesOn(sb).length, 0,
+    "transport playback should leave MIDI output to the native patch path");
   assert.strictEqual(sb._scheduledCount(), 0,
-    "note output should not allocate per-note Task objects");
-  hitEvents = eventsOn(sb, "note_hit");
-  assert.strictEqual(hitEvents.length, 1,
-    "emitted MIDI notes should send one lightweight note_hit UI event");
-  assert.deepStrictEqual(hitEvents[0].args, ["note_hit", "1", "1", "1", "1"]);
+    "transport playback should not allocate per-note Task objects");
+  assert.strictEqual(eventsOn(sb, "note_hit").length, 0,
+    "transport note_hit events should come from the native patch path");
 }
 
-function testTransportLookaheadEmitsDelayedNativeSchedulerEvent() {
+function testTransportMidStepDoesNotEmitOutletMidi() {
   var sb = makeMaxSandbox();
 
   sb._clear();
@@ -400,19 +392,16 @@ function testTransportLookaheadEmitsDelayedNativeSchedulerEvent() {
   sb.rate("16n");
   sb.tempo(120);
   sb.cell(1, 1, 2, 1, 90, 100, 1);
-  sb.native_timing(0);
   sb._flush();
   sb._clear();
 
   sb.transport_position(0.1, 1);
 
-  var emitted = midiNotesOn(sb);
-  assert.strictEqual(emitted.length, 1, "lookahead should queue the next step before its edge");
-  assert.deepStrictEqual(emitted[0].args, [36, 90, 100, 1, 75],
-    "lookahead note event should include a positive pipe delay");
+  assert.strictEqual(midiNotesOn(sb).length, 0,
+    "mid-step transport updates should not emit JS-scheduled MIDI");
 }
 
-function testNativeTimingSyncsPlaybackTableAndSuppressesJsNotes() {
+function testNativePlaybackSyncsPlaybackTableAndSuppressesJsNotes() {
   var sb = makeMaxSandbox();
   var stores;
   var gateMessages;
@@ -423,22 +412,21 @@ function testNativeTimingSyncsPlaybackTableAndSuppressesJsNotes() {
   sb.rate("16n");
   sb.tempo(120);
   sb.cell(1, 1, 1, 1, 90, 100, 1);
-  sb.native_timing(1);
   sb._flush();
 
   sb.transport_position(0, 1);
 
   assert.strictEqual(midiNotesOn(sb).length, 0,
-    "native timing should leave deterministic transport notes to the native patch path");
+    "transport playback should leave deterministic notes to the native patch path");
   stores = sb._named().filter(function (m) {
     return m.bus === "ksh_native_playback_commands" && m.args[0] === "store";
   });
-  assert.ok(stores.length >= 1, "native timing should sync a coll store row");
+  assert.ok(stores.length >= 1, "native playback should sync a coll store row");
   gateMessages = sb._named().filter(function (m) {
     return m.bus === "ksh_native_timing_gate";
   });
   assert.ok(gateMessages.some(function (m) { return m.args[0] === 1; }),
-    "native timing should open the native patch gate when supported");
+    "native playback should open the native patch gate when supported");
 }
 
 function testNativeCycleChangeEmitsUpdatedTableLengthMeta() {
@@ -449,7 +437,6 @@ function testNativeCycleChangeEmitsUpdatedTableLengthMeta() {
   sb.steps(4);
   sb.channels(1);
   sb.cell(1, 1, 1, 1, 90, 100, 1);
-  sb.native_timing(1);
   sb._clear();
 
   sb.cell_cycle(1, 1, 1, 3);
@@ -477,7 +464,6 @@ function testNativeTableSwapClosesGateAndPrimesCurrentStep() {
   sb.mode("static");
   sb.cell(1, 1, 1, 1, 90, 100, 1);
   sb.cell(2, 1, 1, 1, 80, 100, 1);
-  sb.native_timing(1);
   sb.transport_position(0, 1);
   sb._clear();
 
@@ -523,7 +509,6 @@ function testNativeTransportRefreshDoesNotSuppressCurrentStep() {
   sb.refresh_steps(1);
   sb.mode("stack");
   sb.cell(1, 1, 1, 1, 90, 100, 1);
-  sb.native_timing(1);
   sb.transport_position(0, 1);
   sb._clear();
 
@@ -549,12 +534,11 @@ function testResetClearsNativeScheduler() {
   sb.steps(4);
   sb.channels(1);
   sb.cell(1, 1, 1, 1, 100, 100, 1);
-  sb.native_timing(0);
   sb._flush();
   sb._clear();
 
   sb.transport_position(0, 1);
-  assert.strictEqual(midiNotesOn(sb).length, 1, "note event should emit immediately to the native scheduler");
+  assert.strictEqual(midiNotesOn(sb).length, 0, "transport should not emit JS-scheduled MIDI");
   sb._clear();
 
   sb.reset();
@@ -642,6 +626,7 @@ function testGetValueOfSetValueOfRoundtripsEngineState() {
   assert.strictEqual(parsed.swing, 40);
   assert.strictEqual(Object.prototype.hasOwnProperty.call(parsed, "midiChannel"), false);
   assert.strictEqual(Object.prototype.hasOwnProperty.call(parsed, "noteDurationMs"), false);
+  assert.strictEqual(Object.prototype.hasOwnProperty.call(parsed, "nativeTiming"), false);
   assert.strictEqual(parsed.deviceActive, 0);
   assert.strictEqual(parsed.velocityHumanize, 12);
   assert.strictEqual(parsed.timingHumanize, 8);
@@ -784,7 +769,6 @@ function testPatternRestoreEmitsNativeMetaForPersistedClock() {
     velocityHumanize: 0,
     timingHumanize: 0,
     deviceActive: 1,
-    nativeTiming: 1,
     phaseOffsetBeats: 0.125,
     channels: [["1", 36, -1, 16]],
     sourceChannelMutes: [[0], [0], [0], [0]],
@@ -801,6 +785,37 @@ function testPatternRestoreEmitsNativeMetaForPersistedClock() {
   assert.ok(metaMessages.some(function (m) {
     return m.args[1] === 0.5 && m.args[2] === 0.125 && m.args[3] === 16;
   }), "persisted restore should resend native clock metadata after applying state");
+}
+
+function testPatternRestoreIgnoresLegacyNativeTiming() {
+  var sb = makeMaxSandbox();
+  var payload = JSON.stringify({
+    v: 1,
+    stepCount: 8,
+    channelCount: 1,
+    refreshSteps: 1,
+    generationMode: "static",
+    staticSource: 0,
+    rate: "16n",
+    tempo: 120,
+    swing: 0,
+    velocityHumanize: 0,
+    timingHumanize: 0,
+    deviceActive: 1,
+    nativeTiming: 0,
+    phaseOffsetBeats: 0,
+    channels: [["1", 36, -1, 8, "normal"]],
+    sourceChannelMutes: [[0], [0], [0], [0]],
+    cells: [[0, 0, 0, 1, 100, 100, 1]]
+  });
+  var serialized;
+
+  sb._clear();
+  sb.pattern_data(payload);
+  serialized = JSON.parse(decodePersistenceValue(sb.getvalueof()));
+
+  assert.strictEqual(sb.kshEngine.nativePlaybackActive(), true);
+  assert.strictEqual(Object.prototype.hasOwnProperty.call(serialized, "nativeTiming"), false);
 }
 
 function testRestorePatternStoreResyncsNativeSchedulerBeforeRetry() {
@@ -975,7 +990,6 @@ function testDeviceActiveSuppressesTransportOutputAndClearsScheduler() {
   sb.steps(4);
   sb.channels(1);
   sb.cell(1, 1, 1, 1, 100, 100, 1);
-  sb.native_timing(0);
   sb._flush();
   sb._clear();
 
@@ -994,8 +1008,8 @@ function testDeviceActiveSuppressesTransportOutputAndClearsScheduler() {
   sb.device_active(1);
   sb.transport_position(0, 1);
 
-  assert.strictEqual(midiNotesOn(sb).length, 1,
-    "active device should resume transport note output");
+  assert.strictEqual(midiNotesOn(sb).length, 0,
+    "active transport playback should stay on the native patch path");
 }
 
 function testMessnamedFailuresAreSwallowed() {
@@ -1027,9 +1041,9 @@ testRecomposeCommandsFlushPreviewForCompactUi();
 testCellMessageWritesToEngineSourceAndCoalescesPreview();
 testSourceChannelResetClearsStateAndEmitsFullState();
 testChannelAuditionEmitsNoteToOutlet();
-testTransportPositionEmitsNativeSchedulerEvent();
-testTransportLookaheadEmitsDelayedNativeSchedulerEvent();
-testNativeTimingSyncsPlaybackTableAndSuppressesJsNotes();
+testTransportPositionDoesNotEmitOutletMidi();
+testTransportMidStepDoesNotEmitOutletMidi();
+testNativePlaybackSyncsPlaybackTableAndSuppressesJsNotes();
 testNativeCycleChangeEmitsUpdatedTableLengthMeta();
 testNativeTableSwapClosesGateAndPrimesCurrentStep();
 testNativeTransportRefreshDoesNotSuppressCurrentStep();
@@ -1041,6 +1055,7 @@ testSetValueOfRejectsMalformedJsonWithoutChangingState();
 testSetValueOfAppliesValidPartialState();
 testSetValueOfUnwrapsTexteditAndLiveParameterWrapper();
 testPatternRestoreEmitsNativeMetaForPersistedClock();
+testPatternRestoreIgnoresLegacyNativeTiming();
 testRestorePatternStoreResyncsNativeSchedulerBeforeRetry();
 
 function testRestorePatternStoreReadsPattrAndInitsUi() {

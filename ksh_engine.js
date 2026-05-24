@@ -107,14 +107,6 @@ var KSH_EngineClass = null;
     return !(value === "0" || value === "false" || value === "off");
   }
 
-  function clampFloat(value, min, max) {
-    value = parseFloat(value);
-    if (isNaN(value)) {
-      return min;
-    }
-    return Math.max(min, Math.min(max, value));
-  }
-
   function normalizeIncomingState(state) {
     var normalized;
 
@@ -205,13 +197,8 @@ var KSH_EngineClass = null;
     this.deviceActive = true;
     this.currentStep = 0;
     this.lastReportedGlobalStep = null;
-    this.scheduledGlobalSteps = {};
-    this.scheduledNoteKeys = {};
-    this.lookaheadMs = 80;
-    this.lateGraceMs = 2;
     this.phaseOffsetBeats = 0;
     this.transportPlaying = 0;
-    this.nativeTiming = !!KSH_CONSTANTS.DEFAULT_NATIVE_TIMING;
     this.nativePlaybackStepCount = this.stepCount;
     this.nativePlaybackRows = null;
     this.nativeTransportRefreshInProgress = false;
@@ -221,7 +208,6 @@ var KSH_EngineClass = null;
     this.sources = [];
     this.sourceChannelMutes = makeSourceChannelMutes();
     this.generated = makePattern();
-    this.cycleCounters = {};
 
     this.initChannels();
     this.initSources();
@@ -310,8 +296,6 @@ var KSH_EngineClass = null;
   KickSnareHatEngine.prototype.setRate = function (rate) {
     this.rate = normalizeRate(rate);
     this.updateStepIntervalMs();
-    this.scheduledGlobalSteps = {};
-    this.scheduledNoteKeys = {};
     if (this.transportPlaying && typeof cancelPendingNoteTasks === "function") {
       cancelPendingNoteTasks();
     }
@@ -327,8 +311,6 @@ var KSH_EngineClass = null;
     }
     this.tempo = Math.max(20, Math.min(300, tempo));
     this.updateStepIntervalMs();
-    this.scheduledGlobalSteps = {};
-    this.scheduledNoteKeys = {};
     if (this.transportPlaying && typeof cancelPendingNoteTasks === "function") {
       cancelPendingNoteTasks();
     }
@@ -340,14 +322,6 @@ var KSH_EngineClass = null;
   KickSnareHatEngine.prototype.updateStepIntervalMs = function () {
     var quarterMs = 60000 / this.tempo;
     this.stepIntervalMs = quarterMs * this.beatsPerStep();
-  };
-
-  KickSnareHatEngine.prototype.msToBeats = function (ms) {
-    return (clampFloat(ms, 0, 600000) * this.tempo) / 60000;
-  };
-
-  KickSnareHatEngine.prototype.msUntilBeat = function (targetBeat, currentBeat) {
-    return (targetBeat - currentBeat) * (60000 / this.tempo);
   };
 
   KickSnareHatEngine.prototype.beatsPerStep = function () {
@@ -393,8 +367,6 @@ var KSH_EngineClass = null;
     }
 
     this.deviceActive = active;
-    this.scheduledGlobalSteps = {};
-    this.scheduledNoteKeys = {};
     this.emitNativeTimingGate();
     if (!this.deviceActive) {
       if (typeof cancelPendingNoteTasks === "function") {
@@ -413,8 +385,6 @@ var KSH_EngineClass = null;
       offset = 0;
     }
     this.phaseOffsetBeats = Math.max(-0.25, Math.min(0.25, offset));
-    this.scheduledGlobalSteps = {};
-    this.scheduledNoteKeys = {};
     if (this.transportPlaying && typeof cancelPendingNoteTasks === "function") {
       cancelPendingNoteTasks();
     }
@@ -422,12 +392,12 @@ var KSH_EngineClass = null;
     this.status("phase_offset_beats " + this.phaseOffsetBeats);
   };
 
-  KickSnareHatEngine.prototype.nativeTimingSupported = function () {
+  KickSnareHatEngine.prototype.nativePlaybackSupported = function () {
     return this.nativePlaybackPeriod() > 0;
   };
 
-  KickSnareHatEngine.prototype.nativeTimingActive = function () {
-    return this.nativeTiming && this.deviceActive && this.nativeTimingSupported();
+  KickSnareHatEngine.prototype.nativePlaybackActive = function () {
+    return this.deviceActive && this.nativePlaybackSupported();
   };
 
   KickSnareHatEngine.prototype.emitNativeMeta = function () {
@@ -441,20 +411,7 @@ var KSH_EngineClass = null;
     if (typeof safeMessnamed !== "function") {
       return;
     }
-    safeMessnamed("ksh_native_timing_gate", this.nativeTimingActive() ? 1 : 0);
-  };
-
-  KickSnareHatEngine.prototype.setNativeTiming = function (enabled) {
-    this.nativeTiming = normalizeToggle(enabled) ? true : false;
-    this.scheduledGlobalSteps = {};
-    this.scheduledNoteKeys = {};
-    if (typeof cancelPendingNoteTasks === "function") {
-      cancelPendingNoteTasks();
-    }
-    this.syncNativePlaybackTable();
-    this.emitNativeMeta();
-    this.emitNativeTimingGate();
-    this.status("native_timing " + (this.nativeTiming ? 1 : 0));
+    safeMessnamed("ksh_native_timing_gate", this.nativePlaybackActive() ? 1 : 0);
   };
 
   KickSnareHatEngine.prototype.setChannelLabel = function (channel, label) {
@@ -757,10 +714,7 @@ var KSH_EngineClass = null;
     }
     this.currentStep = 0;
     this.playingStepOneBased = 0;
-    this.cycleCounters = {};
     this.lastReportedGlobalStep = null;
-    this.scheduledGlobalSteps = {};
-    this.scheduledNoteKeys = {};
     this.transportPlaying = 0;
     this.generateWindow(0, this.stepCount, true);
     this.reportPlayingStep();
@@ -867,16 +821,16 @@ var KSH_EngineClass = null;
 
   // Re-derive generated cells from their existing per-cell source choices.
   // Cells with no prior source choice (initial state, freshly-grown
-  // stepCount/channelCount, etc.) fall back to a roll; in stack mode that
-  // fallback roll is shared across the whole window so first-time output
-  // still matches stack semantics.
+  // stepCount/channelCount, etc.) get a new source roll; in stack mode that
+  // initial roll is shared across the whole window so first-time output still
+  // matches stack semantics.
   KickSnareHatEngine.prototype.recomposeWindow = function (startStep, length, forceEmit) {
     var offset;
     var step;
     var channel;
     var source;
     var existing;
-    var fallbackStack = -1;
+    var initialStackSource = -1;
     var activeSources;
 
     if (forceEmit === undefined) {
@@ -905,10 +859,10 @@ var KSH_EngineClass = null;
           } else if (this.generationMode === "per_channel") {
             source = this.pickRandomSource(activeSources);
           } else {
-            if (fallbackStack < 0) {
-              fallbackStack = this.pickRandomSource(activeSources);
+            if (initialStackSource < 0) {
+              initialStackSource = this.pickRandomSource(activeSources);
             }
-            source = fallbackStack;
+            source = initialStackSource;
           }
         }
 
@@ -921,9 +875,7 @@ var KSH_EngineClass = null;
 
   KickSnareHatEngine.prototype.markPreviewDirty = function (forceEmit) {
     this.previewDirty = true;
-    if (this.nativeTiming) {
-      this.syncNativePlaybackTable();
-    }
+    this.syncNativePlaybackTable();
     if (forceEmit) {
       this.flushPreview();
     } else if (this.editorActive) {
@@ -943,65 +895,16 @@ var KSH_EngineClass = null;
     return source + ":" + channel + ":" + step;
   };
 
-  KickSnareHatEngine.prototype.shouldFire = function (cell, channel, step) {
-    var key;
-    var count;
-    var cycle;
-    var cycleOffset;
-    var cycleInverted;
-    var probability;
-
-    if (!cell.enabled) {
-      return false;
-    }
-
-    cycle = clamp(cell.cycle, 1, 64);
-    cycleOffset = normalizeCycleOffset(cell.cycleOffset, cycle);
-    cycleInverted = normalizeCycleInverted(cell.cycleInverted, cycle);
-    if (cycle > 1) {
-      key = this.cycleKey(cell.source, channel, typeof cell.sourceStep === "number" ? cell.sourceStep : step);
-      count = this.cycleCounters[key] || 0;
-      this.cycleCounters[key] = count + 1;
-      if (!cycleGateMatches(count, cycle, cycleOffset, cycleInverted)) {
-        return false;
-      }
-    }
-
-    probability = clamp(cell.probability, 0, 100);
-    if (probability >= 100) {
-      return true;
-    }
-    if (probability <= 0) {
-      return false;
-    }
-
-    return this.rng() * 100 < probability;
-  };
-
   KickSnareHatEngine.prototype.swingDelayMsForStep = function (step) {
     return step % 2 === 1 ? this.stepIntervalMs * 0.5 * (this.swing / 100) : 0;
   };
 
-  KickSnareHatEngine.prototype.timingHumanizeRangeMs = function () {
-    return this.stepIntervalMs * 0.5 * (this.timingHumanize / 100);
-  };
-
-  KickSnareHatEngine.prototype.humanizeTimingOffsetMs = function () {
-    var range = this.timingHumanizeRangeMs();
-
-    if (range <= 0) {
-      return 0;
-    }
-
-    return (this.rng() * 2 - 1) * range;
-  };
-
-  KickSnareHatEngine.prototype.nativeTimingHumanizeRangeMs = function () {
+  KickSnareHatEngine.prototype.playbackTimingHumanizeRangeMs = function () {
     return this.stepIntervalMs * TIMING_HUMANIZE_NATIVE_SCALE * (this.timingHumanize / 100);
   };
 
-  KickSnareHatEngine.prototype.nativeHumanizeTimingOffsetMs = function () {
-    var range = this.nativeTimingHumanizeRangeMs();
+  KickSnareHatEngine.prototype.playbackHumanizeTimingOffsetMs = function () {
+    var range = this.playbackTimingHumanizeRangeMs();
 
     if (range <= 0) {
       return 0;
@@ -1022,15 +925,6 @@ var KSH_EngineClass = null;
     range = velocity * (this.velocityHumanize / 100);
     humanized = velocity + (this.rng() * 2 - 1) * range;
     return clamp(Math.round(humanized), 1, 127);
-  };
-
-  KickSnareHatEngine.prototype.delayMsForScheduledStep = function (step, baseDelayMs) {
-    var delayMs;
-
-    delayMs = clampFloat(baseDelayMs, 0, 600000);
-    delayMs += this.swingDelayMsForStep(step);
-    delayMs += this.humanizeTimingOffsetMs();
-    return Math.max(0, delayMs);
   };
 
   KickSnareHatEngine.prototype.nativePlaybackPeriod = function () {
@@ -1162,7 +1056,7 @@ var KSH_EngineClass = null;
 	          }
 	          velocity = this.humanizeVelocity(cell.velocity);
 	          baseDelayMs = this.swingDelayMsForStep(rowStep);
-	          timingOffsetMs = this.nativeHumanizeTimingOffsetMs();
+	          timingOffsetMs = this.playbackHumanizeTimingOffsetMs();
 	          targetPosition = step + (baseDelayMs + timingOffsetMs) / this.stepIntervalMs;
 	          if (targetPosition < 0) {
 	            targetPosition = 0;
@@ -1215,7 +1109,7 @@ var KSH_EngineClass = null;
     var canSend = typeof safeMessnamed === "function";
     var suppressCurrentStep = !this.nativeTransportRefreshInProgress;
 
-    if (canSend && this.nativeTiming) {
+    if (canSend) {
       safeMessnamed("ksh_native_timing_gate", 0);
       if (suppressCurrentStep && this.transportPlaying && typeof cancelPendingNoteTasks === "function") {
         cancelPendingNoteTasks();
@@ -1245,22 +1139,6 @@ var KSH_EngineClass = null;
     this.emitNativeTimingGate();
   };
 
-  KickSnareHatEngine.prototype.pruneScheduledSteps = function (currentGlobalStep) {
-    var cutoff = currentGlobalStep - Math.max(this.stepCount * 4, 64);
-    var key;
-
-    for (key in this.scheduledGlobalSteps) {
-      if (Object.prototype.hasOwnProperty.call(this.scheduledGlobalSteps, key) && parseInt(key, 10) < cutoff) {
-        delete this.scheduledGlobalSteps[key];
-      }
-    }
-    for (key in this.scheduledNoteKeys) {
-      if (Object.prototype.hasOwnProperty.call(this.scheduledNoteKeys, key) && parseInt(key.split(":")[0], 10) < cutoff) {
-        delete this.scheduledNoteKeys[key];
-      }
-    }
-  };
-
   KickSnareHatEngine.prototype.prepareStepForPlayback = function (step) {
     if (step % this.refreshSteps === 0) {
       this.nativeTransportRefreshInProgress = true;
@@ -1284,123 +1162,6 @@ var KSH_EngineClass = null;
     this.reportPlayingStep();
   };
 
-  KickSnareHatEngine.prototype.scheduleGlobalStep = function (globalStep, songBeats) {
-    var key = String(globalStep);
-    var step;
-    var targetBeat;
-    var baseDelayMs;
-
-    if (this.scheduledGlobalSteps[key]) {
-      return [];
-    }
-
-    step = mod(globalStep, this.stepCount);
-    targetBeat = this.beatForGlobalStep(globalStep);
-    baseDelayMs = this.msUntilBeat(targetBeat, songBeats);
-    if (baseDelayMs < -this.lateGraceMs) {
-      this.scheduledGlobalSteps[key] = 1;
-      return [];
-    }
-
-    this.scheduledGlobalSteps[key] = 1;
-    this.prepareStepForPlayback(step);
-    return this.fireStep(step, globalStep, {
-      baseDelayMs: baseDelayMs,
-      reportStep: false
-    });
-  };
-
-  KickSnareHatEngine.prototype.scheduleLookahead = function (songBeats, currentGlobalStep) {
-    var notes = [];
-    var lookaheadBeats = this.msToBeats(this.lookaheadMs);
-    var endBeat = songBeats + lookaheadBeats;
-    var globalStep = currentGlobalStep;
-    var targetBeat;
-    var scheduled;
-    var i;
-
-    while (true) {
-      targetBeat = this.beatForGlobalStep(globalStep);
-      if (targetBeat > endBeat + 0.000000001) {
-        break;
-      }
-
-      scheduled = this.scheduleGlobalStep(globalStep, songBeats);
-      for (i = 0; i < scheduled.length; i += 1) {
-        notes.push(scheduled[i]);
-      }
-      globalStep += 1;
-    }
-
-    return notes;
-  };
-
-  KickSnareHatEngine.prototype.fireStep = function (step, globalStep, options) {
-    var channel;
-    var cell;
-    var notes = [];
-    var note;
-    var baseDelayMs;
-    var reportStep;
-    var playbackIndex;
-    var playbackStep;
-
-    if (!this.deviceActive) {
-      return notes;
-    }
-
-    options = options || {};
-    baseDelayMs = options.baseDelayMs === undefined ? 0 : options.baseDelayMs;
-    reportStep = options.reportStep !== false;
-
-    step = mod(step, this.stepCount);
-    if (reportStep) {
-      this.currentStep = step;
-      this.playingStepOneBased = step + 1;
-      this.reportPlayingStep();
-    }
-
-    playbackIndex = typeof globalStep === "number" ? globalStep : step;
-    for (channel = 0; channel < this.channelCount; channel += 1) {
-      playbackStep = this.playbackStepForChannel(channel, playbackIndex);
-      cell = this.generated[channel][playbackStep];
-      if (this.shouldFire(cell, channel, playbackStep)) {
-        if (typeof globalStep === "number") {
-          if (this.scheduledNoteKeys[globalStep + ":" + channel]) {
-            continue;
-          }
-          this.scheduledNoteKeys[globalStep + ":" + channel] = 1;
-        }
-        note = {
-          lane: channel + 1,
-          step: playbackStep + 1,
-          globalStep: typeof globalStep === "number" ? globalStep : null,
-          pitch: this.channels[channel].note,
-          velocity: this.humanizeVelocity(cell.velocity),
-          channel: KSH_CONSTANTS.DEFAULT_MIDI_CHANNEL,
-          durationMs: KSH_CONSTANTS.DEFAULT_NOTE_DURATION_MS,
-          delayMs: this.delayMsForScheduledStep(step, baseDelayMs),
-          label: this.channels[channel].label,
-          source: cell.source + 1
-        };
-        notes.push(note);
-        this.emitNote(note);
-        this.status(
-          "note_hit " +
-          (channel + 1) +
-          " " +
-          (playbackStep + 1) +
-          " " +
-          (cell.source + 1) +
-          " " +
-          ((typeof cell.sourceStep === "number" ? cell.sourceStep : playbackStep) + 1)
-        );
-      }
-    }
-
-    return notes;
-  };
-
   KickSnareHatEngine.prototype.globalStepForBeats = function (songBeats) {
     var beatsPerStep = this.beatsPerStep();
 
@@ -1412,19 +1173,12 @@ var KSH_EngineClass = null;
     return Math.floor((songBeats - this.phaseOffsetBeats + 0.000000001) / beatsPerStep);
   };
 
-  KickSnareHatEngine.prototype.beatForGlobalStep = function (globalStep) {
-    return globalStep * this.beatsPerStep() + this.phaseOffsetBeats;
-  };
-
   KickSnareHatEngine.prototype.transportPosition = function (songBeats, isPlaying) {
     var globalStep;
     var step;
-    var notes = [];
     var discontinuity;
     var previousGlobalStep;
     var stepChanged;
-    var scheduled;
-    var i;
 
     songBeats = parseFloat(songBeats);
     if (isNaN(songBeats)) {
@@ -1436,8 +1190,6 @@ var KSH_EngineClass = null;
     if (!this.deviceActive) {
       this.transportPlaying = 0;
       this.lastReportedGlobalStep = null;
-      this.scheduledGlobalSteps = {};
-      this.scheduledNoteKeys = {};
       if (this.playingStepOneBased !== 0) {
         this.playingStepOneBased = 0;
         this.reportPlayingStep();
@@ -1460,8 +1212,6 @@ var KSH_EngineClass = null;
       }
       this.transportPlaying = 0;
       this.lastReportedGlobalStep = null;
-      this.scheduledGlobalSteps = {};
-      this.scheduledNoteKeys = {};
       return [];
     }
 
@@ -1477,27 +1227,15 @@ var KSH_EngineClass = null;
       if (typeof cancelPendingNoteTasks === "function") {
         cancelPendingNoteTasks();
       }
-      this.scheduledGlobalSteps = {};
-      this.scheduledNoteKeys = {};
       this.status("transport_jump " + songBeats + " step " + (step + 1));
     }
 
     this.reportTransportStep(globalStep);
 
-    if (this.nativeTimingActive()) {
-      if (stepChanged) {
-        this.prepareStepForPlayback(step);
-      }
-      return notes;
+    if (stepChanged) {
+      this.prepareStepForPlayback(step);
     }
-
-    this.pruneScheduledSteps(globalStep);
-    scheduled = this.scheduleLookahead(songBeats, globalStep);
-    for (i = 0; i < scheduled.length; i += 1) {
-      notes.push(scheduled[i]);
-    }
-
-    return notes;
+    return [];
   };
 
   KickSnareHatEngine.prototype.snapshot = function () {
@@ -1562,7 +1300,6 @@ var KSH_EngineClass = null;
       velocityHumanize: this.velocityHumanize,
       timingHumanize: this.timingHumanize,
       deviceActive: this.deviceActive ? 1 : 0,
-      nativeTiming: this.nativeTiming ? 1 : 0,
       phaseOffsetBeats: this.phaseOffsetBeats,
       channels: this.channels,
       sourceChannelMutes: this.sourceChannelMutes,
@@ -1623,9 +1360,6 @@ var KSH_EngineClass = null;
     }
     if (state.deviceActive !== undefined) {
       this.deviceActive = normalizeToggle(state.deviceActive);
-    }
-    if (state.nativeTiming !== undefined) {
-      this.nativeTiming = normalizeToggle(state.nativeTiming) ? true : false;
     }
     this.phaseOffsetBeats = parseFloat(state.phaseOffsetBeats) || 0;
 
@@ -1731,7 +1465,6 @@ var KSH_EngineClass = null;
       velocityHumanize: this.velocityHumanize,
       timingHumanize: this.timingHumanize,
       deviceActive: this.deviceActive ? 1 : 0,
-      nativeTiming: this.nativeTiming ? 1 : 0,
       phaseOffsetBeats: this.phaseOffsetBeats,
       channels: channelsOut,
       sourceChannelMutes: mutes,
@@ -1762,11 +1495,6 @@ var KSH_EngineClass = null;
     this.velocityHumanize = clamp(state.velocityHumanize, 0, 100);
     this.timingHumanize = clamp(state.timingHumanize, 0, 100);
     this.deviceActive = normalizeToggle(state.deviceActive);
-    if (state.nativeTiming !== undefined) {
-      this.nativeTiming = normalizeToggle(state.nativeTiming);
-    } else {
-      this.nativeTiming = !!KSH_CONSTANTS.DEFAULT_NATIVE_TIMING;
-    }
     this.phaseOffsetBeats = parseFloat(state.phaseOffsetBeats) || 0;
     this.updateStepIntervalMs();
 
@@ -2495,11 +2223,6 @@ function velocity_humanize(value) {
 
 function timing_humanize(value) {
   ensureEngine().setTimingHumanize(value);
-  markPersistentChange();
-}
-
-function native_timing(value) {
-  ensureEngine().setNativeTiming(value);
   markPersistentChange();
 }
 

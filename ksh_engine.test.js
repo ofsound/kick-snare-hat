@@ -48,7 +48,6 @@ function clearAll(engine) {
   if (engine._statuses) {
     engine._statuses.length = 0;
   }
-  engine.setNativeTiming(0);
   engine.reset();
 }
 
@@ -82,15 +81,13 @@ function testStackModeUsesOneSourceForAllLanesOnStep() {
   engine.setGenerationMode("stack");
   engine.setCell(3, 0, 0, 1, 111, 100, 1);
   engine.setCell(3, 1, 0, 1, 88, 100, 1);
-  engine._notes.length = 0;
   engine._setRandomValues([0.76]);
-  engine.transportPosition(0, 1);
+  engine.generateWindow(0, engine.stepCount, true);
 
-  assert.strictEqual(engine._notes.length, 2);
-  assert.strictEqual(engine._notes[0].source, 4);
-  assert.strictEqual(engine._notes[1].source, 4);
-  assert.strictEqual(engine._notes[0].velocity, 111);
-  assert.strictEqual(engine._notes[1].velocity, 88);
+  assert.strictEqual(engine.generated[0][0].source, 3);
+  assert.strictEqual(engine.generated[1][0].source, 3);
+  assert.strictEqual(engine.generated[0][0].velocity, 111);
+  assert.strictEqual(engine.generated[1][0].velocity, 88);
 }
 
 function testPerChannelModeCanChooseDifferentSources() {
@@ -100,13 +97,11 @@ function testPerChannelModeCanChooseDifferentSources() {
   engine.setGenerationMode("per_channel");
   engine.setCell(0, 0, 0, 1, 70, 100, 1);
   engine.setCell(3, 1, 0, 1, 90, 100, 1);
-  engine._notes.length = 0;
   engine._setRandomValues([0, 0.76]);
-  engine.transportPosition(0, 1);
+  engine.generateWindow(0, engine.stepCount, true);
 
-  assert.strictEqual(engine._notes.length, 2);
-  assert.strictEqual(engine._notes[0].source, 1);
-  assert.strictEqual(engine._notes[1].source, 4);
+  assert.strictEqual(engine.generated[0][0].source, 0);
+  assert.strictEqual(engine.generated[1][0].source, 3);
 }
 
 function testStaticModeUsesSelectedSource() {
@@ -119,15 +114,12 @@ function testStaticModeUsesSelectedSource() {
   engine.setCell(0, 0, 0, 1, 40, 100, 1);
   engine.setCell(2, 0, 0, 1, 70, 100, 1);
   engine.setCell(2, 1, 0, 1, 90, 100, 1);
-  engine._notes.length = 0;
-  engine._setRandomValues([0.99]);
-  engine.transportPosition(0, 1);
+  engine.generateWindow(0, engine.stepCount, true);
 
-  assert.strictEqual(engine._notes.length, 2);
-  assert.strictEqual(engine._notes[0].source, 3);
-  assert.strictEqual(engine._notes[0].velocity, 70);
-  assert.strictEqual(engine._notes[1].source, 3);
-  assert.strictEqual(engine._notes[1].velocity, 90);
+  assert.strictEqual(engine.generated[0][0].source, 2);
+  assert.strictEqual(engine.generated[0][0].velocity, 70);
+  assert.strictEqual(engine.generated[1][0].source, 2);
+  assert.strictEqual(engine.generated[1][0].velocity, 90);
 }
 
 function testRandomSourceIgnoresEmptySources() {
@@ -136,13 +128,11 @@ function testRandomSourceIgnoresEmptySources() {
   engine.setChannelCount(1);
   engine.setGenerationMode("stack");
   engine.setCell(0, 0, 0, 1, 55, 100, 1);
-  engine._notes.length = 0;
   engine._setRandomValues([0.99]);
-  engine.transportPosition(0, 1);
+  engine.generateWindow(0, engine.stepCount, true);
 
-  assert.strictEqual(engine._notes.length, 1);
-  assert.strictEqual(engine._notes[0].source, 1);
-  assert.strictEqual(engine._notes[0].velocity, 55);
+  assert.strictEqual(engine.generated[0][0].source, 0);
+  assert.strictEqual(engine.generated[0][0].velocity, 55);
 }
 
 function testInactiveChannelContentDoesNotMakeSourceActive() {
@@ -152,13 +142,11 @@ function testInactiveChannelContentDoesNotMakeSourceActive() {
   engine.setGenerationMode("stack");
   engine.setCell(0, 0, 0, 1, 55, 100, 1);
   engine.setCell(1, 1, 0, 1, 99, 100, 1);
-  engine._notes.length = 0;
   engine._setRandomValues([0.99]);
-  engine.transportPosition(0, 1);
+  engine.generateWindow(0, engine.stepCount, true);
 
-  assert.strictEqual(engine._notes.length, 1);
-  assert.strictEqual(engine._notes[0].source, 1);
-  assert.strictEqual(engine._notes[0].velocity, 55);
+  assert.strictEqual(engine.generated[0][0].source, 0);
+  assert.strictEqual(engine.generated[0][0].velocity, 55);
 }
 
 function testRandomSourceUsesOnlyPopulatedSourceWhenOthersEmpty() {
@@ -167,13 +155,11 @@ function testRandomSourceUsesOnlyPopulatedSourceWhenOthersEmpty() {
   engine.setChannelCount(1);
   engine.setGenerationMode("per_channel");
   engine.setCell(2, 0, 0, 1, 66, 100, 1);
-  engine._notes.length = 0;
   engine._setRandomValues([0, 0.99]);
-  engine.transportPosition(0, 1);
+  engine.generateWindow(0, engine.stepCount, true);
 
-  assert.strictEqual(engine._notes.length, 1);
-  assert.strictEqual(engine._notes[0].source, 3);
-  assert.strictEqual(engine._notes[0].velocity, 66);
+  assert.strictEqual(engine.generated[0][0].source, 2);
+  assert.strictEqual(engine.generated[0][0].velocity, 66);
 }
 
 function testSourceChannelMuteSuppressesGeneratedOutput() {
@@ -183,14 +169,12 @@ function testSourceChannelMuteSuppressesGeneratedOutput() {
   engine.setGenerationMode("per_channel");
   engine.setCell(0, 0, 0, 1, 77, 100, 1);
   engine.setSourceChannelMute(0, 0, 1);
-  engine._notes.length = 0;
   engine._setRandomValues([0]);
-  engine.transportPosition(0, 1);
+  engine.generateWindow(0, engine.stepCount, true);
 
   assert.strictEqual(engine.generated[0][0].source, 0);
   assert.strictEqual(engine.generated[0][0].enabled, 0);
   assert.strictEqual(engine.generated[0][0].velocity, 100);
-  assert.strictEqual(engine._notes.length, 0);
 }
 
 function testMutedSourceChannelDoesNotMakeSourceActive() {
@@ -201,13 +185,11 @@ function testMutedSourceChannelDoesNotMakeSourceActive() {
   engine.setCell(0, 0, 0, 1, 55, 100, 1);
   engine.setCell(1, 0, 0, 1, 88, 100, 1);
   engine.setSourceChannelMute(1, 0, 1);
-  engine._notes.length = 0;
   engine._setRandomValues([0.99]);
-  engine.transportPosition(0, 1);
+  engine.generateWindow(0, engine.stepCount, true);
 
-  assert.strictEqual(engine._notes.length, 1);
-  assert.strictEqual(engine._notes[0].source, 1);
-  assert.strictEqual(engine._notes[0].velocity, 55);
+  assert.strictEqual(engine.generated[0][0].source, 0);
+  assert.strictEqual(engine.generated[0][0].velocity, 55);
 }
 
 function testSourceChannelResetClearsCellsAndMute() {
@@ -309,322 +291,11 @@ function testChannelLockOverridesRandomSource() {
   engine.setGenerationMode("stack");
   engine.setChannelLock(0, 2);
   engine.setCell(2, 0, 0, 1, 101, 100, 1);
-  engine._notes.length = 0;
   engine._setRandomValues([0]);
-  engine.transportPosition(0, 1);
+  engine.generateWindow(0, engine.stepCount, true);
 
-  assert.strictEqual(engine._notes.length, 1);
-  assert.strictEqual(engine._notes[0].source, 3);
-  assert.strictEqual(engine._notes[0].velocity, 101);
-}
-
-function testCycleGateFiresEveryNthEncounter() {
-  var engine = makeEngine([0]);
-  clearAll(engine);
-  engine.setStepCount(1);
-  engine.setChannelCount(1);
-  engine.setCell(0, 0, 0, 1, 100, 100, 2);
-  engine._notes.length = 0;
-  engine._setRandomValues([0]);
-
-  engine.transportPosition(0, 1);
-  engine.transportPosition(0.25, 1);
-  engine.transportPosition(0.5, 1);
-
-  assert.strictEqual(engine._notes.length, 2);
-}
-
-function testCycleOffsetShiftsNthEncounterGate() {
-  var engine = makeEngine([0]);
-  clearAll(engine);
-  engine.setStepCount(1);
-  engine.setChannelCount(1);
-  engine.setCell(0, 0, 0, 1, 100, 100, 2, 1);
-  engine._notes.length = 0;
-  engine._setRandomValues([0]);
-
-  engine.transportPosition(0, 1);
-  assert.strictEqual(engine._notes.length, 0);
-  engine.transportPosition(0.25, 1);
-  assert.strictEqual(engine._notes.length, 1);
-  engine.transportPosition(0.5, 1);
-  assert.strictEqual(engine._notes.length, 1);
-  engine.transportPosition(0.75, 1);
-  assert.strictEqual(engine._notes.length, 2);
-}
-
-function testCycleInversionFlipsNthEncounterGate() {
-  var engine = makeEngine([0]);
-  clearAll(engine);
-  engine.setStepCount(1);
-  engine.setChannelCount(1);
-  engine.setCell(0, 0, 0, 1, 100, 100, 4, 0, 1);
-  engine._notes.length = 0;
-  engine._setRandomValues([0]);
-
-  engine.transportPosition(0, 1);
-  assert.strictEqual(engine._notes.length, 0);
-  engine.transportPosition(0.25, 1);
-  assert.strictEqual(engine._notes.length, 1);
-  engine.transportPosition(0.5, 1);
-  assert.strictEqual(engine._notes.length, 2);
-  engine.transportPosition(0.75, 1);
-  assert.strictEqual(engine._notes.length, 3);
-}
-
-function testRandomGateUsesPercentage() {
-  var engine = makeEngine([0, 0.90]);
-  clearAll(engine);
-  engine.setStepCount(1);
-  engine.setChannelCount(1);
-  engine.setGenerationMode("static");
-  engine.setCell(0, 0, 0, 1, 100, 50, 1);
-  engine.generateWindow(0, 1, true);
-  engine._notes.length = 0;
-  engine._setRandomValues([0, 0.90]);
-
-  engine.transportPosition(0, 1);
-  assert.strictEqual(engine._notes.length, 1);
-  engine.transportPosition(0.25, 1);
-  assert.strictEqual(engine._notes.length, 1);
-}
-
-function testProbabilityAndCycleApplyTogether() {
-  var engine = makeEngine([0.90, 0.10]);
-  clearAll(engine);
-  engine.setStepCount(1);
-  engine.setChannelCount(1);
-  engine.setCell(0, 0, 0, 1, 100, 50, 2);
-  engine._notes.length = 0;
-  engine._setRandomValues([0.90, 0.10]);
-
-  engine.transportPosition(0, 1);
-  engine.transportPosition(0.25, 1);
-  engine.transportPosition(0.5, 1);
-  engine.transportPosition(0.75, 1);
-
-  assert.strictEqual(engine._notes.length, 1);
-}
-
-function testCycleIsEvaluatedBeforeProbability() {
-  var randomCalls = 0;
-  var engine = new KickSnareHatEngine({
-    rng: function () {
-      randomCalls += 1;
-      return 0;
-    }
-  });
-  engine._notes = [];
-
-  clearAll(engine);
-  engine.setStepCount(1);
-  engine.setChannelCount(1);
-  engine.setGenerationMode("per_channel");
-  engine.setChannelLock(0, 0);
-  engine.setCell(0, 0, 0, 1, 100, 50, 2);
-  randomCalls = 0;
-
-  engine.transportPosition(0, 1);
-  engine.transportPosition(0.25, 1);
-
-  assert.strictEqual(randomCalls, 1);
-}
-
-function testDefaultGateValuesBehaveLikeAlways() {
-  var engine = new KickSnareHatEngine({
-    rng: function () {
-      throw new Error("probability RNG should not run for 100%");
-    },
-    emitNote: function (note) {
-      engine._notes.push(note);
-    }
-  });
-  engine._notes = [];
-
-  clearAll(engine);
-  engine.setStepCount(1);
-  engine.setChannelCount(1);
-  engine.setGenerationMode("per_channel");
-  engine.setChannelLock(0, 0);
-  engine.setCell(0, 0, 0, 1, 100, 100, 1);
-
-  engine.transportPosition(0, 1);
-
-  assert.strictEqual(engine._notes.length, 1);
-}
-
-function testSwingAddsDelayToEverySecondStep() {
-  var engine = makeEngine([0]);
-  clearAll(engine);
-  engine.setStepCount(2);
-  engine.setChannelCount(1);
-  engine.setRate("16n");
-  engine.setTempo(120);
-  engine.setSwing(100);
-  engine.setCell(0, 0, 0, 1, 100, 100, 1);
-  engine.setCell(0, 0, 1, 1, 100, 100, 1);
-  engine._notes.length = 0;
-  engine._setRandomValues([0]);
-
-  engine.transportPosition(0, 1);
-  engine.transportPosition(0.25, 1);
-
-  assert.strictEqual(engine._notes[0].delayMs, 0);
-  assert.strictEqual(engine._notes[1].delayMs, 62.5);
-}
-
-function testVelocityHumanizeOffsetsEachHitBidirectionally() {
-  var engine = makeEngine([0]);
-  clearAll(engine);
-  engine.setStepCount(2);
-  engine.setChannelCount(1);
-  engine.setGenerationMode("per_channel");
-  engine.setChannelLock(0, 0);
-  engine.setVelocityHumanize(20);
-  engine.setCell(0, 0, 0, 1, 100, 100, 1);
-  engine.setCell(0, 0, 1, 1, 100, 100, 1);
-  engine._notes.length = 0;
-  engine._setRandomValues([0, 1]);
-
-  engine.transportPosition(0, 1);
-  engine.transportPosition(0.25, 1);
-
-  assert.strictEqual(engine._notes[0].velocity, 80);
-  assert.strictEqual(engine._notes[1].velocity, 120);
-}
-
-function testVelocityHumanizeClampsToMidiVelocityRange() {
-  var engine = makeEngine([1]);
-  clearAll(engine);
-  engine.setStepCount(1);
-  engine.setChannelCount(1);
-  engine.setGenerationMode("per_channel");
-  engine.setChannelLock(0, 0);
-  engine.setVelocityHumanize(100);
-  engine.setCell(0, 0, 0, 1, 120, 100, 1);
-  engine._notes.length = 0;
-  engine._setRandomValues([1]);
-
-  engine.transportPosition(0, 1);
-
-  assert.strictEqual(engine._notes[0].velocity, 127);
-}
-
-function testTimingHumanizeOffsetsStepEdgeDelay() {
-  var engine = makeEngine([1]);
-  clearAll(engine);
-  engine.setStepCount(2);
-  engine.setChannelCount(1);
-  engine.setGenerationMode("static");
-  engine.setRate("16n");
-  engine.setTempo(120);
-  engine.setTimingHumanize(100);
-  engine.setCell(0, 0, 0, 1, 100, 100, 1);
-  engine.generateWindow(0, 2, true);
-  engine._notes.length = 0;
-  engine._setRandomValues([1]);
-
-  engine.transportPosition(0, 1);
-
-  assert.strictEqual(engine._notes.length, 1);
-  assert.ok(engine._notes[0].delayMs > 0);
-}
-
-function testTimingHumanizeCurrentStepCannotScheduleIntoThePast() {
-  var engine = makeEngine([0]);
-  clearAll(engine);
-  engine.setStepCount(1);
-  engine.setChannelCount(1);
-  engine.setGenerationMode("per_channel");
-  engine.setChannelLock(0, 0);
-  engine.setRate("16n");
-  engine.setTempo(120);
-  engine.setTimingHumanize(100);
-  engine.setCell(0, 0, 0, 1, 100, 100, 1);
-  engine._notes.length = 0;
-  engine._setRandomValues([0]);
-
-  engine.transportPosition(0, 1);
-
-  assert.strictEqual(engine._notes[0].delayMs, 0);
-}
-
-function testTransportPositionFiresOnlyWhenLiveStepChanges() {
-  var engine = makeEngine([0]);
-  clearAll(engine);
-  engine.setStepCount(4);
-  engine.setChannelCount(1);
-  engine.setRate("16n");
-  engine.setCell(0, 0, 0, 1, 10, 100, 1);
-  engine.setCell(0, 0, 1, 1, 20, 100, 1);
-  engine._notes.length = 0;
-  engine._setRandomValues([0]);
-
-  engine.transportPosition(0, 1);
-  engine.transportPosition(0.1, 1);
-  engine.transportPosition(0.249, 1);
-  engine.transportPosition(0.25, 1);
-
-  assert.strictEqual(engine._notes.length, 2);
-  assert.strictEqual(engine._notes[0].step, 1);
-  assert.strictEqual(engine._notes[0].globalStep, 0);
-  assert.strictEqual(engine._notes[0].velocity, 10);
-  assert.strictEqual(engine._notes[1].step, 2);
-  assert.strictEqual(engine._notes[1].globalStep, 1);
-  assert.strictEqual(engine._notes[1].velocity, 20);
-}
-
-function testTransportPositionDropsMissedStepsOnJump() {
-  var engine = makeEngine([0]);
-  clearAll(engine);
-  engine.setStepCount(4);
-  engine.setChannelCount(1);
-  engine.setRate("16n");
-  engine.setCell(0, 0, 0, 1, 100, 100, 1);
-  engine.setCell(0, 0, 1, 1, 80, 100, 1);
-  engine._notes.length = 0;
-  engine._setRandomValues([0]);
-
-  engine.transportPosition(0, 1);
-  engine._notes.length = 0;
-  engine.transportPosition(1, 1);
-
-  assert.strictEqual(engine._notes.length, 1, "transport jump should drop stale intermediate steps");
-  assert.strictEqual(engine._notes[0].globalStep, 4);
-}
-
-function testTransportLookaheadQueuesFutureStepWithDelay() {
-  var engine = makeEngine([0]);
-  clearAll(engine);
-  engine.setStepCount(4);
-  engine.setChannelCount(1);
-  engine.setRate("16n");
-  engine.setTempo(120);
-  engine.setCell(0, 0, 1, 1, 100, 100, 1);
-  engine._notes.length = 0;
-  engine._setRandomValues([0]);
-
-  engine.transportPosition(0.1, 1);
-
-  assert.strictEqual(engine._notes.length, 1);
-  assert.strictEqual(engine._notes[0].globalStep, 1);
-  assert.strictEqual(engine._notes[0].delayMs, 75);
-}
-
-function testTransportLookaheadDropsStaleCurrentStep() {
-  var engine = makeEngine([0]);
-  clearAll(engine);
-  engine.setStepCount(4);
-  engine.setChannelCount(1);
-  engine.setRate("16n");
-  engine.setTempo(120);
-  engine.setCell(0, 0, 0, 1, 100, 100, 1);
-  engine._notes.length = 0;
-  engine._setRandomValues([0]);
-
-  engine.transportPosition(0.1, 1);
-
-  assert.strictEqual(engine._notes.length, 0);
+  assert.strictEqual(engine.generated[0][0].source, 2);
+  assert.strictEqual(engine.generated[0][0].velocity, 101);
 }
 
 function testNativePlaybackRowsIncludeDeterministicHitsAndSwing() {
@@ -724,6 +395,7 @@ function testNativePlaybackRowsPrerollProbability() {
   engine.setChannelCount(1);
   engine.setCell(0, 0, 0, 1, 100, 50, 1);
 
+  engine._setRandomValues([0.1, 0.9, 0.2, 0.8]);
   rows = engine.buildNativePlaybackRows();
 
   assert.strictEqual(engine.nativePlaybackStepCount, 16);
@@ -747,6 +419,7 @@ function testNativePlaybackRowsEvaluateCycleBeforeProbability() {
   engine.setChannelCount(1);
   engine.setCell(0, 0, 0, 1, 100, 50, 2);
 
+  randomCalls = 0;
   engine.buildNativePlaybackRows();
 
   assert.strictEqual(engine.nativePlaybackStepCount, 32);
@@ -762,6 +435,7 @@ function testNativePlaybackRowsPrerollVelocityHumanize() {
   engine.setVelocityHumanize(20);
   engine.setCell(0, 0, 0, 1, 100, 100, 1);
 
+  engine._setRandomValues([0, 1, 0.5]);
   rows = engine.buildNativePlaybackRows();
 
   assert.strictEqual(engine.nativePlaybackStepCount, 16);
@@ -778,6 +452,7 @@ function testNativePlaybackRowsShareVariationExpansionForProbabilityAndVelocity(
   engine.setVelocityHumanize(20);
   engine.setCell(0, 0, 0, 1, 100, 50, 1);
 
+  engine._setRandomValues([0, 0, 0, 0]);
   engine.buildNativePlaybackRows();
 
   assert.strictEqual(engine.nativePlaybackStepCount, 16);
@@ -794,6 +469,7 @@ function testNativePlaybackRowsPrerollLateTimingHumanize() {
   engine.setTimingHumanize(100);
   engine.setCell(0, 0, 0, 1, 100, 100, 1);
 
+  engine._setRandomValues([1]);
   rows = engine.buildNativePlaybackRows();
 
   assert.strictEqual(engine.nativePlaybackStepCount, 16);
@@ -811,6 +487,7 @@ function testNativePlaybackRowsPrerollEarlyTimingHumanize() {
   engine.setTimingHumanize(100);
   engine.setCell(0, 0, 1, 1, 100, 100, 1);
 
+  engine._setRandomValues([0]);
   rows = engine.buildNativePlaybackRows();
 
   assert.strictEqual(engine.nativePlaybackStepCount, 32);
@@ -829,6 +506,7 @@ function testNativePlaybackRowsClampFirstStepEarlyTiming() {
   engine.setTimingHumanize(100);
   engine.setCell(0, 0, 0, 1, 100, 100, 1);
 
+  engine._setRandomValues([0]);
   rows = engine.buildNativePlaybackRows();
 
   assert.deepStrictEqual(rows[0], nativeHitRow(36, 100, 100, 1, 0, 1, 1, 1, 1));
@@ -859,25 +537,12 @@ function testReversePlaybackMirrorsTransportPositionAcrossActiveLength() {
   clearAll(engine);
   engine.setStepCount(4);
   engine.setChannelCount(1);
-  engine.setGenerationMode("static");
   engine.setChannelPlaybackMode(0, "reverse");
-  engine.setCell(0, 0, 0, 1, 10, 100, 1);
-  engine.setCell(0, 0, 1, 1, 20, 100, 1);
-  engine.setCell(0, 0, 2, 1, 30, 100, 1);
-  engine.setCell(0, 0, 3, 1, 40, 100, 1);
-  engine.generateWindow(0, 4, true);
-  engine._notes.length = 0;
-  engine._statuses.length = 0;
 
-  engine.transportPosition(0, 1);
-  engine.transportPosition(0.25, 1);
-
-  assert.strictEqual(engine._notes[0].velocity, 40);
-  assert.strictEqual(engine._notes[0].step, 4);
-  assert.strictEqual(engine._notes[1].velocity, 30);
-  assert.strictEqual(engine._notes[1].step, 3);
-  assert.ok(engine._statuses.indexOf("note_hit 1 4 1 4") >= 0);
-  assert.ok(engine._statuses.indexOf("note_hit 1 3 1 3") >= 0);
+  assert.strictEqual(engine.playbackStepForChannel(0, 0), 3);
+  assert.strictEqual(engine.playbackStepForChannel(0, 1), 2);
+  assert.strictEqual(engine.playbackStepForChannel(0, 2), 1);
+  assert.strictEqual(engine.playbackStepForChannel(0, 3), 0);
 }
 
 function testBoomerangPlaybackRepeatsEndpointsAcrossActiveLength() {
@@ -891,18 +556,15 @@ function testBoomerangPlaybackRepeatsEndpointsAcrossActiveLength() {
   engine.setCell(0, 0, 0, 1, 10, 100, 1);
   engine.setCell(0, 0, 1, 1, 20, 100, 1);
   engine.setCell(0, 0, 2, 1, 30, 100, 1);
-  engine.generateWindow(0, 4, true);
-  engine._notes.length = 0;
 
-  engine.transportPosition(0, 1);
-  engine.transportPosition(0.25, 1);
-  engine.transportPosition(0.5, 1);
-  engine.transportPosition(0.75, 1);
-  engine.transportPosition(1, 1);
-  engine.transportPosition(1.25, 1);
-
-  assert.deepStrictEqual(engine._notes.map(function (note) { return note.step; }), [1, 2, 3, 3, 2, 1]);
-  assert.deepStrictEqual(engine._notes.map(function (note) { return note.velocity; }), [10, 20, 30, 30, 20, 10]);
+  assert.deepStrictEqual([
+    engine.playbackStepForChannel(0, 0) + 1,
+    engine.playbackStepForChannel(0, 1) + 1,
+    engine.playbackStepForChannel(0, 2) + 1,
+    engine.playbackStepForChannel(0, 3) + 1,
+    engine.playbackStepForChannel(0, 4) + 1,
+    engine.playbackStepForChannel(0, 5) + 1
+  ], [1, 2, 3, 3, 2, 1]);
 }
 
 function testNativePlaybackRowsApplyPlaybackModesToMetadata() {
@@ -928,93 +590,87 @@ function testNativePlaybackRowsApplyPlaybackModesToMetadata() {
   assert.deepStrictEqual(rows[5], nativeHitRow(36, 10, 100, 1, 0, 1, 1, 1, 1));
 }
 
-function testEngineDefaultsNativeTimingOn() {
+function testEngineUsesNativePlaybackByDefault() {
   var engine = makeEngine([0]);
-  assert.strictEqual(engine.nativeTiming, true);
-  assert.strictEqual(engine.nativeTimingActive(), true);
+  assert.strictEqual(engine.nativePlaybackActive(), true);
 }
 
-function testNativeTimingSuppressesJsLookaheadWhenSupported() {
+function testTransportUsesNativePlaybackOnly() {
   var engine = makeEngine([0]);
   clearAll(engine);
   engine.setStepCount(4);
   engine.setChannelCount(1);
   engine.setRate("16n");
   engine.setCell(0, 0, 0, 1, 100, 100, 1);
-  engine.setNativeTiming(1);
   engine._notes.length = 0;
 
   engine.transportPosition(0, 1);
 
-  assert.strictEqual(engine.nativeTimingActive(), true);
+  assert.strictEqual(engine.nativePlaybackActive(), true);
   assert.strictEqual(engine._notes.length, 0);
 }
 
-function testNativeTimingSupportsCycleGates() {
+function testNativePlaybackSupportsCycleGates() {
   var engine = makeEngine([0]);
   clearAll(engine);
   engine.setStepCount(1);
   engine.setChannelCount(1);
   engine.setCell(0, 0, 0, 1, 100, 100, 2);
-  engine.setNativeTiming(1);
   engine._notes.length = 0;
 
   engine.transportPosition(0, 1);
 
-  assert.strictEqual(engine.nativeTimingActive(), true);
+  assert.strictEqual(engine.nativePlaybackActive(), true);
   assert.strictEqual(engine._notes.length, 0);
 }
 
-function testNativeTimingSupportsProbabilityPreroll() {
+function testNativePlaybackSupportsProbabilityPreroll() {
   var engine = makeEngine([0]);
   clearAll(engine);
   engine.setStepCount(4);
   engine.setChannelCount(1);
   engine.setRate("16n");
   engine.setCell(0, 0, 0, 1, 100, 50, 1);
-  engine.setNativeTiming(1);
   engine._notes.length = 0;
   engine._setRandomValues([0]);
 
   engine.transportPosition(0, 1);
 
-  assert.strictEqual(engine.nativeTimingActive(), true);
+  assert.strictEqual(engine.nativePlaybackActive(), true);
   assert.strictEqual(engine._notes.length, 0);
 }
 
-function testNativeTimingSupportsVelocityHumanizePreroll() {
+function testNativePlaybackSupportsVelocityHumanizePreroll() {
   var engine = makeEngine([0]);
   clearAll(engine);
   engine.setStepCount(4);
   engine.setChannelCount(1);
   engine.setVelocityHumanize(20);
   engine.setCell(0, 0, 0, 1, 100, 100, 1);
-  engine.setNativeTiming(1);
   engine._notes.length = 0;
 
   engine.transportPosition(0, 1);
 
-  assert.strictEqual(engine.nativeTimingActive(), true);
+  assert.strictEqual(engine.nativePlaybackActive(), true);
   assert.strictEqual(engine._notes.length, 0);
 }
 
-function testNativeTimingSupportsTimingHumanizePreroll() {
+function testNativePlaybackSupportsTimingHumanizePreroll() {
   var engine = makeEngine([0]);
   clearAll(engine);
   engine.setStepCount(4);
   engine.setChannelCount(1);
   engine.setTimingHumanize(20);
   engine.setCell(0, 0, 0, 1, 100, 100, 1);
-  engine.setNativeTiming(1);
   engine._notes.length = 0;
 
   engine.transportPosition(0, 1);
 
-  assert.strictEqual(engine.nativeTimingActive(), true);
+  assert.strictEqual(engine.nativePlaybackActive(), true);
   assert.strictEqual(engine._notes.length, 0);
 }
 
-function testNativeTimingRefreshesGeneratedWindowOnTransportBoundary() {
+function testNativePlaybackRefreshesGeneratedWindowOnTransportBoundary() {
   var engine = makeEngine([0]);
   clearAll(engine);
   engine.setStepCount(8);
@@ -1029,7 +685,6 @@ function testNativeTimingRefreshesGeneratedWindowOnTransportBoundary() {
   assert.strictEqual(engine.generated[0][4].source, 0);
   assert.strictEqual(engine.generated[0][4].velocity, 44);
 
-  engine.setNativeTiming(1);
   engine._notes.length = 0;
   engine._setRandomValues([0, 0.99, 0]);
   engine.transportPosition(0, 1);
@@ -1038,7 +693,7 @@ function testNativeTimingRefreshesGeneratedWindowOnTransportBoundary() {
   engine.transportPosition(0.75, 1);
   engine.transportPosition(1, 1);
 
-  assert.strictEqual(engine.nativeTimingActive(), true);
+  assert.strictEqual(engine.nativePlaybackActive(), true);
   assert.strictEqual(engine._notes.length, 0);
   assert.strictEqual(engine.generated[0][4].source, 3);
   assert.strictEqual(engine.generated[0][4].velocity, 99);
@@ -1085,7 +740,7 @@ function testDeviceInactiveSuppressesTransportAndAudition() {
   engine.setDeviceActive(1);
   engine.transportPosition(0, 1);
 
-  assert.strictEqual(engine._notes.length, 1);
+  assert.strictEqual(engine._notes.length, 0);
 
   restored.deserialize({ deviceActive: false });
   assert.strictEqual(restored.deviceActive, false);
@@ -1450,22 +1105,6 @@ testChannelLoopLengthRefreshesAllWrappedGeneratedCells();
 testChannelLoopLengthClampsToStepCount();
 testTrailingCellsDoNotMakeSourceActive();
 testChannelLockOverridesRandomSource();
-testCycleGateFiresEveryNthEncounter();
-testCycleOffsetShiftsNthEncounterGate();
-testCycleInversionFlipsNthEncounterGate();
-testRandomGateUsesPercentage();
-testProbabilityAndCycleApplyTogether();
-testCycleIsEvaluatedBeforeProbability();
-testDefaultGateValuesBehaveLikeAlways();
-testSwingAddsDelayToEverySecondStep();
-testVelocityHumanizeOffsetsEachHitBidirectionally();
-testVelocityHumanizeClampsToMidiVelocityRange();
-testTimingHumanizeOffsetsStepEdgeDelay();
-testTimingHumanizeCurrentStepCannotScheduleIntoThePast();
-testTransportPositionFiresOnlyWhenLiveStepChanges();
-testTransportPositionDropsMissedStepsOnJump();
-testTransportLookaheadQueuesFutureStepWithDelay();
-testTransportLookaheadDropsStaleCurrentStep();
 testNativePlaybackRowsIncludeDeterministicHitsAndSwing();
 testNativePlaybackRowsPrecomputeCycleGates();
 testNativePlaybackRowsPrecomputeCycleOffsets();
@@ -1482,13 +1121,13 @@ testNativePlaybackRowsIncludeNoteHitMetadata();
 testReversePlaybackMirrorsTransportPositionAcrossActiveLength();
 testBoomerangPlaybackRepeatsEndpointsAcrossActiveLength();
 testNativePlaybackRowsApplyPlaybackModesToMetadata();
-testEngineDefaultsNativeTimingOn();
-testNativeTimingSuppressesJsLookaheadWhenSupported();
-testNativeTimingSupportsCycleGates();
-testNativeTimingSupportsProbabilityPreroll();
-testNativeTimingSupportsVelocityHumanizePreroll();
-testNativeTimingSupportsTimingHumanizePreroll();
-testNativeTimingRefreshesGeneratedWindowOnTransportBoundary();
+testEngineUsesNativePlaybackByDefault();
+testTransportUsesNativePlaybackOnly();
+testNativePlaybackSupportsCycleGates();
+testNativePlaybackSupportsProbabilityPreroll();
+testNativePlaybackSupportsVelocityHumanizePreroll();
+testNativePlaybackSupportsTimingHumanizePreroll();
+testNativePlaybackRefreshesGeneratedWindowOnTransportBoundary();
 testTransportPositionDoesNotFireWhileStopped();
 testDeviceInactiveSuppressesTransportAndAudition();
 testDeserializeAcceptsUILaneSchema();
@@ -1523,6 +1162,7 @@ function testSerializeForPersistenceRoundtripsSparsePattern() {
   assert.strictEqual(payload.stepCount, 8);
   assert.strictEqual(payload.channelCount, 2);
   assert.strictEqual(payload.swing, 25);
+  assert.strictEqual(payload.nativeTiming, undefined);
   assert.ok(payload.cells.length >= 1);
 
   json = JSON.stringify(payload);
@@ -1578,7 +1218,7 @@ function testSerializeForPersistenceIncludesChannelSettings() {
 
 testSerializeForPersistenceIncludesChannelSettings();
 
-function testTransportDropsSkippedStepsAfterJump() {
+function testTransportDoesNotEmitMidiAfterJump() {
   var engine = makeEngine([0.99, 0.99, 0.99, 0.99]);
   clearAll(engine);
   engine.setChannelCount(1);
@@ -1593,11 +1233,11 @@ function testTransportDropsSkippedStepsAfterJump() {
   engine.transportPosition(0, 1);
   engine._notes.length = 0;
   engine.transportPosition(0.75, 1);
-  assert.strictEqual(engine._notes.length, 1, "transport should only schedule the live step after a jump");
-  assert.strictEqual(engine._notes[0].globalStep, 3);
+  assert.strictEqual(engine._notes.length, 0, "transport playback should stay on the native patch path after a jump");
+  assert.strictEqual(engine.playingStepOneBased, 4);
 }
 
-function testTransportEmitsOnStepEdgeOnly() {
+function testTransportReportsStepEdgeWithoutMidiOutlet() {
   var engine = makeEngine([0.99, 0.99, 0.99]);
   clearAll(engine);
   engine.setChannelCount(1);
@@ -1607,10 +1247,10 @@ function testTransportEmitsOnStepEdgeOnly() {
   engine.generateWindow(0, 4, true);
   engine._notes.length = 0;
   engine.transportPosition(0, 1);
-  assert.ok(engine._notes.length >= 1, "transport should emit on step edge");
-  engine._notes.length = 0;
+  assert.strictEqual(engine._notes.length, 0, "transport playback should not emit outlet MIDI");
+  assert.strictEqual(engine.playingStepOneBased, 1);
   engine.transportPosition(0.01, 1);
-  assert.strictEqual(engine._notes.length, 0, "transport should not emit again on same step");
+  assert.strictEqual(engine.playingStepOneBased, 1);
 }
 
 function testPhaseOffsetShiftsStepBoundaryEarlier() {
@@ -1624,8 +1264,36 @@ function testPhaseOffsetShiftsStepBoundaryEarlier() {
   assert.strictEqual(engine.globalStepForBeats(0), 0);
 }
 
-testTransportEmitsOnStepEdgeOnly();
-testTransportDropsSkippedStepsAfterJump();
+function testOldNativeTimingPersistenceIsIgnored() {
+  var restored = makeEngine([0.5]);
+  var payload = {
+    v: 1,
+    stepCount: 8,
+    channelCount: 1,
+    refreshSteps: 1,
+    generationMode: "static",
+    staticSource: 0,
+    rate: "16n",
+    tempo: 120,
+    swing: 0,
+    velocityHumanize: 0,
+    timingHumanize: 0,
+    deviceActive: 1,
+    nativeTiming: 0,
+    phaseOffsetBeats: 0,
+    channels: [["1", 36, -1, 8, "normal"]],
+    sourceChannelMutes: [[0], [0], [0], [0]],
+    cells: [[0, 0, 0, 1, 64, 100, 1, 0, 0]]
+  };
+
+  assert.strictEqual(restored.deserializeForPersistence(payload), true);
+  assert.strictEqual(restored.nativePlaybackActive(), true);
+  assert.strictEqual(restored.serializeForPersistence().nativeTiming, undefined);
+}
+
+testTransportReportsStepEdgeWithoutMidiOutlet();
+testTransportDoesNotEmitMidiAfterJump();
 testPhaseOffsetShiftsStepBoundaryEarlier();
+testOldNativeTimingPersistenceIsIgnored();
 
 console.log("ksh_engine tests passed");

@@ -42,7 +42,7 @@ Checks patchline bounds, editor subpatcher, `.amxd` payload, forbidden stale wir
 - `live.path` + `live.observer is_playing` → `sel 0` on stop → engine `reset` + `native-step-reset-msg` (`set -1`)
 - `live.observer tempo` → `prepend tempo` → engine
 
-### Native timing (default playback)
+### Native playback
 
 See `docs/native-timing.md`. Required boxes/lines include:
 
