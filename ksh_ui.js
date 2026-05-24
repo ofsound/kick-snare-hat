@@ -305,10 +305,10 @@ function normalizeSourceValueMode(mode) {
 
 function cycleOffsetLabel(value) {
   value = parseInt(value, 10);
-  if (isNaN(value) || value <= 0) {
-    return "0";
+  if (isNaN(value) || value < 0) {
+    return "1";
   }
-  return "+" + value;
+  return String(value + 1);
 }
 
 function quantizedDragOffset(delta, scale, deadZone) {
