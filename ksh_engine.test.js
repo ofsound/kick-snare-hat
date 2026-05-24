@@ -326,6 +326,44 @@ function testCycleGateFiresEveryNthEncounter() {
   assert.strictEqual(engine._notes.length, 2);
 }
 
+function testCycleOffsetShiftsNthEncounterGate() {
+  var engine = makeEngine([0]);
+  clearAll(engine);
+  engine.setStepCount(1);
+  engine.setChannelCount(1);
+  engine.setCell(0, 0, 0, 1, 100, 100, 2, 1);
+  engine._notes.length = 0;
+  engine._setRandomValues([0]);
+
+  engine.transportPosition(0, 1);
+  assert.strictEqual(engine._notes.length, 0);
+  engine.transportPosition(0.25, 1);
+  assert.strictEqual(engine._notes.length, 1);
+  engine.transportPosition(0.5, 1);
+  assert.strictEqual(engine._notes.length, 1);
+  engine.transportPosition(0.75, 1);
+  assert.strictEqual(engine._notes.length, 2);
+}
+
+function testCycleInversionFlipsNthEncounterGate() {
+  var engine = makeEngine([0]);
+  clearAll(engine);
+  engine.setStepCount(1);
+  engine.setChannelCount(1);
+  engine.setCell(0, 0, 0, 1, 100, 100, 4, 0, 1);
+  engine._notes.length = 0;
+  engine._setRandomValues([0]);
+
+  engine.transportPosition(0, 1);
+  assert.strictEqual(engine._notes.length, 0);
+  engine.transportPosition(0.25, 1);
+  assert.strictEqual(engine._notes.length, 1);
+  engine.transportPosition(0.5, 1);
+  assert.strictEqual(engine._notes.length, 2);
+  engine.transportPosition(0.75, 1);
+  assert.strictEqual(engine._notes.length, 3);
+}
+
 function testRandomGateUsesPercentage() {
   var engine = makeEngine([0, 0.90]);
   clearAll(engine);
@@ -613,6 +651,39 @@ function testNativePlaybackRowsPrecomputeCycleGates() {
   assert.deepStrictEqual(rows[0], nativeHitRow(36, 100, 100, 1, 0, 1, 1, 1, 1));
   assert.deepStrictEqual(rows[1], []);
   assert.deepStrictEqual(rows[2], []);
+}
+
+function testNativePlaybackRowsPrecomputeCycleOffsets() {
+  var engine = makeEngine([0]);
+  var rows;
+  clearAll(engine);
+  engine.setStepCount(1);
+  engine.setChannelCount(1);
+  engine.setCell(0, 0, 0, 1, 100, 100, 3, 2);
+
+  rows = engine.buildNativePlaybackRows();
+
+  assert.strictEqual(engine.nativePlaybackStepCount, 3);
+  assert.deepStrictEqual(rows[0], []);
+  assert.deepStrictEqual(rows[1], []);
+  assert.deepStrictEqual(rows[2], nativeHitRow(36, 100, 100, 1, 0, 1, 1, 1, 1));
+}
+
+function testNativePlaybackRowsPrecomputeCycleInversion() {
+  var engine = makeEngine([0]);
+  var rows;
+  clearAll(engine);
+  engine.setStepCount(1);
+  engine.setChannelCount(1);
+  engine.setCell(0, 0, 0, 1, 100, 100, 4, 0, 1);
+
+  rows = engine.buildNativePlaybackRows();
+
+  assert.strictEqual(engine.nativePlaybackStepCount, 4);
+  assert.deepStrictEqual(rows[0], []);
+  assert.deepStrictEqual(rows[1], nativeHitRow(36, 100, 100, 1, 0, 1, 1, 1, 1));
+  assert.deepStrictEqual(rows[2], nativeHitRow(36, 100, 100, 1, 0, 1, 1, 1, 1));
+  assert.deepStrictEqual(rows[3], nativeHitRow(36, 100, 100, 1, 0, 1, 1, 1, 1));
 }
 
 function testNativePlaybackRowsUseLeastCommonCyclePeriod() {
@@ -993,6 +1064,39 @@ function testCellEditsReachStepsBeyondSixteen() {
   assert.strictEqual(engine.sources[0][0][16].enabled, 0);
 }
 
+function testCycleOffsetClampsToCycleRange() {
+  var engine = makeEngine([0]);
+  clearAll(engine);
+  engine.setStepCount(8);
+  engine.setChannelCount(1);
+  engine.setCell(0, 0, 0, 1, 100, 100, 4, 9);
+  assert.strictEqual(engine.sources[0][0][0].cycleOffset, 3);
+
+  engine.setCellCycleOffset(0, 0, 0, 2);
+  assert.strictEqual(engine.sources[0][0][0].cycleOffset, 2);
+
+  engine.setCellCycle(0, 0, 0, 2);
+  assert.strictEqual(engine.sources[0][0][0].cycleOffset, 1);
+
+  engine.setCellCycle(0, 0, 0, 1);
+  assert.strictEqual(engine.sources[0][0][0].cycleOffset, 0);
+}
+
+function testCycleInversionClearsWhenCycleIsOne() {
+  var engine = makeEngine([0]);
+  clearAll(engine);
+  engine.setStepCount(8);
+  engine.setChannelCount(1);
+  engine.setCell(0, 0, 0, 1, 100, 100, 4, 0, 1);
+  assert.strictEqual(engine.sources[0][0][0].cycleInverted, 1);
+
+  engine.setCellCycle(0, 0, 0, 1);
+  assert.strictEqual(engine.sources[0][0][0].cycleInverted, 0);
+
+  engine.setCellCycleInverted(0, 0, 0, 1);
+  assert.strictEqual(engine.sources[0][0][0].cycleInverted, 0);
+}
+
 function testCellEditDoesNotReRollGeneratedSources() {
   var engine = makeEngine([0]);
   clearAll(engine);
@@ -1231,6 +1335,8 @@ testChannelLoopLengthClampsToStepCount();
 testTrailingCellsDoNotMakeSourceActive();
 testChannelLockOverridesRandomSource();
 testCycleGateFiresEveryNthEncounter();
+testCycleOffsetShiftsNthEncounterGate();
+testCycleInversionFlipsNthEncounterGate();
 testRandomGateUsesPercentage();
 testProbabilityAndCycleApplyTogether();
 testCycleIsEvaluatedBeforeProbability();
@@ -1246,6 +1352,8 @@ testTransportLookaheadQueuesFutureStepWithDelay();
 testTransportLookaheadDropsStaleCurrentStep();
 testNativePlaybackRowsIncludeDeterministicHitsAndSwing();
 testNativePlaybackRowsPrecomputeCycleGates();
+testNativePlaybackRowsPrecomputeCycleOffsets();
+testNativePlaybackRowsPrecomputeCycleInversion();
 testNativePlaybackRowsUseLeastCommonCyclePeriod();
 testNativePlaybackRowsPrerollProbability();
 testNativePlaybackRowsEvaluateCycleBeforeProbability();
@@ -1267,6 +1375,8 @@ testDeserializeAcceptsUILaneSchema();
 testDeserializeRestoresZeroSwing();
 testDeserializePreservesMissingChannelKeys();
 testCellEditsReachStepsBeyondSixteen();
+testCycleOffsetClampsToCycleRange();
+testCycleInversionClearsWhenCycleIsOne();
 testCellEditDoesNotReRollGeneratedSources();
 testCellEditOnlyMutatesGeneratedWhenSourceMatches();
 testChannelLockRoutesSourceEditsToGenerated();
@@ -1323,7 +1433,7 @@ function testSerializeForPersistenceIncludesChannelSettings() {
   engine.channels[1].lock = 2;
   engine.setGenerationMode("static");
   engine.setCell(0, 0, 0, 1, 100, 100, 1);
-  engine.setCell(1, 1, 4, 1, 80, 50, 2);
+  engine.setCell(1, 1, 4, 1, 80, 50, 4, 3, 1);
 
   var payload = engine.serializeForPersistence();
   var restored = makeEngine([0.5]);
@@ -1339,7 +1449,9 @@ function testSerializeForPersistenceIncludesChannelSettings() {
   assert.strictEqual(restored.sources[1][1][4].enabled, 1);
   assert.strictEqual(restored.sources[1][1][4].velocity, 80);
   assert.strictEqual(restored.sources[1][1][4].probability, 50);
-  assert.strictEqual(restored.sources[1][1][4].cycle, 2);
+  assert.strictEqual(restored.sources[1][1][4].cycle, 4);
+  assert.strictEqual(restored.sources[1][1][4].cycleOffset, 3);
+  assert.strictEqual(restored.sources[1][1][4].cycleInverted, 1);
 }
 
 testSerializeForPersistenceIncludesChannelSettings();

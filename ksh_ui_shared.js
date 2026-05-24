@@ -303,10 +303,24 @@ ksh_shared.valueBox = function (hitZones, id, label, value, x, y, w, boxHeight, 
 ksh_shared.findZone = function (hitZones, x, y) {
   var i;
   var z;
+  var localX;
+  var localY;
+  var lineY;
 
   for (i = hitZones.length - 1; i >= 0; i -= 1) {
     z = hitZones[i];
     if (x >= z.x && x <= z.x + z.w && y >= z.y && y <= z.y + z.h) {
+      if (z.data && z.data.triangle) {
+        localX = x - z.x;
+        localY = y - z.y;
+        lineY = z.h - (z.h * localX / z.w);
+        if (z.data.triangle === "top_left" && localY > lineY) {
+          continue;
+        }
+        if (z.data.triangle === "bottom_right" && localY <= lineY) {
+          continue;
+        }
+      }
       return z;
     }
   }
@@ -472,7 +486,9 @@ ksh_shared.applyPersistenceState = function (state, payload) {
       enabled: entry[3],
       velocity: entry[4],
       probability: entry[5],
-      cycle: entry[6]
+      cycle: entry[6],
+      cycleOffset: entry[7],
+      cycleInverted: entry[8]
     });
   }
 

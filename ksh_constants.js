@@ -36,6 +36,8 @@ var ksh_constants = {
     velocity: 100,
     probability: 100,
     cycle: 1,
+    cycleOffset: 0,
+    cycleInverted: 0,
     source: -1
   },
   defaultCell: function () {
@@ -44,20 +46,29 @@ var ksh_constants = {
   cloneCell: function (cell) {
     var hasProbability;
     var hasCycle;
+    var hasCycleOffset;
+    var hasCycleInverted;
     var probability;
     var cycle;
+    var cycleOffset;
 
     cell = cell || this.DEFAULT_CELL;
     hasProbability = cell.probability !== undefined;
     hasCycle = cell.cycle !== undefined;
+    hasCycleOffset = cell.cycleOffset !== undefined;
+    hasCycleInverted = cell.cycleInverted !== undefined;
     probability = hasProbability ? cell.probability : this.DEFAULT_CELL.probability;
     cycle = hasCycle ? cell.cycle : this.DEFAULT_CELL.cycle;
+    cycle = kshClamp(cycle, 1, 64);
+    cycleOffset = hasCycleOffset ? cell.cycleOffset : this.DEFAULT_CELL.cycleOffset;
 
     return {
       enabled: cell.enabled ? 1 : 0,
       velocity: kshClamp(cell.velocity, 1, 127),
       probability: kshClamp(probability, 0, 100),
-      cycle: kshClamp(cycle, 1, 64),
+      cycle: cycle,
+      cycleOffset: kshClamp(cycleOffset, 0, cycle - 1),
+      cycleInverted: cycle > 1 && hasCycleInverted && cell.cycleInverted ? 1 : 0,
       source: typeof cell.source === "number" ? cell.source : -1
     };
   },

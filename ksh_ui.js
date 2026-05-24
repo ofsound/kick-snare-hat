@@ -22,8 +22,8 @@ var EDITOR_LAYOUT = {
   MAIN_TOP: 68,
   FOOTER_H: 28,
   FOOTER_GAP: 8,
-  RIGHT_MARGIN: 12,
-  PATTERN_MIN_RIGHT_PAD: 56,
+  RIGHT_MARGIN: 14,
+  PATTERN_MIN_RIGHT_PAD: 0,
   ROW_CONTROLS_X: 20,
   ROW_LABEL_W: 56,
   ROW_NOTE_W: 24,
@@ -45,14 +45,16 @@ var windowResizeTaskImmediate = null;
 var windowResizeTaskSettle = null;
 
 function rowControlsRight(scale) {
+  var step = (EDITOR_LAYOUT.ROW_SHIFT_W / 2 +
+    EDITOR_LAYOUT.ROW_CONTROL_GAP +
+    EDITOR_LAYOUT.ROW_MUTE_W / 2) * scale;
+
   return EDITOR_LAYOUT.ROW_CONTROLS_X +
-    (EDITOR_LAYOUT.ROW_LABEL_W +
-      EDITOR_LAYOUT.ROW_NOTE_W +
-      EDITOR_LAYOUT.ROW_LOOP_W +
-      EDITOR_LAYOUT.ROW_LOCK_W +
-      EDITOR_LAYOUT.ROW_SHIFT_W * 2 +
-      EDITOR_LAYOUT.ROW_MUTE_W +
-      EDITOR_LAYOUT.ROW_CONTROL_GAP * 6) * scale;
+    EDITOR_LAYOUT.ROW_LABEL_W * scale +
+    EDITOR_LAYOUT.ROW_CONTROL_GAP * scale +
+    EDITOR_LAYOUT.ROW_NOTE_W * scale / 2 +
+    step * 4.5 +
+    EDITOR_LAYOUT.ROW_MUTE_W * scale / 2;
 }
 
 function computeEditorDimensions() {
@@ -185,6 +187,7 @@ var lastLaneAuditionAt = 0;
 var LANE_AUDITION_DEBOUNCE_MS = 60;
 var laneRenameTap = { lane: -1, at: 0 };
 var sourceRowResetTap = { lane: -1, at: 0 };
+var cycleCellTap = { source: -1, lane: -1, step: -1, at: 0, wasEnabled: 0 };
 var LANE_RENAME_MS = 450;
 var velocityDrag = null;
 var headerValueDrag = null;
@@ -288,6 +291,21 @@ function sourceLayerValue(cell, mode) {
     return cell.probability;
   }
   return cell.velocity;
+}
+
+function normalizeSourceValueMode(mode) {
+  if (mode === "cycle_offset") {
+    return "cycle_offset";
+  }
+  return normalizeSourceLayerMode(mode);
+}
+
+function cycleOffsetLabel(value) {
+  value = parseInt(value, 10);
+  if (isNaN(value) || value <= 0) {
+    return "0";
+  }
+  return "+" + value;
 }
 
 function quantizedDragOffset(delta, scale, deadZone) {
@@ -421,7 +439,7 @@ function drawHeader() {
   var modeW = 78;
   var toggleW = 42;
   var toggleGap = 6;
-  var onX = WIDTH - 12 - toggleW;
+  var onX = WIDTH - EDITOR_LAYOUT.RIGHT_MARGIN - toggleW;
   var dcX = onX - toggleGap - toggleW;
   var nativeX = dcX - toggleGap - toggleW;
   var layerW = sourceLayerControlWidth();
@@ -431,8 +449,11 @@ function drawHeader() {
   var sourceDividerX = sourceEndX + dividerGap;
   var stepsX = sourceDividerX + dividerW + dividerGap;
   var rateX = stepsX + sourceBtnW + groupedControlGap;
-  var patternDividerX = rateX + 62 + dividerGap;
-  var patternX = patternDividerX + dividerW + dividerGap;
+  var modeDividerX = rateX + 62 + dividerGap;
+  var modeX = modeDividerX + dividerW + dividerGap;
+  var refreshX = modeX + modeW + dividerGap;
+  var modeRightDividerX = refreshX + sourceBtnW + dividerGap;
+  var patternX = modeRightDividerX + dividerW + dividerGap;
   var patternLabelW = 60;
   var patternShiftW = EDITOR_LAYOUT.ROW_SHIFT_W * GRID_SCALE;
   var patternShiftGap = EDITOR_LAYOUT.ROW_CONTROL_GAP * GRID_SCALE;
@@ -446,9 +467,7 @@ function drawHeader() {
   var rightLayerDividerX = nativeX - dividerGap - dividerW;
   var layerX = rightLayerDividerX - dividerGap - layerW;
   var leftLayerDividerX = layerX - dividerGap - dividerW;
-  var refreshX = leftLayerDividerX - dividerGap - sourceBtnW;
-  var modeX = refreshX - dividerGap - modeW;
-  var rightHumanizeDividerX = modeX - dividerGap - dividerW;
+  var rightHumanizeDividerX = leftLayerDividerX - dividerGap - dividerW;
   var timingHumanizeX = rightHumanizeDividerX - dividerGap - sourceBtnW;
   var velocityHumanizeX = timingHumanizeX - groupedControlGap - sourceBtnW;
   var swingX = velocityHumanizeX - groupedControlGap - sourceBtnW;
@@ -478,7 +497,10 @@ function drawHeader() {
   drawHeaderValueCell("steps", "Steps", state.stepCount, stepsX, headerControlY, sourceBtnW, headerControlH);
   ksh_shared.text("Step Value", rateX, 12, 10, colors.muted);
   ksh_shared.button(hitZones, "rate", state.rate, rateX, headerControlY, 62, headerControlH, false);
-  drawVerticalDivider(patternDividerX, 12, dividerW, 36);
+  drawVerticalDivider(modeDividerX, 12, dividerW, 36);
+  ksh_shared.button(hitZones, "mode", ksh_shared.generationModeLabel(state.generationMode), modeX, headerControlY, modeW, headerControlH, false);
+  drawHeaderValueCell("refresh", "Refresh", state.refreshSteps, refreshX, headerControlY, sourceBtnW, headerControlH);
+  drawVerticalDivider(modeRightDividerX, 12, dividerW, 36);
   ksh_shared.text("Pattern:", patternX, patternTextY, 14, colors.text);
   drawShiftArrow(patternShiftLeftX + patternShiftW / 2, patternIconY, -1);
   drawShiftArrow(patternShiftRightX + patternShiftW / 2, patternIconY, 1);
@@ -493,8 +515,6 @@ function drawHeader() {
   drawHeaderValueCell("velocity_humanize", "Vel %", state.velocityHumanize, velocityHumanizeX, headerControlY, sourceBtnW, headerControlH);
   drawHeaderValueCell("timing_humanize", "Time %", state.timingHumanize, timingHumanizeX, headerControlY, sourceBtnW, headerControlH);
   drawVerticalDivider(rightHumanizeDividerX, 12, dividerW, 36);
-  ksh_shared.button(hitZones, "mode", ksh_shared.generationModeLabel(state.generationMode), modeX, headerControlY, modeW, headerControlH, false);
-  drawHeaderValueCell("refresh", "Refresh", state.refreshSteps, refreshX, headerControlY, sourceBtnW, headerControlH);
   drawVerticalDivider(leftLayerDividerX, 12, dividerW, 36);
   ksh_shared.text("Layer", layerX, 12, 10, colors.muted);
   ksh_shared.rect(layerX, 18, layerW, 25, colors.panel2);
@@ -557,6 +577,9 @@ function drawClearIcon(cx, cy) {
 
 function drawSourceRowControls(layout, lane, y, cellH, muted, scale) {
   var gap = EDITOR_LAYOUT.ROW_CONTROL_GAP * scale;
+  var controlStep = (EDITOR_LAYOUT.ROW_SHIFT_W / 2 +
+    EDITOR_LAYOUT.ROW_CONTROL_GAP +
+    EDITOR_LAYOUT.ROW_MUTE_W / 2) * scale;
   var labelW = EDITOR_LAYOUT.ROW_LABEL_W * scale;
   var noteW = EDITOR_LAYOUT.ROW_NOTE_W * scale;
   var loopW = EDITOR_LAYOUT.ROW_LOOP_W * scale;
@@ -565,11 +588,12 @@ function drawSourceRowControls(layout, lane, y, cellH, muted, scale) {
   var muteW = EDITOR_LAYOUT.ROW_MUTE_W * scale;
   var x = layout.rowControlsX;
   var noteX = x + labelW + gap;
-  var loopX = noteX + noteW + gap;
-  var lockX = loopX + loopW + gap;
-  var shiftLeftX = lockX + lockW + gap;
-  var shiftRightX = shiftLeftX + shiftW + gap;
-  var muteX = shiftRightX + shiftW + gap;
+  var noteCenterX = noteX + noteW / 2;
+  var lockX = noteCenterX + controlStep - lockW / 2;
+  var loopX = noteCenterX + controlStep * 2 - loopW / 2;
+  var shiftLeftX = noteCenterX + controlStep * 3 - shiftW / 2;
+  var shiftRightX = noteCenterX + controlStep * 3.5 - shiftW / 2;
+  var muteX = noteCenterX + controlStep * 4.5 - muteW / 2;
   var textY = rowHeaderTextY(y, cellH);
   var lockLabel = state.lanes[lane].lock < 0 ? "R" : "S" + (state.lanes[lane].lock + 1);
   var loopActive = rowLoopDrag && rowLoopDrag.lane === lane;
@@ -578,9 +602,9 @@ function drawSourceRowControls(layout, lane, y, cellH, muted, scale) {
   var iconY = y + cellH / 2;
 
   ksh_shared.text(state.lanes[lane].label, x, textY, ROW_HEADER_FONT_SIZE, muted ? colors.muted : colors.text);
-  ksh_shared.text(String(state.lanes[lane].note), noteX + noteW / 2, textY, ROW_HEADER_FONT_SIZE, muted ? colors.muted : colors.blue, "center");
+  ksh_shared.text(String(state.lanes[lane].note), noteCenterX, textY, ROW_HEADER_FONT_SIZE, muted ? colors.muted : colors.blue, "center");
   ksh_shared.text("L" + state.lanes[lane].loopLength, loopX + loopW / 2, textY, ROW_HEADER_FONT_SIZE, loopActive ? colors.amber : muted ? colors.muted : colors.blue, "center");
-  ksh_shared.text(lockLabel, lockX + lockW / 2, textY, ROW_HEADER_FONT_SIZE, muted ? colors.muted : colors.amber, "center");
+  ksh_shared.text(lockLabel, lockX + lockW / 2, textY, ROW_HEADER_FONT_SIZE, muted ? colors.muted : colors.blue, "center");
   drawShiftArrow(shiftLeftX + shiftW / 2, iconY, -1);
   drawShiftArrow(shiftRightX + shiftW / 2, iconY, 1);
   drawMuteCircle(muteX + muteW / 2, iconY, ROW_HEADER_ICON_RADIUS, muted);
@@ -603,7 +627,7 @@ function drawStepNumberLabels(x0, cellW, y) {
   var scale = GRID_SCALE;
 
   for (step = 0; step < state.stepCount; step += 1) {
-    ksh_shared.text(String(step + 1), x0 + step * cellW + cellW / 2, y, 10 * scale, stepLabelColor(step), "center");
+    ksh_shared.text(String(step + 1), x0 + step * cellW + cellW / 2, y, 8 * scale, stepLabelColor(step), "center");
   }
 }
 
@@ -630,6 +654,10 @@ function drawSourceGrid() {
   var inactive;
   var now = Date.now();
   var sourceFlashActive;
+  var cellX;
+  var cellY;
+  var cellInnerW;
+  var cellInnerH;
 
   drawStepNumberLabels(x0, cellW, layout.sourceStepY);
 
@@ -646,8 +674,12 @@ function drawSourceGrid() {
         sourceHitFlashes[selectedSource][lane] &&
         sourceHitFlashes[selectedSource][lane][step] &&
         sourceHitFlashes[selectedSource][lane][step] > now;
+      cellX = x + cellPad;
+      cellY = y + cellPad;
+      cellInnerW = cellW - cellPad * 2;
+      cellInnerH = cellH - cellPad * 2;
       if (inactive) {
-        ksh_shared.rect(x + cellPad, y + cellPad, cellW - cellPad * 2, cellH - cellPad * 2, colors.inactiveCell);
+        ksh_shared.rect(cellX, cellY, cellInnerW, cellInnerH, colors.inactiveCell);
         if (cell.enabled) {
           ksh_shared.text(String(sourceLayerValue(cell, layerMode)), x + cellW / 2, y + 14 * scale, 9 * scale, colors.inactiveText, "center");
         }
@@ -660,23 +692,33 @@ function drawSourceGrid() {
           lightColor = mutedSourceCellColor(lightColor);
         }
         ksh_shared.sourceCellBackground(
-          x + cellPad,
-          y + cellPad,
-          cellW - cellPad * 2,
-          cellH - cellPad * 2,
+          cellX,
+          cellY,
+          cellInnerW,
+          cellInnerH,
           layerMode,
-          baseColor,
-          lightColor,
+          layerMode === "cycle" && cell.cycleInverted ? lightColor : baseColor,
+          layerMode === "cycle" && cell.cycleInverted ? baseColor : lightColor,
           layerValue
         );
-        ksh_shared.text(String(layerValue), x + cellW / 2, y + 14 * scale, 9 * scale, sourceFlashActive ? colors.sourceHitText : muted ? colors.muted : colors.off, "center");
+        if (layerMode === "cycle") {
+          ksh_shared.text((cell.cycleInverted ? "!" : "") + String(layerValue), cellX + 3 * scale, cellY + 9 * scale, 7 * scale, sourceFlashActive ? colors.sourceHitText : muted ? colors.muted : colors.off);
+          ksh_shared.text(cycleOffsetLabel(cell.cycleOffset), cellX + cellInnerW - 3 * scale, cellY + cellInnerH - 3 * scale, 7 * scale, sourceFlashActive ? colors.sourceHitText : muted ? colors.muted : colors.off, "right");
+        } else {
+          ksh_shared.text(String(layerValue), x + cellW / 2, y + 14 * scale, 9 * scale, sourceFlashActive ? colors.sourceHitText : muted ? colors.muted : colors.off, "center");
+        }
       } else {
         offColor = step % 4 === 0 ? colors.downbeatCellOff : colors.off;
-        ksh_shared.rect(x + cellPad, y + cellPad, cellW - cellPad * 2, cellH - cellPad * 2, muted ? colors.mutedCellOff : offColor);
+        ksh_shared.rect(cellX, cellY, cellInnerW, cellInnerH, muted ? colors.mutedCellOff : offColor);
       }
-      ksh_shared.strokeRect(x + cellPad, y + cellPad, cellW - cellPad * 2, cellH - cellPad * 2, inactive ? colors.inactiveStroke : selectedLane === lane && selectedStep === step ? colors.text : muted ? colors.muted : colors.strokeSoft, 1);
+      ksh_shared.strokeRect(cellX, cellY, cellInnerW, cellInnerH, inactive ? colors.inactiveStroke : selectedLane === lane && selectedStep === step ? colors.text : muted ? colors.muted : colors.strokeSoft, 1);
       if (!inactive) {
-        ksh_shared.zone(hitZones, "source_cell", x + cellPad, y + cellPad, cellW - cellPad * 2, cellH - cellPad * 2, { lane: lane, step: step });
+        if (layerMode === "cycle") {
+          ksh_shared.zone(hitZones, "source_cell", cellX, cellY, cellInnerW, cellInnerH, { lane: lane, step: step, triangle: "top_left", valueMode: "cycle" });
+          ksh_shared.zone(hitZones, "source_cell", cellX, cellY, cellInnerW, cellInnerH, { lane: lane, step: step, triangle: "bottom_right", valueMode: "cycle_offset" });
+        } else {
+          ksh_shared.zone(hitZones, "source_cell", cellX, cellY, cellInnerW, cellInnerH, { lane: lane, step: step });
+        }
       }
     }
   }
@@ -719,7 +761,7 @@ function sendLane(lane) {
 
 function sendCell(source, lane, step) {
   var cell = state.sources[source][lane][step];
-  send("cell", source + 1, lane + 1, step + 1, cell.enabled, cell.velocity, cell.probability, cell.cycle);
+  send("cell", source + 1, lane + 1, step + 1, cell.enabled, cell.velocity, cell.probability, cell.cycle, cell.cycleOffset, cell.cycleInverted);
 }
 
 function sendSourceChannelMute(source, lane) {
@@ -968,11 +1010,13 @@ function applySourcePaintRange(fromStep, toStep) {
 
 function beginSourceCellInteraction(z, x, y, layerMode) {
   var cell;
+  var valueMode;
 
   selectedLane = z.data.lane;
   selectedStep = z.data.step;
   cell = state.sources[selectedSource][selectedLane][selectedStep];
   layerMode = layerMode || effectiveSourceLayerMode();
+  valueMode = z.data.valueMode || layerMode;
   velocityDrag = {
     lane: selectedLane,
     step: selectedStep,
@@ -981,11 +1025,43 @@ function beginSourceCellInteraction(z, x, y, layerMode) {
     startVelocity: cell.velocity,
     startProbability: cell.probability,
     startCycle: cell.cycle,
+    startCycleOffset: cell.cycleOffset,
     layerMode: layerMode,
+    valueMode: valueMode,
     paintEnabled: cell.enabled ? 0 : 1,
     mode: null,
     moved: false
   };
+}
+
+function sourceCellMatchesTap(z, tap) {
+  return tap.source === selectedSource &&
+    tap.lane === z.data.lane &&
+    tap.step === z.data.step &&
+    Date.now() - tap.at <= LANE_RENAME_MS;
+}
+
+function handleCycleCellDoubleClick(z) {
+  var cell;
+
+  if (!z.data || !z.data.valueMode || !sourceCellMatchesTap(z, cycleCellTap) || !cycleCellTap.wasEnabled) {
+    return false;
+  }
+
+  cell = state.sources[selectedSource][z.data.lane][z.data.step];
+  if (cell.cycle <= 1) {
+    cycleCellTap = { source: -1, lane: -1, step: -1, at: 0, wasEnabled: 0 };
+    return false;
+  }
+
+  selectedLane = z.data.lane;
+  selectedStep = z.data.step;
+  cell.enabled = 1;
+  cell.cycleInverted = cell.cycleInverted ? 0 : 1;
+  sendCell(selectedSource, selectedLane, selectedStep);
+  cycleCellTap = { source: -1, lane: -1, step: -1, at: 0, wasEnabled: 0 };
+  mgraphics.redraw();
+  return true;
 }
 
 function applySourceCellDrag(x, y) {
@@ -1033,6 +1109,7 @@ function applySourceValueDrag(y) {
   var maxValue;
   var startValue;
   var enabledChanged;
+  var valueMode;
 
   if (!velocityDrag || velocityDrag.mode === "paint") {
     return;
@@ -1049,13 +1126,19 @@ function applySourceValueDrag(y) {
     cell.enabled = 1;
   }
 
+  valueMode = normalizeSourceValueMode(velocityDrag.valueMode);
   layerMode = normalizeSourceLayerMode(velocityDrag.layerMode);
-  if (layerMode === "probability") {
+  if (valueMode === "probability") {
     startValue = velocityDrag.startProbability;
     scale = PROBABILITY_DRAG_SCALE;
     minValue = 0;
     maxValue = 100;
-  } else if (layerMode === "cycle") {
+  } else if (valueMode === "cycle_offset") {
+    startValue = velocityDrag.startCycleOffset;
+    scale = CYCLE_DRAG_SCALE;
+    minValue = 0;
+    maxValue = ksh_shared.clamp(cell.cycle, 1, 64) - 1;
+  } else if (valueMode === "cycle") {
     startValue = velocityDrag.startCycle;
     scale = CYCLE_DRAG_SCALE;
     minValue = 1;
@@ -1073,15 +1156,25 @@ function applySourceValueDrag(y) {
     minValue,
     maxValue
   );
-  if (layerMode === "probability" && cell.probability !== nextValue) {
+  if (valueMode === "probability" && cell.probability !== nextValue) {
     cell.probability = nextValue;
     sendCell(selectedSource, velocityDrag.lane, velocityDrag.step);
     mgraphics.redraw();
-  } else if (layerMode === "cycle" && cell.cycle !== nextValue) {
-    cell.cycle = nextValue;
+  } else if (valueMode === "cycle_offset" && cell.cycleOffset !== nextValue) {
+    cell.cycleOffset = nextValue;
     sendCell(selectedSource, velocityDrag.lane, velocityDrag.step);
     mgraphics.redraw();
-  } else if (layerMode === "velocity" && cell.velocity !== nextValue) {
+  } else if (valueMode === "cycle" && cell.cycle !== nextValue) {
+    cell.cycle = nextValue;
+    if (cell.cycleOffset > cell.cycle - 1) {
+      cell.cycleOffset = cell.cycle - 1;
+    }
+    if (cell.cycle <= 1) {
+      cell.cycleInverted = 0;
+    }
+    sendCell(selectedSource, velocityDrag.lane, velocityDrag.step);
+    mgraphics.redraw();
+  } else if (valueMode === "velocity" && cell.velocity !== nextValue) {
     cell.velocity = nextValue;
     sendCell(selectedSource, velocityDrag.lane, velocityDrag.step);
     mgraphics.redraw();
@@ -1093,6 +1186,7 @@ function applySourceValueDrag(y) {
 
 function endSourceCellInteraction() {
   var cell;
+  var wasEnabled;
 
   if (!velocityDrag) {
     return;
@@ -1100,6 +1194,18 @@ function endSourceCellInteraction() {
 
   cell = state.sources[selectedSource][velocityDrag.lane][velocityDrag.step];
   if (!velocityDrag.moved) {
+    wasEnabled = cell.enabled ? 1 : 0;
+    if (velocityDrag.layerMode === "cycle" && wasEnabled && cell.cycle > 1) {
+      cycleCellTap = {
+        source: selectedSource,
+        lane: velocityDrag.lane,
+        step: velocityDrag.step,
+        at: Date.now(),
+        wasEnabled: 1
+      };
+    } else {
+      cycleCellTap = { source: -1, lane: -1, step: -1, at: 0, wasEnabled: 0 };
+    }
     cell.enabled = cell.enabled ? 0 : 1;
     sendCell(selectedSource, velocityDrag.lane, velocityDrag.step);
   }
@@ -1356,6 +1462,8 @@ function onclick(x, y, button, cmd, shift, capslock, option, ctrl) {
   } else if (z.id === "source_cell") {
     if (button === 0) {
       endSourceCellInteraction();
+    } else if (handleCycleCellDoubleClick(z)) {
+      return;
     } else {
       beginSourceCellInteraction(z, x, y, modifierLayerMode(shift, option));
     }

@@ -512,18 +512,36 @@ var KSH_EngineClass = null;
   function clampChannel(channel) { return clamp(channel, 0, MAX_LANES - 1); }
   function clampStep(step) { return clamp(step, 0, MAX_STEPS - 1); }
 
-  function normalizeCellParams(probability, cycle, currentCell) {
+  function normalizeCycleOffset(cycleOffset, cycle) {
+    return clamp(cycleOffset, 0, clamp(cycle, 1, 64) - 1);
+  }
+
+  function normalizeCycleInverted(cycleInverted, cycle) {
+    return clamp(cycle, 1, 64) > 1 && cycleInverted ? 1 : 0;
+  }
+
+  function cycleGateMatches(count, cycle, cycleOffset, cycleInverted) {
+    var matches = count % cycle === cycleOffset;
+    return cycleInverted ? !matches : matches;
+  }
+
+  function normalizeCellParams(probability, cycle, cycleOffset, cycleInverted, currentCell) {
     var params;
 
     currentCell = currentCell || KSH_CONSTANTS.DEFAULT_CELL;
     params = {
       probability: probability === undefined ? currentCell.probability : probability,
-      cycle: cycle === undefined ? currentCell.cycle : cycle
+      cycle: cycle === undefined ? currentCell.cycle : cycle,
+      cycleOffset: cycleOffset === undefined ? currentCell.cycleOffset : cycleOffset,
+      cycleInverted: cycleInverted === undefined ? currentCell.cycleInverted : cycleInverted
     };
+    params.cycle = clamp(params.cycle, 1, 64);
 
     return {
       probability: clamp(params.probability, 0, 100),
-      cycle: clamp(params.cycle, 1, 64)
+      cycle: params.cycle,
+      cycleOffset: normalizeCycleOffset(params.cycleOffset, params.cycle),
+      cycleInverted: normalizeCycleInverted(params.cycleInverted, params.cycle)
     };
   }
 
@@ -628,7 +646,7 @@ var KSH_EngineClass = null;
     this.status("source_channel_reset " + (source + 1) + " " + (channel + 1));
   };
 
-  KickSnareHatEngine.prototype.setCell = function (source, channel, step, enabled, velocity, probability, cycle) {
+  KickSnareHatEngine.prototype.setCell = function (source, channel, step, enabled, velocity, probability, cycle, cycleOffset, cycleInverted) {
     var cell;
     var params;
 
@@ -637,11 +655,13 @@ var KSH_EngineClass = null;
     step = clampStep(step);
 
     cell = this.sources[source][channel][step];
-    params = normalizeCellParams(probability, cycle, cell);
+    params = normalizeCellParams(probability, cycle, cycleOffset, cycleInverted, cell);
     cell.enabled = enabled ? 1 : 0;
     cell.velocity = clamp(velocity, 1, 127);
     cell.probability = params.probability;
     cell.cycle = params.cycle;
+    cell.cycleOffset = params.cycleOffset;
+    cell.cycleInverted = params.cycleInverted;
 
     this.refreshGeneratedCellsForSourceEdit(source, channel, step);
   };
@@ -682,6 +702,38 @@ var KSH_EngineClass = null;
     step = clampStep(step);
     cycle = clamp(cycle, 1, 64);
     this.sources[source][channel][step].cycle = cycle;
+    this.sources[source][channel][step].cycleOffset = normalizeCycleOffset(
+      this.sources[source][channel][step].cycleOffset,
+      cycle
+    );
+    this.sources[source][channel][step].cycleInverted = normalizeCycleInverted(
+      this.sources[source][channel][step].cycleInverted,
+      cycle
+    );
+
+    this.refreshGeneratedCellsForSourceEdit(source, channel, step);
+  };
+
+  KickSnareHatEngine.prototype.setCellCycleOffset = function (source, channel, step, cycleOffset) {
+    var cell;
+
+    source = clampSource(source);
+    channel = clampChannel(channel);
+    step = clampStep(step);
+    cell = this.sources[source][channel][step];
+    cell.cycleOffset = normalizeCycleOffset(cycleOffset, cell.cycle);
+
+    this.refreshGeneratedCellsForSourceEdit(source, channel, step);
+  };
+
+  KickSnareHatEngine.prototype.setCellCycleInverted = function (source, channel, step, cycleInverted) {
+    var cell;
+
+    source = clampSource(source);
+    channel = clampChannel(channel);
+    step = clampStep(step);
+    cell = this.sources[source][channel][step];
+    cell.cycleInverted = normalizeCycleInverted(cycleInverted, cell.cycle);
 
     this.refreshGeneratedCellsForSourceEdit(source, channel, step);
   };
@@ -881,17 +933,23 @@ var KSH_EngineClass = null;
   KickSnareHatEngine.prototype.shouldFire = function (cell, channel, step) {
     var key;
     var count;
+    var cycle;
+    var cycleOffset;
+    var cycleInverted;
     var probability;
 
     if (!cell.enabled) {
       return false;
     }
 
-    if (clamp(cell.cycle, 1, 64) > 1) {
+    cycle = clamp(cell.cycle, 1, 64);
+    cycleOffset = normalizeCycleOffset(cell.cycleOffset, cycle);
+    cycleInverted = normalizeCycleInverted(cell.cycleInverted, cycle);
+    if (cycle > 1) {
       key = this.cycleKey(cell.source, channel, typeof cell.sourceStep === "number" ? cell.sourceStep : step);
       count = this.cycleCounters[key] || 0;
       this.cycleCounters[key] = count + 1;
-      if (count % clamp(cell.cycle, 1, 64) !== 0) {
+      if (!cycleGateMatches(count, cycle, cycleOffset, cycleInverted)) {
         return false;
       }
     }
@@ -1007,6 +1065,8 @@ var KSH_EngineClass = null;
 	    var cycleCounters = {};
 	    var key;
 	    var cycle;
+      var cycleOffset;
+      var cycleInverted;
 	    var probability;
 	    var velocity;
 	    var timingOffsetMs;
@@ -1032,6 +1092,8 @@ var KSH_EngineClass = null;
 	        cell = this.generated[channel][rowStep];
 	        if (cell && cell.enabled) {
           cycle = clamp(cell.cycle, 1, 64);
+          cycleOffset = normalizeCycleOffset(cell.cycleOffset, cycle);
+          cycleInverted = normalizeCycleInverted(cell.cycleInverted, cycle);
           if (cycle > 1) {
             key = this.cycleKey(cell.source, channel, typeof cell.sourceStep === "number" ? cell.sourceStep : rowStep);
             if (cycleCounters[key] === undefined) {
@@ -1039,7 +1101,7 @@ var KSH_EngineClass = null;
             } else {
               cycleCounters[key] += 1;
             }
-            if (cycleCounters[key] % cycle !== 0) {
+            if (!cycleGateMatches(cycleCounters[key], cycle, cycleOffset, cycleInverted)) {
               continue;
             }
           }
@@ -1372,6 +1434,8 @@ var KSH_EngineClass = null;
           velocity: cell.velocity,
           probability: cell.probability,
           cycle: cell.cycle,
+          cycleOffset: cell.cycleOffset,
+          cycleInverted: cell.cycleInverted,
           source: cell.source + 1
         };
       }
@@ -1531,7 +1595,7 @@ var KSH_EngineClass = null;
       for (channel = 0; channel < this.channelCount; channel += 1) {
         for (step = 0; step < this.stepCount; step += 1) {
           cell = this.sources[source][channel][step];
-          if (cell.enabled !== 0 || cell.velocity !== 100 || cell.probability !== 100 || cell.cycle !== 1) {
+          if (cell.enabled !== 0 || cell.velocity !== 100 || cell.probability !== 100 || cell.cycle !== 1 || cell.cycleOffset !== 0 || cell.cycleInverted !== 0) {
             cells.push([
               source,
               channel,
@@ -1539,7 +1603,9 @@ var KSH_EngineClass = null;
               cell.enabled ? 1 : 0,
               cell.velocity,
               cell.probability,
-              cell.cycle
+              cell.cycle,
+              cell.cycleOffset,
+              cell.cycleInverted
             ]);
           }
         }
@@ -1652,7 +1718,9 @@ var KSH_EngineClass = null;
         enabled: entry[3],
         velocity: entry[4],
         probability: entry[5],
-        cycle: entry[6]
+        cycle: entry[6],
+        cycleOffset: entry[7],
+        cycleInverted: entry[8]
       });
     }
 
@@ -2383,7 +2451,7 @@ function source_channel_reset(source, channel) {
   emitFullState();
 }
 
-function cell(source, channel, stepIndex, enabled, velocity, probability, cycle) {
+function cell(source, channel, stepIndex, enabled, velocity, probability, cycle, cycleOffset, cycleInverted) {
   ensureEngine().setCell(
     zeroBased(source),
     zeroBased(channel),
@@ -2391,7 +2459,9 @@ function cell(source, channel, stepIndex, enabled, velocity, probability, cycle)
     parseInt(enabled, 10) !== 0,
     velocity,
     probability,
-    cycle
+    cycle,
+    cycleOffset,
+    cycleInverted
   );
   markPersistentChange();
 }
@@ -2418,6 +2488,16 @@ function cell_probability(source, channel, stepIndex, probability) {
 
 function cell_cycle(source, channel, stepIndex, cycleValue) {
   ensureEngine().setCellCycle(zeroBased(source), zeroBased(channel), zeroBased(stepIndex), cycleValue);
+  markPersistentChange();
+}
+
+function cell_cycle_offset(source, channel, stepIndex, cycleOffset) {
+  ensureEngine().setCellCycleOffset(zeroBased(source), zeroBased(channel), zeroBased(stepIndex), cycleOffset);
+  markPersistentChange();
+}
+
+function cell_cycle_inverted(source, channel, stepIndex, cycleInverted) {
+  ensureEngine().setCellCycleInverted(zeroBased(source), zeroBased(channel), zeroBased(stepIndex), cycleInverted);
   markPersistentChange();
 }
 

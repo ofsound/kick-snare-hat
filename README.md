@@ -24,11 +24,11 @@ using unconstrained randomness.
 - Device-wide velocity and timing humanize. Velocity humanize offsets each hit from its cell velocity. Timing humanize range is ±50% of the step interval at `100%` on the engine path; native table builds use a subtler fixed scale (see [docs/native-timing.md](docs/native-timing.md)).
 - Live tempo from `live_set` drives step interval via `live.observer tempo`.
 - Compact Presentation UI for the Live device strip with mode, steps, lanes, refresh, rate, swing, generated preview, and editor launch controls.
-- Floating editor subpatcher with source dropdown, source grid, generated preview, lane note/lock controls, per-cell velocity/probability/cycle controls, phase offset, device on/off, and **Nat**.
+- Floating editor subpatcher with source dropdown, source grid, generated preview, lane note/lock controls, per-cell velocity/probability/cycle/cycle-offset controls, phase offset, device on/off, and **Nat**.
 - Source Pattern layer modes for velocity, cycle, and probability (buttons and number keys `1`/`2`/`3`, Shift/Option hover).
 - Source row mute and reset.
 - Live set persistence for source patterns, globals, and channel metadata ([Live set persistence](#live-set-persistence)).
-- Per-source cell values: enabled, velocity, probability, every-N-cycles.
+- Per-source cell values: enabled, velocity, probability, every-N-cycles, cycle offset, and cycle inversion.
 
 ## Files
 
@@ -94,13 +94,15 @@ channel_lock 1 random
 channel_lock 1 2
 channel_loop_length 1 8
 
-cell 1 1 1 1 100 100 1
-cell 1 1 5 1 90 60 1
-cell 1 2 9 1 110 75 3
+cell 1 1 1 1 100 100 1 0 0
+cell 1 1 5 1 90 60 1 0 0
+cell 1 2 9 1 110 75 3 1 1
 cell_enabled 1 1 1 0
 cell_velocity 1 1 1 96
 cell_probability 1 1 1 75
 cell_cycle 1 1 1 3
+cell_cycle_offset 1 1 1 1
+cell_cycle_inverted 1 1 1 1
 source_channel_mute 1 1 1
 source_channel_reset 1 1
 
