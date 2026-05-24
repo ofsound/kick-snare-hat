@@ -65,6 +65,9 @@ For native transport playback, coll scheduling, and patch wiring, see
   the engine. No per-cell echo from the engine.
 - Source messages: `cell <source> <channel> <step> …`, `source_channel_mute`,
   `source_channel_reset` (reset triggers full `engine_state`).
+- Source cell payloads include enabled, velocity, probability, cycle,
+  cycle offset, cycle inversion, and roll. Missing roll values from old saves
+  normalize to `1`.
 - `channel_loop_length <channel> <steps>` — channel-global loop across sources.
 - `channel_playback_mode <channel> normal|reverse|boomerang` — channel-global
   playback direction over the active loop length.

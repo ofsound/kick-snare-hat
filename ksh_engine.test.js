@@ -316,6 +316,47 @@ function testNativePlaybackRowsIncludeDeterministicHitsAndSwing() {
   assert.deepStrictEqual(rows[1], nativeHitRow(36, 80, 100, 1, 62.5, 1, 2, 1, 2));
 }
 
+function testNativePlaybackRowsExpandRollsInsideStep() {
+  var engine = makeEngine([0]);
+  var rows;
+
+  clearAll(engine);
+  engine.setStepCount(1);
+  engine.setChannelCount(1);
+  engine.setRate("16n");
+  engine.setTempo(120);
+  engine.setCell(0, 0, 0, 1, 100, 100, 1, 0, 0, 4);
+
+  rows = engine.buildNativePlaybackRows();
+
+  assert.deepStrictEqual(rows[0], nativeHitRow(36, 100, 28, 1, 0, 1, 1, 1, 1).concat(
+    nativeHitRow(36, 100, 28, 1, 31.25, 1, 1, 1, 1),
+    nativeHitRow(36, 100, 28, 1, 62.5, 1, 1, 1, 1),
+    nativeHitRow(36, 100, 28, 1, 93.75, 1, 1, 1, 1)
+  ));
+}
+
+function testNativePlaybackRowsApplySwingOnlyToFirstRollHit() {
+  var engine = makeEngine([0]);
+  var rows;
+
+  clearAll(engine);
+  engine.setStepCount(2);
+  engine.setChannelCount(1);
+  engine.setRate("16n");
+  engine.setTempo(120);
+  engine.setSwing(100);
+  engine.setCell(0, 0, 1, 1, 80, 100, 1, 0, 0, 4);
+
+  rows = engine.buildNativePlaybackRows();
+
+  assert.deepStrictEqual(rows[1], nativeHitRow(36, 80, 28, 1, 62.5, 1, 2, 1, 2).concat(
+    nativeHitRow(36, 80, 28, 1, 31.25, 1, 2, 1, 2),
+    nativeHitRow(36, 80, 28, 1, 62.5, 1, 2, 1, 2),
+    nativeHitRow(36, 80, 28, 1, 93.75, 1, 2, 1, 2)
+  ));
+}
+
 function testNativePlaybackRowsPrecomputeCycleGates() {
   var engine = makeEngine([0]);
   var rows;
@@ -403,6 +444,26 @@ function testNativePlaybackRowsPrerollProbability() {
   assert.deepStrictEqual(rows[1], []);
   assert.deepStrictEqual(rows[2], nativeHitRow(36, 100, 100, 1, 0, 1, 1, 1, 1));
   assert.deepStrictEqual(rows[3], []);
+}
+
+function testNativePlaybackRowsEvaluateProbabilityOncePerRollStep() {
+  var randomCalls = 0;
+  var engine = new KickSnareHatEngine({
+    rng: function () {
+      randomCalls += 1;
+      return 0;
+    }
+  });
+  engine._notes = [];
+  clearAll(engine);
+  engine.setStepCount(1);
+  engine.setChannelCount(1);
+  engine.setCell(0, 0, 0, 1, 100, 50, 1, 0, 0, 4);
+
+  randomCalls = 0;
+  engine.buildNativePlaybackRows();
+
+  assert.strictEqual(randomCalls, 16);
 }
 
 function testNativePlaybackRowsEvaluateCycleBeforeProbability() {
@@ -757,7 +818,7 @@ function testDeserializeAcceptsUILaneSchema() {
   engine.setChannelLabel(0, "Sub");
   engine.setChannelNote(0, 35);
   engine.setChannelLock(0, 1);
-  engine.setCell(1, 0, 2, 1, 77, 25, 1);
+  engine.setCell(1, 0, 2, 1, 77, 25, 1, 0, 0, 5);
 
   uiState = JSON.parse(JSON.stringify(engine.serialize()));
   uiState.laneCount = uiState.channelCount;
@@ -775,6 +836,7 @@ function testDeserializeAcceptsUILaneSchema() {
   assert.strictEqual(restored.sources[1][0][2].velocity, 77);
   assert.strictEqual(restored.sources[1][0][2].probability, 25);
   assert.strictEqual(restored.sources[1][0][2].cycle, 1);
+  assert.strictEqual(restored.sources[1][0][2].roll, 5);
 }
 
 function testDeserializeRestoresZeroSwing() {
@@ -1106,11 +1168,14 @@ testChannelLoopLengthClampsToStepCount();
 testTrailingCellsDoNotMakeSourceActive();
 testChannelLockOverridesRandomSource();
 testNativePlaybackRowsIncludeDeterministicHitsAndSwing();
+testNativePlaybackRowsExpandRollsInsideStep();
+testNativePlaybackRowsApplySwingOnlyToFirstRollHit();
 testNativePlaybackRowsPrecomputeCycleGates();
 testNativePlaybackRowsPrecomputeCycleOffsets();
 testNativePlaybackRowsPrecomputeCycleInversion();
 testNativePlaybackRowsUseLeastCommonCyclePeriod();
 testNativePlaybackRowsPrerollProbability();
+testNativePlaybackRowsEvaluateProbabilityOncePerRollStep();
 testNativePlaybackRowsEvaluateCycleBeforeProbability();
 testNativePlaybackRowsPrerollVelocityHumanize();
 testNativePlaybackRowsShareVariationExpansionForProbabilityAndVelocity();
@@ -1153,7 +1218,7 @@ function testSerializeForPersistenceRoundtripsSparsePattern() {
   engine.setStepCount(8);
   engine.setChannelCount(2);
   engine.swing = 25;
-  engine.setCell(0, 0, 0, 1, 64, 30, 1);
+  engine.setCell(0, 0, 0, 1, 64, 30, 1, 0, 0, 3);
   engine.channels[0].label = "Sub";
   engine.channels[1].note = 50;
 
@@ -1176,6 +1241,7 @@ function testSerializeForPersistenceRoundtripsSparsePattern() {
   assert.strictEqual(restored.swing, 25);
   assert.strictEqual(restored.sources[0][0][0].enabled, 1);
   assert.strictEqual(restored.sources[0][0][0].velocity, 64);
+  assert.strictEqual(restored.sources[0][0][0].roll, 3);
   assert.strictEqual(restored.channels[0].label, "Sub");
   assert.strictEqual(restored.channels[1].note, 50);
 }
@@ -1194,7 +1260,7 @@ function testSerializeForPersistenceIncludesChannelSettings() {
   engine.channels[1].playbackMode = "boomerang";
   engine.setGenerationMode("static");
   engine.setCell(0, 0, 0, 1, 100, 100, 1);
-  engine.setCell(1, 1, 4, 1, 80, 50, 4, 3, 1);
+  engine.setCell(1, 1, 4, 1, 80, 50, 4, 3, 1, 6);
 
   var payload = engine.serializeForPersistence();
   var restored = makeEngine([0.5]);
@@ -1214,6 +1280,7 @@ function testSerializeForPersistenceIncludesChannelSettings() {
   assert.strictEqual(restored.sources[1][1][4].cycle, 4);
   assert.strictEqual(restored.sources[1][1][4].cycleOffset, 3);
   assert.strictEqual(restored.sources[1][1][4].cycleInverted, 1);
+  assert.strictEqual(restored.sources[1][1][4].roll, 6);
 }
 
 testSerializeForPersistenceIncludesChannelSettings();
@@ -1314,6 +1381,26 @@ function testRenderGeneratedMidiNotesBakesStaticPattern() {
   assert.deepStrictEqual(render.notes.map(function (note) { return note.velocity; }), [64, 64, 64, 64]);
 }
 
+function testRenderGeneratedMidiNotesIncludesRollHits() {
+  var engine = makeEngine([0.99]);
+  var render;
+
+  clearAll(engine);
+  engine.setChannelCount(1);
+  engine.setStepCount(4);
+  engine.setRate("4n");
+  engine.setTempo(120);
+  engine.setGenerationMode("static");
+  engine.channels[0].note = 42;
+  engine.setCell(0, 0, 0, 1, 64, 100, 1, 0, 0, 4);
+  engine.generateWindow(0, 4, true);
+
+  render = engine.renderGeneratedMidiNotes(1, 4);
+
+  assert.deepStrictEqual(render.notes.map(function (note) { return note.start_time; }), [0, 0.25, 0.5, 0.75]);
+  assert.deepStrictEqual(render.notes.map(function (note) { return note.duration; }), [0.2, 0.2, 0.2, 0.2]);
+}
+
 function testRenderGeneratedMidiNotesRerollsRefreshWindows() {
   var engine = makeEngine([0.1, 0.9]);
   var render;
@@ -1342,6 +1429,7 @@ testTransportDoesNotEmitMidiAfterJump();
 testPhaseOffsetShiftsStepBoundaryEarlier();
 testOldNativeTimingPersistenceIsIgnored();
 testRenderGeneratedMidiNotesBakesStaticPattern();
+testRenderGeneratedMidiNotesIncludesRollHits();
 testRenderGeneratedMidiNotesRerollsRefreshWindows();
 
 console.log("ksh_engine tests passed");

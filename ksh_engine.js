@@ -51,6 +51,7 @@ var KSH_EngineClass = null;
 	  var NATIVE_PLAYBACK_MAX_ROWS = 2048;
 	  var NATIVE_PROBABILITY_MULTIPLIER = 16;
 	  var TIMING_HUMANIZE_NATIVE_SCALE = 0.2;
+	  var ROLL_NOTE_DURATION_SCALE = 0.9;
 
   function clamp(value, min, max) {
     value = parseInt(value, 10);
@@ -490,12 +491,28 @@ var KSH_EngineClass = null;
     return clamp(cycle, 1, 64) > 1 && cycleInverted ? 1 : 0;
   }
 
+  function normalizeRoll(roll) {
+    return clamp(roll, 1, KSH_CONSTANTS.MAX_ROLL);
+  }
+
+  function rollNoteDurationMs(stepIntervalMs, roll) {
+    var subdivisionMs;
+
+    roll = normalizeRoll(roll);
+    if (roll <= 1) {
+      return KSH_CONSTANTS.DEFAULT_NOTE_DURATION_MS;
+    }
+
+    subdivisionMs = stepIntervalMs / roll;
+    return Math.max(1, Math.min(KSH_CONSTANTS.DEFAULT_NOTE_DURATION_MS, Math.floor(subdivisionMs * ROLL_NOTE_DURATION_SCALE)));
+  }
+
   function cycleGateMatches(count, cycle, cycleOffset, cycleInverted) {
     var matches = count % cycle === cycleOffset;
     return cycleInverted ? !matches : matches;
   }
 
-  function normalizeCellParams(probability, cycle, cycleOffset, cycleInverted, currentCell) {
+  function normalizeCellParams(probability, cycle, cycleOffset, cycleInverted, roll, currentCell) {
     var params;
 
     currentCell = currentCell || KSH_CONSTANTS.DEFAULT_CELL;
@@ -503,7 +520,8 @@ var KSH_EngineClass = null;
       probability: probability === undefined ? currentCell.probability : probability,
       cycle: cycle === undefined ? currentCell.cycle : cycle,
       cycleOffset: cycleOffset === undefined ? currentCell.cycleOffset : cycleOffset,
-      cycleInverted: cycleInverted === undefined ? currentCell.cycleInverted : cycleInverted
+      cycleInverted: cycleInverted === undefined ? currentCell.cycleInverted : cycleInverted,
+      roll: roll === undefined ? currentCell.roll : roll
     };
     params.cycle = clamp(params.cycle, 1, 64);
 
@@ -511,7 +529,8 @@ var KSH_EngineClass = null;
       probability: clamp(params.probability, 0, 100),
       cycle: params.cycle,
       cycleOffset: normalizeCycleOffset(params.cycleOffset, params.cycle),
-      cycleInverted: normalizeCycleInverted(params.cycleInverted, params.cycle)
+      cycleInverted: normalizeCycleInverted(params.cycleInverted, params.cycle),
+      roll: normalizeRoll(params.roll)
     };
   }
 
@@ -616,7 +635,7 @@ var KSH_EngineClass = null;
     this.status("source_channel_reset " + (source + 1) + " " + (channel + 1));
   };
 
-  KickSnareHatEngine.prototype.setCell = function (source, channel, step, enabled, velocity, probability, cycle, cycleOffset, cycleInverted) {
+  KickSnareHatEngine.prototype.setCell = function (source, channel, step, enabled, velocity, probability, cycle, cycleOffset, cycleInverted, roll) {
     var cell;
     var params;
 
@@ -625,13 +644,14 @@ var KSH_EngineClass = null;
     step = clampStep(step);
 
     cell = this.sources[source][channel][step];
-    params = normalizeCellParams(probability, cycle, cycleOffset, cycleInverted, cell);
+    params = normalizeCellParams(probability, cycle, cycleOffset, cycleInverted, roll, cell);
     cell.enabled = enabled ? 1 : 0;
     cell.velocity = clamp(velocity, 1, 127);
     cell.probability = params.probability;
     cell.cycle = params.cycle;
     cell.cycleOffset = params.cycleOffset;
     cell.cycleInverted = params.cycleInverted;
+    cell.roll = params.roll;
 
     this.refreshGeneratedCellsForSourceEdit(source, channel, step);
   };
@@ -704,6 +724,15 @@ var KSH_EngineClass = null;
     step = clampStep(step);
     cell = this.sources[source][channel][step];
     cell.cycleInverted = normalizeCycleInverted(cycleInverted, cell.cycle);
+
+    this.refreshGeneratedCellsForSourceEdit(source, channel, step);
+  };
+
+  KickSnareHatEngine.prototype.setCellRoll = function (source, channel, step, roll) {
+    source = clampSource(source);
+    channel = clampChannel(channel);
+    step = clampStep(step);
+    this.sources[source][channel][step].roll = normalizeRoll(roll);
 
     this.refreshGeneratedCellsForSourceEdit(source, channel, step);
   };
@@ -1069,7 +1098,9 @@ var KSH_EngineClass = null;
     var baseDelayMs;
     var timingOffsetMs;
     var startBeat;
-    var durationBeats;
+    var roll;
+    var rollIndex;
+    var rollDurationBeats;
 
     barCount = clamp(barCount, 1, 32);
     beatsPerBar = parseFloat(beatsPerBar);
@@ -1080,7 +1111,6 @@ var KSH_EngineClass = null;
     totalBeats = barCount * beatsPerBar;
     beatsPerStep = this.beatsPerStep();
     quarterMs = 60000 / this.tempo;
-    durationBeats = KSH_CONSTANTS.DEFAULT_NOTE_DURATION_MS / quarterMs;
     generated = this.cloneGeneratedGrid();
     maxSteps = Math.ceil((totalBeats + Math.abs(this.phaseOffsetBeats) + beatsPerStep) / beatsPerStep);
 
@@ -1121,22 +1151,31 @@ var KSH_EngineClass = null;
         }
 
         velocity = this.humanizeVelocity(cell.velocity);
+        roll = normalizeRoll(cell.roll);
+        rollDurationBeats = rollNoteDurationMs(this.stepIntervalMs, roll) / quarterMs;
         baseDelayMs = this.swingDelayMsForStep(rowStep);
         timingOffsetMs = this.playbackHumanizeTimingOffsetMs();
-        startBeat = this.phaseOffsetBeats + absStep * beatsPerStep + (baseDelayMs + timingOffsetMs) / quarterMs;
-        if (startBeat < 0) {
-          startBeat = 0;
-        }
-        if (startBeat >= totalBeats) {
-          continue;
-        }
+        for (rollIndex = 0; rollIndex < roll; rollIndex += 1) {
+          startBeat = this.phaseOffsetBeats + absStep * beatsPerStep;
+          if (rollIndex === 0) {
+            startBeat += (baseDelayMs + timingOffsetMs) / quarterMs;
+          } else {
+            startBeat += rollIndex * beatsPerStep / roll;
+          }
+          if (startBeat < 0) {
+            startBeat = 0;
+          }
+          if (startBeat >= totalBeats) {
+            continue;
+          }
 
-        notes.push({
-          pitch: this.channels[channel].note,
-          start_time: startBeat,
-          duration: Math.max(0.0001, Math.min(durationBeats, totalBeats - startBeat)),
-          velocity: velocity
-        });
+          notes.push({
+            pitch: this.channels[channel].note,
+            start_time: startBeat,
+            duration: Math.max(0.0001, Math.min(rollDurationBeats, totalBeats - startBeat)),
+            velocity: velocity
+          });
+        }
       }
     }
 
@@ -1175,6 +1214,9 @@ var KSH_EngineClass = null;
 	    var targetRowFloat;
 	    var targetRow;
 	    var targetDelayMs;
+	    var roll;
+	    var rollIndex;
+	    var noteDurationMs;
 
 	    cyclePeriod = this.nativePlaybackPeriod();
 	    if (cyclePeriod < 1) {
@@ -1214,17 +1256,25 @@ var KSH_EngineClass = null;
 	            continue;
 	          }
 	          velocity = this.humanizeVelocity(cell.velocity);
+	          roll = normalizeRoll(cell.roll);
+	          noteDurationMs = rollNoteDurationMs(this.stepIntervalMs, roll);
 	          baseDelayMs = this.swingDelayMsForStep(rowStep);
 	          timingOffsetMs = this.playbackHumanizeTimingOffsetMs();
-	          targetPosition = step + (baseDelayMs + timingOffsetMs) / this.stepIntervalMs;
-	          if (targetPosition < 0) {
-	            targetPosition = 0;
+	          for (rollIndex = 0; rollIndex < roll; rollIndex += 1) {
+	            if (rollIndex === 0) {
+	              targetPosition = step + (baseDelayMs + timingOffsetMs) / this.stepIntervalMs;
+	            } else {
+	              targetPosition = step + rollIndex / roll;
+	            }
+	            if (targetPosition < 0) {
+	              targetPosition = 0;
+	            }
+	            targetRowFloat = Math.floor(targetPosition);
+	            targetDelayMs = (targetPosition - targetRowFloat) * this.stepIntervalMs;
+	            targetRow = mod(targetRowFloat, this.nativePlaybackStepCount);
+	            row = rows[targetRow];
+	            this.appendNativeHit(row, channel, playbackStep, cell, velocity, targetDelayMs, noteDurationMs);
 	          }
-	          targetRowFloat = Math.floor(targetPosition);
-	          targetDelayMs = (targetPosition - targetRowFloat) * this.stepIntervalMs;
-	          targetRow = mod(targetRowFloat, this.nativePlaybackStepCount);
-	          row = rows[targetRow];
-	          this.appendNativeHit(row, channel, playbackStep, cell, velocity, targetDelayMs);
 	        }
 	      }
 	    }
@@ -1232,12 +1282,12 @@ var KSH_EngineClass = null;
 	    return rows;
   };
 
-  KickSnareHatEngine.prototype.appendNativeHit = function (row, channel, rowStep, cell, velocity, delayMs) {
+  KickSnareHatEngine.prototype.appendNativeHit = function (row, channel, rowStep, cell, velocity, delayMs, durationMs) {
     var sourceStep = typeof cell.sourceStep === "number" ? cell.sourceStep : rowStep;
 
     row.push(this.channels[channel].note);
     row.push(velocity);
-    row.push(KSH_CONSTANTS.DEFAULT_NOTE_DURATION_MS);
+    row.push(durationMs === undefined ? KSH_CONSTANTS.DEFAULT_NOTE_DURATION_MS : Math.max(1, Math.round(durationMs)));
     row.push(KSH_CONSTANTS.DEFAULT_MIDI_CHANNEL);
     row.push(Math.max(0, delayMs));
     row.push(channel + 1);
@@ -1422,6 +1472,7 @@ var KSH_EngineClass = null;
           cycle: cell.cycle,
           cycleOffset: cell.cycleOffset,
           cycleInverted: cell.cycleInverted,
+          roll: cell.roll,
           source: cell.source + 1
         };
       }
@@ -1580,7 +1631,7 @@ var KSH_EngineClass = null;
       for (channel = 0; channel < this.channelCount; channel += 1) {
         for (step = 0; step < this.stepCount; step += 1) {
           cell = this.sources[source][channel][step];
-          if (cell.enabled !== 0 || cell.velocity !== 100 || cell.probability !== 100 || cell.cycle !== 1 || cell.cycleOffset !== 0 || cell.cycleInverted !== 0) {
+          if (cell.enabled !== 0 || cell.velocity !== 100 || cell.probability !== 100 || cell.cycle !== 1 || cell.cycleOffset !== 0 || cell.cycleInverted !== 0 || cell.roll !== 1) {
             cells.push([
               source,
               channel,
@@ -1590,7 +1641,8 @@ var KSH_EngineClass = null;
               cell.probability,
               cell.cycle,
               cell.cycleOffset,
-              cell.cycleInverted
+              cell.cycleInverted,
+              cell.roll
             ]);
           }
         }
@@ -1701,7 +1753,8 @@ var KSH_EngineClass = null;
         probability: entry[5],
         cycle: entry[6],
         cycleOffset: entry[7],
-        cycleInverted: entry[8]
+        cycleInverted: entry[8],
+        roll: entry[9]
       });
     }
 
@@ -2685,7 +2738,7 @@ function source_channel_reset(source, channel) {
   emitFullState();
 }
 
-function cell(source, channel, stepIndex, enabled, velocity, probability, cycle, cycleOffset, cycleInverted) {
+function cell(source, channel, stepIndex, enabled, velocity, probability, cycle, cycleOffset, cycleInverted, roll) {
   ensureEngine().setCell(
     zeroBased(source),
     zeroBased(channel),
@@ -2695,7 +2748,8 @@ function cell(source, channel, stepIndex, enabled, velocity, probability, cycle,
     probability,
     cycle,
     cycleOffset,
-    cycleInverted
+    cycleInverted,
+    roll
   );
   markPersistentChange();
 }
@@ -2732,6 +2786,11 @@ function cell_cycle_offset(source, channel, stepIndex, cycleOffset) {
 
 function cell_cycle_inverted(source, channel, stepIndex, cycleInverted) {
   ensureEngine().setCellCycleInverted(zeroBased(source), zeroBased(channel), zeroBased(stepIndex), cycleInverted);
+  markPersistentChange();
+}
+
+function cell_roll(source, channel, stepIndex, roll) {
+  ensureEngine().setCellRoll(zeroBased(source), zeroBased(channel), zeroBased(stepIndex), roll);
   markPersistentChange();
 }
 

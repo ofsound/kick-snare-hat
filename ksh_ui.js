@@ -201,6 +201,7 @@ var SOURCE_MUTE_DRAG_X_PAD = 40;
 var VELOCITY_DRAG_SCALE = 2;
 var PROBABILITY_DRAG_SCALE = 2;
 var CYCLE_DRAG_SCALE = 4;
+var ROLL_DRAG_SCALE = 4;
 var NOTE_HIT_FLASH_MS = 80;
 var sourceHitFlashes = [];
 var sourceHitFlashTask = null;
@@ -251,10 +252,16 @@ function normalizeSourceLayerMode(mode) {
   if (mode === "probability") {
     return "probability";
   }
+  if (mode === "roll") {
+    return "roll";
+  }
   return "velocity";
 }
 
-function modifierLayerMode(shift, option) {
+function modifierLayerMode(cmd, shift, option) {
+  if (cmd) {
+    return "roll";
+  }
   if (option) {
     return "probability";
   }
@@ -292,6 +299,9 @@ function sourceLayerValue(cell, mode) {
   }
   if (mode === "probability") {
     return cell.probability;
+  }
+  if (mode === "roll") {
+    return cell.roll;
   }
   return cell.velocity;
 }
@@ -331,6 +341,9 @@ function sourceLayerLabel(mode) {
   }
   if (mode === "probability") {
     return "Probability";
+  }
+  if (mode === "roll") {
+    return "Roll";
   }
   return "Velocity";
 }
@@ -767,7 +780,7 @@ function sendLane(lane) {
 
 function sendCell(source, lane, step) {
   var cell = state.sources[source][lane][step];
-  send("cell", source + 1, lane + 1, step + 1, cell.enabled, cell.velocity, cell.probability, cell.cycle, cell.cycleOffset, cell.cycleInverted);
+  send("cell", source + 1, lane + 1, step + 1, cell.enabled, cell.velocity, cell.probability, cell.cycle, cell.cycleOffset, cell.cycleInverted, cell.roll);
 }
 
 function sendSourceChannelMute(source, lane) {
@@ -1092,6 +1105,10 @@ function applyPaintCellProperties(cell, paintCell) {
     cell.cycleInverted = paintCell.cycleInverted;
     changed = true;
   }
+  if (cell.roll !== paintCell.roll) {
+    cell.roll = paintCell.roll;
+    changed = true;
+  }
 
   return changed;
 }
@@ -1152,6 +1169,7 @@ function beginSourceCellInteraction(z, x, y, layerMode) {
     startProbability: cell.probability,
     startCycle: cell.cycle,
     startCycleOffset: cell.cycleOffset,
+    startRoll: cell.roll,
     paintCell: ksh_shared.cloneCell(cell),
     layerMode: layerMode,
     valueMode: valueMode,
@@ -1270,6 +1288,11 @@ function applySourceValueDrag(y) {
     scale = CYCLE_DRAG_SCALE;
     minValue = 1;
     maxValue = 64;
+  } else if (valueMode === "roll") {
+    startValue = velocityDrag.startRoll;
+    scale = ROLL_DRAG_SCALE;
+    minValue = 1;
+    maxValue = ksh_shared.constants.MAX_ROLL;
   } else {
     startValue = velocityDrag.startVelocity;
     scale = VELOCITY_DRAG_SCALE;
@@ -1299,6 +1322,10 @@ function applySourceValueDrag(y) {
     if (cell.cycle <= 1) {
       cell.cycleInverted = 0;
     }
+    sendCell(selectedSource, velocityDrag.lane, velocityDrag.step);
+    mgraphics.redraw();
+  } else if (valueMode === "roll" && cell.roll !== nextValue) {
+    cell.roll = nextValue;
     sendCell(selectedSource, velocityDrag.lane, velocityDrag.step);
     mgraphics.redraw();
   } else if (valueMode === "velocity" && cell.velocity !== nextValue) {
@@ -1593,7 +1620,7 @@ function onclick(x, y, button, cmd, shift, capslock, option, ctrl) {
     } else if (handleCycleCellDoubleClick(z)) {
       return;
     } else {
-      beginSourceCellInteraction(z, x, y, modifierLayerMode(shift, option));
+      beginSourceCellInteraction(z, x, y, modifierLayerMode(cmd, shift, option));
     }
   } else if (z.id === "header_value") {
     if (button === 0) {
@@ -1684,7 +1711,7 @@ function ondrag(x, y, button) {
 }
 
 function onidle(x, y, button, cmd, shift, capslock, option, ctrl) {
-  setHoverLayerMode(modifierLayerMode(shift, option));
+  setHoverLayerMode(modifierLayerMode(cmd, shift, option));
 }
 
 function onidleout(x, y, button, cmd, shift, capslock, option, ctrl) {

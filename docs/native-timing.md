@@ -40,6 +40,14 @@ Swing and timing humanize are applied when the table is built: early hits are pl
 
 Velocity humanize is rolled into stored velocities at table build time. Cycle gates and probability are resolved when the table is built (probability uses a 16× row expansion when any cell has probability &lt; 100%).
 
+Roll values expand one logical step into multiple 9-field hits inside the same
+step duration. Roll `1` is the default and emits the existing single hit; roll
+`2`-`8` emit evenly spaced subdivisions within the step. Probability and cycle
+gates are evaluated once for the logical step, then all roll hits are emitted if
+the step plays. Swing and timing humanize apply only to the first roll hit; the
+remaining subdivisions use their exact intra-step offsets. Roll note durations
+are clamped below the subdivision interval to avoid overlapping repeated notes.
+
 Per-channel playback mode is also resolved when rows are built. `normal`
 preserves the current generated step order, `reverse` mirrors the transport
 position through the channel loop length, and `boomerang` plays forward then

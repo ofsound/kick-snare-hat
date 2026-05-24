@@ -26,6 +26,7 @@ var ksh_constants = {
   DEFAULT_CHANNEL_PLAYBACK_MODE: "normal",
   DEFAULT_MIDI_CHANNEL: 1,
   DEFAULT_NOTE_DURATION_MS: 100,
+  MAX_ROLL: 8,
   RATES: ["4n", "4nt", "8n", "8nt", "16n", "16nt", "32n", "32nt"],
   DEFAULT_RATE: "16n",
   NATIVE_HIT_FIELD_COUNT: 9,
@@ -38,6 +39,7 @@ var ksh_constants = {
     cycle: 1,
     cycleOffset: 0,
     cycleInverted: 0,
+    roll: 1,
     source: -1
   },
   defaultCell: function () {
@@ -51,6 +53,7 @@ var ksh_constants = {
     var probability;
     var cycle;
     var cycleOffset;
+    var roll;
 
     cell = cell || this.DEFAULT_CELL;
     hasProbability = cell.probability !== undefined;
@@ -61,6 +64,7 @@ var ksh_constants = {
     cycle = hasCycle ? cell.cycle : this.DEFAULT_CELL.cycle;
     cycle = kshClamp(cycle, 1, 64);
     cycleOffset = hasCycleOffset ? cell.cycleOffset : this.DEFAULT_CELL.cycleOffset;
+    roll = cell.roll === undefined ? this.DEFAULT_CELL.roll : cell.roll;
 
     return {
       enabled: cell.enabled ? 1 : 0,
@@ -69,6 +73,7 @@ var ksh_constants = {
       cycle: cycle,
       cycleOffset: kshClamp(cycleOffset, 0, cycle - 1),
       cycleInverted: cycle > 1 && hasCycleInverted && cell.cycleInverted ? 1 : 0,
+      roll: kshClamp(roll, 1, this.MAX_ROLL),
       source: typeof cell.source === "number" ? cell.source : -1
     };
   },

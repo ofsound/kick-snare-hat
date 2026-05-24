@@ -173,6 +173,7 @@ function testMaxWrapperBootsEngineAndExposesHandlers() {
   assert.strictEqual(typeof sb.cell_cycle, "function");
   assert.strictEqual(typeof sb.cell_cycle_offset, "function");
   assert.strictEqual(typeof sb.cell_cycle_inverted, "function");
+  assert.strictEqual(typeof sb.cell_roll, "function");
   assert.strictEqual(typeof sb.transport_position, "function");
   assert.strictEqual(typeof sb.reset, "function");
   assert.strictEqual(typeof sb.sync_all, "function");
@@ -309,7 +310,7 @@ function testCellMessageWritesToEngineSourceAndCoalescesPreview() {
 
   sb.cell(2, 1, 5, 1, 88, 100, 1);
   sb.cell(2, 1, 5, 1, 99, 80, 2);
-  sb.cell(2, 1, 5, 1, 110, 70, 3, 2, 1);
+  sb.cell(2, 1, 5, 1, 110, 70, 3, 2, 1, 4);
 
   // Three edits → at most one preview Task scheduled, no synchronous preview
   // emission yet because the schedule is deferred.
@@ -328,6 +329,7 @@ function testCellMessageWritesToEngineSourceAndCoalescesPreview() {
   assert.strictEqual(sb.kshEngine.sources[1][0][4].cycle, 3);
   assert.strictEqual(sb.kshEngine.sources[1][0][4].cycleOffset, 2);
   assert.strictEqual(sb.kshEngine.sources[1][0][4].cycleInverted, 1);
+  assert.strictEqual(sb.kshEngine.sources[1][0][4].roll, 4);
 }
 
 function testSourceChannelResetClearsStateAndEmitsFullState() {

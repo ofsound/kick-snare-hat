@@ -217,12 +217,15 @@ ksh_shared.fillPath = function (points, color) {
 };
 
 // Layer fill for enabled source cells: live vertical meter (velocity and
-// probability), or diagonal split (cycle).
+// probability), diagonal split (cycle), or equal subdivisions (roll).
 ksh_shared.sourceCellBackground = function (x, y, w, h, layerMode, baseColor, lightColor, layerValue) {
   var fillH;
   var fillY;
   var value;
   var maxValue;
+  var segment;
+  var segmentX;
+  var nextSegmentX;
 
   if (layerMode === "velocity" || layerMode === "probability") {
     maxValue = layerMode === "velocity" ? 127 : 100;
@@ -253,6 +256,15 @@ ksh_shared.sourceCellBackground = function (x, y, w, h, layerMode, baseColor, li
       ],
       lightColor
     );
+    return;
+  }
+  if (layerMode === "roll") {
+    value = ksh_shared.clamp(layerValue, 1, ksh_shared.constants.MAX_ROLL);
+    for (segment = 0; segment < value; segment += 1) {
+      segmentX = Math.round(x + w * segment / value);
+      nextSegmentX = segment === value - 1 ? x + w : Math.round(x + w * (segment + 1) / value);
+      ksh_shared.rect(segmentX, y, nextSegmentX - segmentX, h, segment % 2 === 0 ? baseColor : lightColor);
+    }
     return;
   }
   ksh_shared.rect(x, y, w, h, baseColor);
@@ -513,7 +525,8 @@ ksh_shared.applyPersistenceState = function (state, payload) {
       probability: entry[5],
       cycle: entry[6],
       cycleOffset: entry[7],
-      cycleInverted: entry[8]
+      cycleInverted: entry[8],
+      roll: entry[9]
     });
   }
 
