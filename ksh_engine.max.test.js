@@ -195,6 +195,21 @@ function testMaxWrapperBootsEngineAndExposesHandlers() {
   assert.strictEqual(typeof sb.channel_playback_mode, "function");
   assert.strictEqual(typeof sb.source_channel_mute, "function");
   assert.strictEqual(typeof sb.source_channel_reset, "function");
+  assert.strictEqual(typeof sb.export_generated_bars, "function");
+}
+
+function testExportGeneratedBarsReportsMissingLiveApi() {
+  var sb = makeMaxSandbox();
+  var event;
+
+  sb._clear();
+  sb.export_generated_bars(4);
+
+  event = lastEventOn(sb, "export_status");
+  assert.ok(event, "export should emit a status event when LiveAPI is unavailable");
+  assert.strictEqual(event.args[0], "export_status");
+  assert.strictEqual(event.args[1], "error");
+  assert.strictEqual(event.args[2], "LiveAPI unavailable");
 }
 
 function testStatusMessagesEmitUiSelectors() {
@@ -1035,6 +1050,7 @@ function testMessnamedFailuresAreSwallowed() {
 }
 
 testMaxWrapperBootsEngineAndExposesHandlers();
+testExportGeneratedBarsReportsMissingLiveApi();
 testStatusMessagesEmitUiSelectors();
 testSyncAllEmitsStateAndPreview();
 testRecomposeCommandsFlushPreviewForCompactUi();

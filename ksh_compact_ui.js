@@ -23,6 +23,10 @@ var PREVIEW_CELL_H = 18;
 var colors = ksh_shared.colors;
 var inactiveStepColor = [0.14, 0.16, 0.19, 1];
 var NOTE_HIT_FLASH_MS = 80;
+var EXPORT_BAR_VALUES = [1, 2, 4, 8, 16, 32];
+var exportBarIndex = 2;
+var exportStatus = "";
+var exportStatusUntil = 0;
 
 var state = makeState();
 var previewData = null;
@@ -77,8 +81,20 @@ function paint() {
 }
 
 function drawActionColumn() {
+  var now = Date.now();
+
   ksh_shared.rect(0, 0, ACTION_COLUMN_WIDTH, HEIGHT, colors.panel2);
   ksh_shared.button(hitZones, "open_editor", "Edit", 14, 18, 58, 25, true);
+  ksh_shared.text("Export", 14, 65, 10, colors.muted);
+  ksh_shared.button(hitZones, "export_bars_dec", "-", 14, 75, 18, 22, false);
+  ksh_shared.rect(34, 75, 20, 22, colors.bg);
+  ksh_shared.strokeRect(34, 75, 20, 22, colors.strokeSoft, 1);
+  ksh_shared.text(String(EXPORT_BAR_VALUES[exportBarIndex]), 44, 90, 11, colors.text, "center");
+  ksh_shared.button(hitZones, "export_bars_inc", "+", 56, 75, 18, 22, false);
+  ksh_shared.button(hitZones, "export_commit", "Commit", 14, 105, 60, 24, false);
+  if (exportStatus && exportStatusUntil > now) {
+    ksh_shared.text(exportStatus, 43, 151, 9, colors.muted, "center");
+  }
 }
 
 function drawPreview() {
@@ -178,6 +194,12 @@ function onclick(x, y, button, cmd, shift) {
 
   if (z.id === "open_editor") {
     send("open_editor");
+  } else if (z.id === "export_bars_dec") {
+    exportBarIndex = Math.max(0, exportBarIndex - 1);
+  } else if (z.id === "export_bars_inc") {
+    exportBarIndex = Math.min(EXPORT_BAR_VALUES.length - 1, exportBarIndex + 1);
+  } else if (z.id === "export_commit") {
+    send("export_generated_bars", EXPORT_BAR_VALUES[exportBarIndex]);
   }
   mgraphics.redraw();
 }
@@ -194,6 +216,16 @@ function preview(json) {
   }
 }
 
+function export_status(status, message, bars, noteCount) {
+  if (String(status) === "ok") {
+    exportStatus = String(bars || EXPORT_BAR_VALUES[exportBarIndex]) + " bars";
+  } else {
+    exportStatus = "Export err";
+  }
+  exportStatusUntil = Date.now() + 1200;
+  mgraphics.redraw();
+}
+
 function anything() {
   if (messagename === "preview") {
     preview.apply(this, arrayfromargs(arguments));
@@ -203,6 +235,8 @@ function anything() {
     return;
   } else if (messagename === "note_hit") {
     note_hit.apply(this, arrayfromargs(arguments));
+  } else if (messagename === "export_status") {
+    export_status.apply(this, arrayfromargs(arguments));
   } else {
     ksh_shared.applyStatusMessage(state, messagename, arrayfromargs(arguments));
     if (messagename === "steps") {

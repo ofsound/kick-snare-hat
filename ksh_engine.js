@@ -993,6 +993,165 @@ var KSH_EngineClass = null;
     return mod(playbackIndex, this.stepCount);
   };
 
+  KickSnareHatEngine.prototype.cloneGeneratedGrid = function () {
+    var generated = [];
+    var channel;
+    var step;
+
+    for (channel = 0; channel < MAX_LANES; channel += 1) {
+      generated[channel] = [];
+      for (step = 0; step < MAX_STEPS; step += 1) {
+        generated[channel][step] = cloneCell(this.generated[channel][step]);
+      }
+    }
+
+    return generated;
+  };
+
+  KickSnareHatEngine.prototype.generateExportWindow = function (generated, startStep, length) {
+    var offset;
+    var step;
+    var channel;
+    var source;
+    var stackSource;
+    var activeSources;
+
+    startStep = clamp(startStep, 0, this.stepCount - 1);
+    length = clamp(length, 1, this.stepCount);
+
+    activeSources = null;
+    stackSource = -1;
+    if (this.generationMode === "per_channel") {
+      activeSources = this.activeSourceIndices();
+    } else if (this.generationMode === "stack") {
+      activeSources = this.activeSourceIndices();
+      stackSource = this.pickRandomSource(activeSources);
+    }
+
+    for (offset = 0; offset < length; offset += 1) {
+      step = (startStep + offset) % this.stepCount;
+
+      for (channel = 0; channel < this.channelCount; channel += 1) {
+        if (this.generationMode === "static") {
+          source = this.staticSource;
+        } else if (this.channels[channel].lock >= 0) {
+          source = this.channels[channel].lock;
+        } else if (this.generationMode === "per_channel") {
+          source = this.pickRandomSource(activeSources);
+        } else {
+          source = stackSource;
+        }
+
+        generated[channel][step] = this.generatedCellFromSource(source, channel, step);
+      }
+    }
+  };
+
+  KickSnareHatEngine.prototype.renderGeneratedMidiNotes = function (barCount, beatsPerBar) {
+    var generated;
+    var notes = [];
+    var totalBeats;
+    var beatsPerStep;
+    var quarterMs;
+    var maxSteps;
+    var absStep;
+    var rowStep;
+    var playbackStep;
+    var channel;
+    var cell;
+    var cycleCounters = {};
+    var key;
+    var cycle;
+    var cycleOffset;
+    var cycleInverted;
+    var probability;
+    var velocity;
+    var baseDelayMs;
+    var timingOffsetMs;
+    var startBeat;
+    var durationBeats;
+
+    barCount = clamp(barCount, 1, 32);
+    beatsPerBar = parseFloat(beatsPerBar);
+    if (isNaN(beatsPerBar) || beatsPerBar <= 0) {
+      beatsPerBar = 4;
+    }
+
+    totalBeats = barCount * beatsPerBar;
+    beatsPerStep = this.beatsPerStep();
+    quarterMs = 60000 / this.tempo;
+    durationBeats = KSH_CONSTANTS.DEFAULT_NOTE_DURATION_MS / quarterMs;
+    generated = this.cloneGeneratedGrid();
+    maxSteps = Math.ceil((totalBeats + Math.abs(this.phaseOffsetBeats) + beatsPerStep) / beatsPerStep);
+
+    for (absStep = 0; absStep < maxSteps; absStep += 1) {
+      rowStep = absStep % this.stepCount;
+      if (rowStep % this.refreshSteps === 0) {
+        this.generateExportWindow(generated, rowStep, this.refreshSteps);
+      }
+
+      for (channel = 0; channel < this.channelCount; channel += 1) {
+        playbackStep = this.playbackStepForChannel(channel, absStep);
+        cell = generated[channel][playbackStep];
+        if (!cell || !cell.enabled) {
+          continue;
+        }
+
+        cycle = clamp(cell.cycle, 1, 64);
+        cycleOffset = normalizeCycleOffset(cell.cycleOffset, cycle);
+        cycleInverted = normalizeCycleInverted(cell.cycleInverted, cycle);
+        if (cycle > 1) {
+          key = this.cycleKey(cell.source, channel, typeof cell.sourceStep === "number" ? cell.sourceStep : playbackStep);
+          if (cycleCounters[key] === undefined) {
+            cycleCounters[key] = 0;
+          } else {
+            cycleCounters[key] += 1;
+          }
+          if (!cycleGateMatches(cycleCounters[key], cycle, cycleOffset, cycleInverted)) {
+            continue;
+          }
+        }
+
+        probability = clamp(cell.probability, 0, 100);
+        if (probability <= 0) {
+          continue;
+        }
+        if (probability < 100 && !(this.rng() * 100 < probability)) {
+          continue;
+        }
+
+        velocity = this.humanizeVelocity(cell.velocity);
+        baseDelayMs = this.swingDelayMsForStep(rowStep);
+        timingOffsetMs = this.playbackHumanizeTimingOffsetMs();
+        startBeat = this.phaseOffsetBeats + absStep * beatsPerStep + (baseDelayMs + timingOffsetMs) / quarterMs;
+        if (startBeat < 0) {
+          startBeat = 0;
+        }
+        if (startBeat >= totalBeats) {
+          continue;
+        }
+
+        notes.push({
+          pitch: this.channels[channel].note,
+          start_time: startBeat,
+          duration: Math.max(0.0001, Math.min(durationBeats, totalBeats - startBeat)),
+          velocity: velocity
+        });
+      }
+    }
+
+    notes.sort(function (a, b) {
+      return a.start_time - b.start_time || a.pitch - b.pitch;
+    });
+
+    return {
+      bars: barCount,
+      beatsPerBar: beatsPerBar,
+      lengthBeats: totalBeats,
+      notes: notes
+    };
+  };
+
 	  KickSnareHatEngine.prototype.buildNativePlaybackRows = function () {
 	    var rows = [];
 	    var step;
@@ -2165,6 +2324,253 @@ function ensureEngine() {
     kshEngine = new KSH_EngineClass();
   }
   return kshEngine;
+}
+
+function liveApiScalar(value) {
+  if (value && typeof value === "object" && typeof value.length === "number" && typeof value !== "string") {
+    return value.length ? value[0] : "";
+  }
+  return value;
+}
+
+function liveApiPath(api) {
+  var path;
+
+  if (!api) {
+    return "";
+  }
+  if (api.unquotedpath) {
+    return String(api.unquotedpath);
+  }
+  if (typeof api.getpath === "function") {
+    path = api.getpath();
+    if (path && typeof path === "object" && typeof path.length === "number") {
+      path = Array.prototype.slice.call(path).join(" ");
+    }
+    return String(path || "").replace(/^"|"$/g, "");
+  }
+  if (api.path) {
+    return String(api.path).replace(/^"|"$/g, "");
+  }
+  return "";
+}
+
+function emitExportStatus(status, message, bars, noteCount) {
+  safeMessnamed("ksh_engine_events", "export_status", status, message || "", bars || 0, noteCount || 0);
+}
+
+function postExportError(message) {
+  if (typeof post === "function") {
+    try {
+      post("[ksh] Export failed: " + message + "\n");
+    } catch (postError) {
+      // Max console feedback is best-effort.
+    }
+  }
+}
+
+function ownTrackPath() {
+  var device;
+  var path;
+  var marker;
+  var index;
+
+  if (typeof LiveAPI !== "function") {
+    return "";
+  }
+
+  device = new LiveAPI("this_device");
+  path = liveApiPath(device);
+  marker = " devices ";
+  index = path.indexOf(marker);
+  if (index < 0) {
+    return "";
+  }
+  return path.slice(0, index);
+}
+
+function focusedDocumentView() {
+  var appView;
+  var value;
+
+  if (typeof LiveAPI !== "function") {
+    return "";
+  }
+
+  appView = new LiveAPI("live_app view");
+  value = liveApiScalar(appView.get("focused_document_view"));
+  return String(value || "");
+}
+
+function selectedSceneIndex() {
+  var scene;
+  var path;
+  var match;
+
+  if (typeof LiveAPI !== "function") {
+    return 0;
+  }
+
+  scene = new LiveAPI("live_set view selected_scene");
+  path = liveApiPath(scene);
+  match = path.match(/live_set scenes (\d+)/);
+  return match ? parseInt(match[1], 10) : 0;
+}
+
+function findEmptyClipSlotPath(trackPath, preferredScene) {
+  var track;
+  var count;
+  var offset;
+  var index;
+  var slot;
+  var hasClip;
+  var song;
+
+  track = new LiveAPI(trackPath);
+  count = track.getcount("clip_slots");
+  preferredScene = Math.max(0, parseInt(preferredScene, 10) || 0);
+
+  for (offset = 0; offset < count; offset += 1) {
+    index = (preferredScene + offset) % count;
+    slot = new LiveAPI(trackPath + " clip_slots " + index);
+    hasClip = liveApiScalar(slot.get("has_clip"));
+    if (parseInt(hasClip, 10) === 0) {
+      return trackPath + " clip_slots " + index;
+    }
+  }
+
+  song = new LiveAPI("live_set");
+  song.call("create_scene", -1);
+  count = track.getcount("clip_slots");
+  if (count > 0) {
+    return trackPath + " clip_slots " + (count - 1);
+  }
+  return "";
+}
+
+function addRenderedNotesToClip(clip, render) {
+  clip.call("add_new_notes", { notes: render.notes });
+  try {
+    clip.set("name", "Kick Snare Hat " + render.bars + " bars");
+  } catch (nameError) {
+    KSH_CONSTANTS.debugPost("export clip name failed", nameError);
+  }
+}
+
+function createSessionExportClip(trackPath, render) {
+  var slotPath;
+  var slot;
+  var clip;
+
+  slotPath = findEmptyClipSlotPath(trackPath, selectedSceneIndex());
+  if (!slotPath) {
+    throw new Error("No Session clip slot is available on this track.");
+  }
+
+  slot = new LiveAPI(slotPath);
+  slot.call("create_clip", render.lengthBeats);
+  clip = new LiveAPI(slotPath + " clip");
+  addRenderedNotesToClip(clip, render);
+  return "session";
+}
+
+function arrangementClipAfterCreate(trackPath, startBeat) {
+  var track;
+  var count;
+  var i;
+  var clip;
+  var start;
+  var candidate = null;
+
+  track = new LiveAPI(trackPath);
+  count = track.getcount("arrangement_clips");
+  for (i = 0; i < count; i += 1) {
+    clip = new LiveAPI(trackPath + " arrangement_clips " + i);
+    start = parseFloat(liveApiScalar(clip.get("start_time")));
+    if (!isNaN(start) && Math.abs(start - startBeat) < 0.0001) {
+      candidate = clip;
+    }
+  }
+
+  return candidate;
+}
+
+function createArrangementExportClip(trackPath, render) {
+  var song;
+  var track;
+  var startBeat;
+  var clip;
+
+  song = new LiveAPI("live_set");
+  track = new LiveAPI(trackPath);
+  startBeat = parseFloat(liveApiScalar(song.get("current_song_time")));
+  if (isNaN(startBeat) || startBeat < 0) {
+    startBeat = 0;
+  }
+
+  track.call("create_midi_clip", startBeat, render.lengthBeats);
+  clip = arrangementClipAfterCreate(trackPath, startBeat);
+  if (!clip) {
+    throw new Error("Live did not return the newly created Arrangement clip.");
+  }
+  addRenderedNotesToClip(clip, render);
+  return "arrangement";
+}
+
+function beatsPerBarFromLive() {
+  var song;
+  var numerator;
+  var denominator;
+
+  if (typeof LiveAPI !== "function") {
+    return 4;
+  }
+
+  song = new LiveAPI("live_set");
+  numerator = parseFloat(liveApiScalar(song.get("signature_numerator")));
+  denominator = parseFloat(liveApiScalar(song.get("signature_denominator")));
+  if (isNaN(numerator) || numerator <= 0) {
+    numerator = 4;
+  }
+  if (isNaN(denominator) || denominator <= 0) {
+    denominator = 4;
+  }
+  return numerator * (4 / denominator);
+}
+
+function export_generated_bars(barCount) {
+  var engine;
+  var render;
+  var trackPath;
+  var view;
+  var destination;
+
+  if (typeof LiveAPI !== "function") {
+    emitExportStatus("error", "LiveAPI unavailable", 0, 0);
+    postExportError("LiveAPI is unavailable.");
+    return;
+  }
+
+  try {
+    engine = ensureEngine();
+    render = engine.renderGeneratedMidiNotes(barCount, beatsPerBarFromLive());
+    trackPath = ownTrackPath();
+    if (!trackPath) {
+      throw new Error("Could not resolve the track containing this device.");
+    }
+
+    view = focusedDocumentView();
+    if (view === "Session") {
+      destination = createSessionExportClip(trackPath, render);
+    } else {
+      destination = createArrangementExportClip(trackPath, render);
+    }
+
+    emitExportStatus("ok", destination, render.bars, render.notes.length);
+  } catch (error) {
+    emitExportStatus("error", error && error.message ? error.message : String(error), 0, 0);
+    postExportError(error && error.message ? error.message : String(error));
+  }
 }
 
 function transport_position(songBeats, isPlaying) {

@@ -1291,9 +1291,57 @@ function testOldNativeTimingPersistenceIsIgnored() {
   assert.strictEqual(restored.serializeForPersistence().nativeTiming, undefined);
 }
 
+function testRenderGeneratedMidiNotesBakesStaticPattern() {
+  var engine = makeEngine([0.99]);
+  var render;
+
+  clearAll(engine);
+  engine.setChannelCount(1);
+  engine.setStepCount(4);
+  engine.setRate("16n");
+  engine.setTempo(120);
+  engine.setGenerationMode("static");
+  engine.channels[0].note = 42;
+  engine.setCell(0, 0, 0, 1, 64, 100, 1);
+  engine.generateWindow(0, 4, true);
+
+  render = engine.renderGeneratedMidiNotes(1, 4);
+
+  assert.strictEqual(render.lengthBeats, 4);
+  assert.strictEqual(render.notes.length, 4);
+  assert.deepStrictEqual(render.notes.map(function (note) { return note.start_time; }), [0, 1, 2, 3]);
+  assert.deepStrictEqual(render.notes.map(function (note) { return note.pitch; }), [42, 42, 42, 42]);
+  assert.deepStrictEqual(render.notes.map(function (note) { return note.velocity; }), [64, 64, 64, 64]);
+}
+
+function testRenderGeneratedMidiNotesRerollsRefreshWindows() {
+  var engine = makeEngine([0.1, 0.9]);
+  var render;
+
+  clearAll(engine);
+  engine.setChannelCount(1);
+  engine.setStepCount(8);
+  engine.setRefreshSteps(4);
+  engine.setRate("16n");
+  engine.setGenerationMode("stack");
+  engine.setCell(0, 0, 0, 1, 40, 100, 1);
+  engine.setCell(1, 0, 4, 1, 90, 100, 1);
+  engine._setRandomValues([0.1, 0.9]);
+
+  render = engine.renderGeneratedMidiNotes(1, 4);
+
+  assert.ok(render.notes.length >= 2, "render should include hits from separate refresh windows");
+  assert.strictEqual(render.notes[0].start_time, 0);
+  assert.strictEqual(render.notes[0].velocity, 40);
+  assert.strictEqual(render.notes[1].start_time, 1);
+  assert.strictEqual(render.notes[1].velocity, 90);
+}
+
 testTransportReportsStepEdgeWithoutMidiOutlet();
 testTransportDoesNotEmitMidiAfterJump();
 testPhaseOffsetShiftsStepBoundaryEarlier();
 testOldNativeTimingPersistenceIsIgnored();
+testRenderGeneratedMidiNotesBakesStaticPattern();
+testRenderGeneratedMidiNotesRerollsRefreshWindows();
 
 console.log("ksh_engine tests passed");
