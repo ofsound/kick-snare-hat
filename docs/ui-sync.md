@@ -4,77 +4,72 @@ Kick Snare Hat uses the engine as the source of truth. The compact and editor
 UIs mirror engine state and send Max messages back to the engine; they do not
 persist independent state.
 
+For native transport playback, coll scheduling, and patch wiring, see
+[native-timing.md](./native-timing.md).
+
 ## Engine events
 
-- `engine_state <json>` sends compact `serializeForPersistence()` output (`v:1`:
-  globals, channel metadata, sparse source cells, mutes). Same shape as the
-  `ksh_pattern_data` Live parameter. It does not include the generated preview
-  grid. (Full `serialize()` is not sent over `messnamed`—it is too large for the
-  editor `jsui`.)
-- `preview <json>` sends `snapshot()` output for the generated grid and current
-  visible dimensions.
-- Status selectors such as `steps`, `channels`, `refresh_steps`, `mode`, `rate`,
-  `swing`, `velocity_humanize`, `timing_humanize`, `device_active`, `native_timing`, `phase_offset_beats`,
-  `channel_label`, `channel_note`, `channel_lock`, `static_source`, and
-  `source_channel_mute` are incremental UI hints emitted by setters.
-  `channel_loop_length <channel> <steps>` sets the per-channel source row loop
-  length, clamped to the current global step count.
-- `channel_audition <channel>` triggers a one-shot MIDI note for that channel's
-  configured pitch (editor lane row/label click). Output uses fixed MIDI channel
-  1 and fixed note duration; audition does not change engine state.
-- `current_step` is editor-only playback position feedback and is suppressed
-  while the editor is inactive.
-- `note_hit <channel> <generated-step> <source> <source-step>` is emitted when a
-  MIDI note is actually output so UIs can flash the affected cells without
-  polling or animation loops. In native timing mode the Max patch forwards each
-  native coll hit to `ksh_engine_events` using metadata stored beside the note.
+- `engine_state <json>` — compact `serializeForPersistence()` output (`v:1`:
+  globals, `nativeTiming`, channel metadata, sparse source cells, mutes). Same
+  shape as `ksh_pattern_data`. Does not include the generated preview grid.
+- `preview <json>` — `snapshot()` output for the generated grid and dimensions.
+- Status selectors (`steps`, `channels`, `refresh_steps`, `mode`, `rate`,
+  `swing`, `velocity_humanize`, `timing_humanize`, `device_active`,
+  `native_timing`, `phase_offset_beats`, `channel_label`, `channel_note`,
+  `channel_lock`, `static_source`, `source_channel_mute`, …) are incremental
+  UI hints from setters.
+- `channel_loop_length <channel> <steps>` — per-channel source row loop length,
+  clamped to the global step count.
+- `channel_audition <channel>` — one-shot MIDI for the lane pitch (editor row
+  click). Fixed MIDI channel 1 and note duration; does not mutate pattern state.
+- `current_step` — editor playhead while the editor subpatcher is active;
+  driven by `transport_position` even when native timing handles note output.
+- `note_hit <channel> <generated-step> <source> <source-step>` — emitted when a
+  MIDI hit is output so UIs can flash cells:
+  - **Native timing on:** the patch sends this to `ksh_engine_events` after each
+    coll hit, using UI metadata stored in the 9-field native playback row.
+  - **Native timing off:** the engine sends this from `fireStep()` when a note is
+    scheduled.
 
 ## UI requests
 
-- `sync_all` asks the engine to emit both `engine_state` and `preview`.
-- `request_state` asks for `engine_state` only.
-- `device_active 0|1` toggles transport note output and clears pending scheduler
-  output when disabled.
-- `native_timing 0|1` toggles the Max-native playback-table path (default on).
-  Cycle, probability, velocity humanize, and timing humanize values are
-  precomputed into the playback table. Native timing humanize uses a subtler
-  range than the JS fallback and moves early hits into earlier table rows.
-- `velocity_humanize <0-100>` offsets emitted velocities per hit by a signed
-  percentage of the source-cell velocity.
-- `timing_humanize <0-100>` offsets emitted note timing per hit by a signed
-  percentage where `100` means half the current step interval; early hits depend
-  on engine lookahead and cannot occur before playback starts.
-- `channel_audition` (1-based channel index) previews that channel's MIDI note once.
-- `static_source <source>` stores the selected source pattern for Static mode;
-  the editor mirrors it as the visible source pattern.
-- Compact and editor UIs call `sync_all` during init/load/open paths so a newly
-  visible UI catches up to the persisted engine state.
-- After a set reload, the patch runs `restore_pattern_store`; on success the
-  engine emits compact `engine_state` and `ksh_ui_commands init`. UIs hydrate via
+- `sync_all` — engine emits `engine_state` and `preview`.
+- `request_state` — `engine_state` only.
+- `device_active 0|1` — toggles output; clears the native scheduler (`pipe` /
+  `makenote`) when disabled.
+- `native_timing 0|1` — toggles native coll playback (default **on**). Rebuilds
+  `ksh_native_playback`, updates `ksh_native_timing_gate`, emits `native_timing`
+  status. Editor **Nat** button sends this message.
+- `velocity_humanize <0-100>` — per-hit velocity offset (baked into native rows
+  when native is on).
+- `timing_humanize <0-100>` — per-hit timing offset. Native mode precomputes row
+  index and `pipe` delay when the table is built. Engine mode uses transport
+  lookahead when native is off (`100%` → ±half a step interval).
+- `phase_offset_beats <float>` — shifts the transport step phase (native `expr`
+  and engine `globalStepForBeats`).
+- `channel_audition <channel>` — preview lane pitch once.
+- `static_source <source>` — static mode source selection (editor source tabs).
+- Compact and editor call `sync_all` on init/load/open.
+- After set reload, `restore_pattern_store` → `pattern_data` → compact
+  `engine_state` + `ksh_ui_commands init`. UIs hydrate via
   `ksh_ui_shared.applyPersistenceState()` when `engine_state` has `v:1`.
 
 ## Compact vs editor
 
-- The compact UI keeps layout state plus `previewData`. It can change global
-  controls but does not edit source cells.
-- The editor keeps the full source grid in local state, plus `previewData` for
-  the generated grid.
-- Editor cell edits are optimistic: the editor updates its local source cell and
-  sends `cell` to the engine. The engine updates state and preview data, but it
-  does not echo individual `cell` messages back to the editor.
-- Source-cell messages use `cell <source> <channel> <step> <enabled> <velocity>
-  <probability> <cycle>`.
-- Source row messages use `source_channel_mute <source> <channel> <muted>` and
-  `source_channel_reset <source> <channel>`. Reset emits a fresh `engine_state`
-  because it clears all source cells in that row.
-- Channel row loop length uses `channel_loop_length <channel> <steps>`. It is
-  channel-global across all source patterns, starts at source step 1, and wraps
-  source lookup inside the current global step range.
-- Incoming MIDI note-on pitches 0-3 are routed by the patch shell to
-  `static_source 1-4`.
+- **Compact** — global controls and generated preview; mirrors `nativeTiming`
+  from `engine_state`; flashes preview cells on `note_hit` (channel +
+  generated step).
+- **Editor** — full source grid, generated preview, **Nat** toggle, phase, device
+  on/off; flashes source-layer cell text on `note_hit` (channel, source,
+  source-step) for the visible source pattern.
+- Editor cell edits are optimistic: local `state.sources` update, then `cell` to
+  the engine. No per-cell echo from the engine.
+- Source messages: `cell <source> <channel> <step> …`, `source_channel_mute`,
+  `source_channel_reset` (reset triggers full `engine_state`).
+- `channel_loop_length <channel> <steps>` — channel-global loop across sources.
+- MIDI note-on pitches 0-3 → `static_source 1-4` in the patch shell.
 
 ## Naming
 
-Engine messages, persistence, and new API fields should use `channel`. UI text
-may still say "Lane" where that is clearer in the device interface. Legacy
-`lane` state shapes remain accepted by `normalizeIncomingState()`.
+Engine messages, persistence, and API fields use `channel`. UI labels may say
+"Lane". `normalizeIncomingState()` still accepts legacy `lane` keys in stored JSON.

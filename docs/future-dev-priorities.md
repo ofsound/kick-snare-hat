@@ -1,8 +1,8 @@
 # Future development priorities
 
-This document captures architecture priorities and non-blocking risks for future Kick Snare Hat feature work.
+Architecture priorities and non-blocking risks for Kick Snare Hat feature work.
 
-For per-feature workflow, use [feature-prep-checklist.md](./feature-prep-checklist.md). For the engine/UI message contract, use [ui-sync.md](./ui-sync.md).
+**Workflow:** [feature-prep-checklist.md](./feature-prep-checklist.md) · **Messages:** [ui-sync.md](./ui-sync.md) · **Native playback:** [native-timing.md](./native-timing.md)
 
 ---
 
@@ -10,42 +10,45 @@ For per-feature workflow, use [feature-prep-checklist.md](./feature-prep-checkli
 
 ### Shared schema
 
-`ksh_constants.js` is the single source of truth for device limits, cell defaults, `cloneCell`, `normalizeGateMode`, and the rate allowlist. Engine and UI code load it directly through Node `require()` or Max `include()`.
+`ksh_constants.js` is the single source of truth for device limits, cell defaults, `DEFAULT_NATIVE_TIMING`, `NATIVE_HIT_FIELD_COUNT`, `normalizeRate`, and related helpers.
 
 When adding a persisted field, rate, limit, or cell property:
 
-1. Update `ksh_constants.js` first if normalization/defaults are shared.
-2. Add engine state, setter logic, `serializeForPersistence()` / `deserializeForPersistence()` (Live), `serialize()` / `deserialize()` (runtime), and focused `ksh_engine.test.js` coverage.
-3. Add the Max-facing handler in `ksh_engine.js`, keeping source/channel/step indexes 1-based at the message boundary.
-4. Add UI state/controls only when the feature is user-facing.
-5. Update README message docs and `ksh_engine.max.test.js` when handlers or Max wrapper behavior change.
+1. Update `ksh_constants.js` when normalization or defaults are shared.
+2. Add engine state, setters, persistence serializers, and `ksh_engine.test.js` coverage.
+3. If the field affects native MIDI output, update `buildNativePlaybackRows()` / `appendNativeHit()` and patch validation.
+4. Add Max handlers in `ksh_engine.js` (1-based at the message boundary).
+5. Add UI only when user-facing.
+6. Update README, [native-timing.md](./native-timing.md) when wire formats change, and `ksh_engine.max.test.js` when wrapper behavior changes.
+
+### Native timing
+
+Default transport playback is documented in [native-timing.md](./native-timing.md). The engine owns table content and gate state; the patch owns step edges and MIDI/`note_hit` output. Features that add per-hit behavior should decide whether values belong in the 9-field coll row, in `buildNativePlaybackRows()`, or in engine-only transport logic.
 
 ### UI and engine sync
 
-The engine is the source of truth. UIs mirror `engine_state` and `preview`, then send commands back through the named-message bus.
+The engine is the source of truth. UIs mirror `engine_state` and `preview`.
 
-- `engine_state` is compact `serializeForPersistence()` JSON (`v:1`). It does not include the generated grid.
-- `preview` is generated-grid state from `snapshot()`.
-- Editor source-cell edits are optimistic: the editor updates local `state.sources`, sends `cell`, and does not wait for an engine `cell` echo.
-- Hot-path cell edits should rely on `generatedCellForSourceEdit()` plus `markPreviewDirty()`, not full `emitFullState()`.
+- `engine_state` — compact `v:1` JSON (includes `nativeTiming`); not the generated grid.
+- `preview` — generated grid from `snapshot()`.
+- Editor source edits are optimistic (`cell` without echo).
+- Hot paths use `generatedCellForSourceEdit()` + `markPreviewDirty()`, not `emitFullState()`.
 
-See [ui-sync.md](./ui-sync.md) before changing message flow.
+See [ui-sync.md](./ui-sync.md).
 
 ### Persistence recovery
 
-Live sets store compact JSON on `textedit` `ksh_pattern_data`. The engine writes with `set` + URI encoding and recalls via `restore_pattern_store` → `pattern_data`. `persistencePayloadLooksLikeJson()` rejects empty values and the literal `get` token from old bad wiring.
+Live sets store compact JSON on `textedit` `ksh_pattern_data`. Save: `set` + URI encoding. Restore: `restore_pattern_store` → `pattern_data`. `normalizeIncomingState()` accepts legacy `lane` / `lanes` keys.
 
-`setvalueof` / chunked `getvalueof` / `save()` + `embedded_state_*` remain in `ksh_engine.js` for Max wrapper tests and optional device-embed saves; they are **not** wired in the current patch for `.als` recall. `normalizeIncomingState()` accepts legacy `laneCount` / `lanes` shapes and maps them to `channelCount` / `channels`.
-
-New Live-persisted fields belong in `serializeForPersistence()` / `deserializeForPersistence()`. Extend full `serialize()` / `deserialize()` when runtime or tests need them. Only extend `normalizeIncomingState()` when a legacy shape or migration actually exists.
+New Live fields belong in `serializeForPersistence()` / `deserializeForPersistence()`.
 
 ### Debug visibility
 
-`KSH_CONSTANTS.DEBUG` defaults to `false`. Flip it locally while debugging Max-side JSON parse failures, `messnamed` / `outlet` failures, or patcher resize problems. Do not commit release builds with debug noise enabled.
+`KSH_CONSTANTS.DEBUG` defaults to `false`. Enable locally for Max JSON or `messnamed` failures.
 
 ### Naming
 
-Engine messages, API fields, and persisted state should use `channel`. UI display text may still say "Lane", and existing UI-local names such as `laneCount` may remain until touched for real feature work.
+Engine and persistence use `channel`. UI labels may say "Lane".
 
 ---
 
@@ -53,34 +56,29 @@ Engine messages, API fields, and persisted state should use `channel`. UI displa
 
 ### Manual Live/jsui smoke test
 
-The automated gate covers engine logic, Max wrapper plumbing, patch wiring, `.amxd` payload integrity, and User Library sync. It does not automate actual `jsui` behavior inside Ableton Live.
+The automated gate covers engine logic, native playback rows, Max wrapper plumbing, patch wiring, `.amxd` integrity, and User Library sync. It does not automate `jsui` inside Live.
 
-Before large UI-facing features, manually confirm in Ableton Live 12.4+:
+Before large UI-facing features, confirm in Ableton Live 12.4+ (see [feature-prep-checklist.md](./feature-prep-checklist.md)):
 
-- Compact UI loads, resizes, and sends global controls.
-- Editor opens and resizes.
-- Source cells toggle, horizontal paint works, and vertical velocity drag works.
-- Lane note/lock changes update generated preview.
-- Transport playback highlights the current step.
-- Save/reload restores source cells, channel metadata, and global settings.
+- Compact and editor load and resize.
+- Source grid editing and preview updates.
+- Native timing on/off, `note_hit` flashes, first-step-on-play.
+- Transport playhead and save/reload.
 
 ### Deferred cleanup
 
-These are not blockers for feature work:
-
 | Topic | Defer because |
 |-------|----------------|
-| Split `ksh_ui.js` into layout / paint / input modules | Do this when editor features make the file hard to change safely. |
-| Throttle `preview` JSON during playback | Current limits are small; profile in Live before optimizing. |
-| Automated `jsui` tests | Setup cost is high; engine + Max VM tests cover the core logic. |
-| Rename all UI `lane*` internals to `channel*` | Cosmetic unless already editing those paths. |
-| Trim legacy `getvalueof` / outlet chunking / unused second engine outlet | Live path is `ksh_pattern_data` only; keep until tests and embed `save()` path are re-audited. |
+| Split `ksh_ui.js` into modules | Do when editor edits become unsafe in one file. |
+| Throttle `preview` during playback | Profile in Live first. |
+| Automated `jsui` tests | High setup cost; engine + VM tests cover core logic. |
+| Rename UI `lane*` to `channel*` | Cosmetic unless touching those paths. |
 
 ---
 
 ## Non-negotiable verification
 
-After substantive device edits, run the post-edit gate from `.cursor/rules/post-edit-verification.mdc`:
+After substantive device edits (`.cursor/rules/post-edit-verification.mdc`):
 
 ```sh
 node ksh_engine.test.js
@@ -89,7 +87,7 @@ node scripts/validate-device-patch.js
 node scripts/sync-user-library.js
 ```
 
-When patch wiring or `scripts/build-device-patch.js` changes, rebuild first:
+When patch wiring changes:
 
 ```sh
 node scripts/build-device-patch.js

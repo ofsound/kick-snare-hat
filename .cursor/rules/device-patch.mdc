@@ -8,8 +8,8 @@ alwaysApply: false
 
 ## Source of truth
 
-- Prefer editing **`scripts/build-device-patch.js`** to change wiring, box layout, or subpatchers—then regenerate.
-- `kick-snare-hat.maxpat` is JSON written by the build script; avoid one-off hand edits that drift from the generator.
+- Edit **`scripts/build-device-patch.js`**, then regenerate.
+- `kick-snare-hat.maxpat` is JSON from the build script; avoid hand edits that drift from the generator.
 
 ## Build pipeline
 
@@ -17,7 +17,7 @@ alwaysApply: false
 node scripts/build-device-patch.js
 ```
 
-Writes `kick-snare-hat.maxpat` and `Kick-Snare-Hat.amxd` (ampf/ptch embed), then syncs via `sync-user-library.js`.
+Writes `kick-snare-hat.maxpat` and `Kick-Snare-Hat.amxd`, then syncs via `sync-user-library.js`.
 
 ## Validation
 
@@ -25,18 +25,39 @@ Writes `kick-snare-hat.maxpat` and `Kick-Snare-Hat.amxd` (ampf/ptch embed), then
 node scripts/validate-device-patch.js
 ```
 
-Checks patchline inlet/outlet bounds, nested editor subpatcher, `.amxd` payload length and equality with `.maxpat`, and forbidden stale wiring strings.
+Checks patchline bounds, editor subpatcher, `.amxd` payload, forbidden stale wiring, and native scheduler contracts.
 
 ## Wiring contracts (do not break)
 
-- `r ksh_ui_commands` → UIs; `s ksh_ui_commands` from UI outlet path
-- `r ksh_engine_commands` → `js ksh_engine.js`
-- `r ksh_engine_events` → UIs for `engine_state` / `preview`
-- `plugsync~` → `transport_position` → engine
-- `live.path` + `live.observer` → tempo and transport stop → `reset`
-- `textedit` `ksh_pattern_data` ← engine `set <uri-encoded-json>` via `patcher.getnamed` (not a patch cord); `pattern-store` outlet → `prepend pattern_data` → engine on recall; `restore_pattern_store` after load
-- Editor subpatcher: `jsui` `ksh_ui.js`, opened via `pcontrol` / `route open_editor`
+### UI and engine buses
+
+- `r ksh_ui_commands` → UIs; UI outlets → `s ksh_ui_commands` → `r ksh_engine_commands` → `js ksh_engine.js`
+- `r ksh_engine_events` → UIs (`engine_state`, `preview`, `note_hit`, status selectors)
+- `textedit` `ksh_pattern_data` ← engine `set <uri-encoded-json>` via `patcher.getnamed`; recall → `pattern_data` on engine; `restore_pattern_store` after load
+- Editor subpatcher: `jsui` `ksh_ui.js`, `pcontrol` / `route open_editor`
+
+### Transport
+
+- `plugsync~` → `transportbeat` / `transportpos` → `transport_position` on engine
+- `live.path` + `live.observer is_playing` → `sel 0` on stop → engine `reset` + `native-step-reset-msg` (`set -1`)
+- `live.observer tempo` → `prepend tempo` → engine
+
+### Native timing (default playback)
+
+See `docs/native-timing.md`. Required boxes/lines include:
+
+- `r ksh_native_meta` → `route meta` → bps / phase / step count for step `expr`
+- `transportbeat` → `native-step-expr` → `native-step-input-gate` (playing) → `change` → gates → `coll ksh_native_playback`
+- `native-step-reset-msg` → `change` ← stop + `loadbang`
+- `r ksh_native_playback_commands` → coll
+- `r ksh_native_timing_gate` → `native-mode-gate`
+- coll → `zl.iter 9` → `unpack i i i i f i i i i` → `pipe` / `makenote` / `noteout` and `prepend note_hit` → `s ksh_engine_events`
+
+### Shared MIDI path
+
+- Engine outlet and native unpack both feed `note-unpack` → `pipe` → `makenote` → `noteout`
+- `r ksh_scheduler_commands` → `route clear` → `pipe` clear + `makenote stop` (playing→stopped transition only from engine)
 
 ## dependency_cache
 
-Build script lists all four `ksh_*.js` files plus `ksh_constants.js` so Max resolves them beside the device.
+List `ksh_engine.js`, `ksh_compact_ui.js`, `ksh_ui.js`, `ksh_ui_shared.js`, and `ksh_constants.js` so Max resolves them beside the device.

@@ -53,6 +53,7 @@
 | `docs/feature-prep-checklist.md` | Future-facing checklist for feature branches |
 | `docs/future-dev-priorities.md` | Architecture priorities and non-blocking risks |
 | `docs/ui-sync.md` | UI ↔ engine event contract |
+| `docs/native-timing.md` | Native coll playback, patch clock path, `note_hit` routing |
 
 **Max message indexes are 1-based** in Live; engine internals use 0-based indices. See `README.md` for message reference.
 
@@ -61,8 +62,8 @@
 ## 4. Architecture (do not break casually)
 
 - **Engine ↔ UI:** Engine emits `engine_state` / `preview` via `messnamed("ksh_engine_events", ...)`. UIs send commands through `messnamed("ksh_ui_commands", ...)` and the patch routes them to `ksh_engine.js`.
-- **Persistence:** hidden `textedit` Live parameter `ksh_pattern_data` stores compact `v:1` JSON (`serializeForPersistence()`). The engine writes with `set <uri-encoded-json>` on the box directly (no `prepend set` patch cord). Recall: `restore_pattern_store` → read store (LiveAPI / pattr / attrs) → `pattern_data`. `setvalueof` remains as a guarded fallback for tests only—not wired in the patch. UIs mirror via compact `engine_state` + `preview`; they are not the source of truth.
-- **Transport:** `plugsync~` + `transport_position` drive step timing; `live.observer` for tempo and stop → `reset`.
+- **Persistence:** hidden `textedit` Live parameter `ksh_pattern_data` stores compact `v:1` JSON (`serializeForPersistence()`). The engine writes with `set <uri-encoded-json>` on the box directly (no `prepend set` patch cord). Recall: `restore_pattern_store` → read store → `pattern_data`. UIs mirror via compact `engine_state` + `preview`; they are not the source of truth.
+- **Transport:** `plugsync~` → `transport_position` on the engine (playhead, reset). **Native timing (default):** engine fills `coll ksh_native_playback` and sets `ksh_native_timing_gate`; patch step `change` drives MIDI + `note_hit` on `ksh_engine_events`. **`native_timing 0`:** engine schedules notes on the `js` outlet into the shared `pipe` / `makenote` path. See `docs/native-timing.md`.
 - **Dual runtime:** `ksh_engine.js` wraps the class in an IIFE with `module.exports` for Node and Max-only `outlet` / `Task` / `messnamed` code behind `if (typeof module === "undefined" || !module.exports)`.
 
 ---

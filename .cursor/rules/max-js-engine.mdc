@@ -15,7 +15,8 @@ alwaysApply: false
 ## State and persistence
 
 - **Live sets:** `serializeForPersistence()` / `deserializeForPersistence()` compact `v:1` JSON in `textedit` `ksh_pattern_data`; `pushPatternToStore()` uses `set` + URI encoding.
-- **Runtime / tests:** `serialize()` / `deserialize()` / `snapshot()` for full engine state; `getvalueof` / `setvalueof` / `save()` + `embedded_state_*` are legacy/test/device-embed paths—not wired for `.als` recall in the current patch.
+- **Runtime / tests:** `serialize()` / `deserialize()` / `snapshot()` for full engine state.
+- **Native timing:** `buildNativePlaybackRows()` / `syncNativePlaybackTable()` / `appendNativeHit()` (9 fields per hit); `emitNativeMeta()` and `emitNativeTimingGate()`; when `nativeTimingActive()`, `transportPosition` does not call `fireStep` / `emitNote`. See `docs/native-timing.md`.
 - `normalizeIncomingState()` accepts legacy UI shapes (`lanes` → `channels`, nested `state`).
 - UI sync: `emitFullState()` → compact persistence JSON on `engine_state` (full `serialize()` is too large for `messnamed` to the editor). Preview grid: `"preview"`.
 

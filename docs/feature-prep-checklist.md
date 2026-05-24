@@ -1,18 +1,19 @@
 # Feature prep checklist
 
-Use this before and during feature branches. It is intentionally limited to decisions, checks, and risks that still matter for future work.
+Use this before and during feature branches.
 
-**Related docs:** [ui-sync.md](./ui-sync.md) documents the engine/UI message contract. [future-dev-priorities.md](./future-dev-priorities.md) captures architecture notes and non-blocking risks.
+**Related docs:** [ui-sync.md](./ui-sync.md) (message contract), [native-timing.md](./native-timing.md) (transport playback), [future-dev-priorities.md](./future-dev-priorities.md) (architecture and risks).
 
 ---
 
 ## Before feature work
 
 - [ ] Clarify the product behavior in Ableton terms before coding. If multiple interpretations exist, ask.
-- [ ] Identify whether the feature touches engine logic, Max message handlers, UI state/painting, persistence, patch wiring, or generated device artifacts.
+- [ ] Identify whether the feature touches engine logic, native playback rows, Max message handlers, UI state/painting, persistence, patch wiring, or generated device artifacts.
 - [ ] For new cell fields, rates, limits, or shared validation, update `ksh_constants.js` first.
-- [ ] For new persisted fields, plan `serializeForPersistence()` / `deserializeForPersistence()` (Live saves), `serialize()` / `deserialize()` (runtime/tests), and any necessary `normalizeIncomingState()` migration.
-- [ ] For UI-facing changes, review [ui-sync.md](./ui-sync.md) so the feature uses `engine_state`, `preview`, status selectors, and optimistic editor edits correctly.
+- [ ] For new persisted fields, plan `serializeForPersistence()` / `deserializeForPersistence()` and `serialize()` / `deserialize()` for tests.
+- [ ] For UI-facing changes, review [ui-sync.md](./ui-sync.md).
+- [ ] For transport, MIDI output, or `note_hit` behavior, review [native-timing.md](./native-timing.md).
 
 ---
 
@@ -20,25 +21,27 @@ Use this before and during feature branches. It is intentionally limited to deci
 
 ### Engine / persistence
 
-- [ ] Keep Max-facing source/channel/step indexes 1-based; keep engine internals 0-based.
-- [ ] Add or extend `ksh_engine.test.js` for generation, persistence, and deterministic RNG behavior.
-- [ ] Touch `ksh_engine.max.test.js` when Max handlers, wrapper plumbing, `pattern_data`, `restore_pattern_store`, or legacy `getvalueof` / `setvalueof` change.
+- [ ] Keep Max-facing source/channel/step indexes 1-based; engine internals 0-based.
+- [ ] Add or extend `ksh_engine.test.js` for generation, native rows, persistence, and deterministic RNG.
+- [ ] Touch `ksh_engine.max.test.js` when Max handlers, `native_timing`, `pattern_data`, or `restore_pattern_store` change.
 - [ ] Emit a status selector when UIs need incremental updates.
 - [ ] Use `emitFullState()` for load/reset/restore/sync paths, not hot cell or transport paths.
-- [ ] For interactive source-cell edits, rely on `generatedCellForSourceEdit()` and `markPreviewDirty()` unless the product behavior requires a full re-roll.
+- [ ] For source-cell edits, use `generatedCellForSourceEdit()` and `markPreviewDirty()` unless a full re-roll is required.
+- [ ] When native timing is on, call `syncNativePlaybackTable()` after changes that affect generated hits; extend `appendNativeHit()` if the coll row shape changes.
 
 ### UI
 
-- [ ] Keep the editor optimistic: update local `state.sources`, then send `cell`; do not wait for an engine `cell` echo.
-- [ ] Use existing `ksh_shared` layout, colors, hit zones, and resize helpers.
-- [ ] New engine/API/persistence names should use `channel`; UI display text may still say "Lane".
-- [ ] After `.js` edits, run `node scripts/sync-user-library.js` or keep `node scripts/sync-user-library.js --watch` running.
+- [ ] Keep the editor optimistic: update local `state.sources`, then send `cell`.
+- [ ] Use `ksh_shared` layout, colors, hit zones, and resize helpers.
+- [ ] New engine/API/persistence names use `channel`; UI display text may still say "Lane".
+- [ ] After `.js` edits, run `node scripts/sync-user-library.js` or `node scripts/sync-user-library.js --watch`.
 
 ### Patch / device shell
 
-- [ ] Change patch wiring through `scripts/build-device-patch.js`, then regenerate.
-- [ ] Do not hand-edit `Kick-Snare-Hat.amxd`; regenerate it from the patch build script.
-- [ ] Keep `dependency_cache` listing all sibling JS files required by the device.
+- [ ] Change wiring through `scripts/build-device-patch.js`, then regenerate.
+- [ ] Do not hand-edit `Kick-Snare-Hat.amxd`.
+- [ ] Extend `scripts/validate-device-patch.js` when native scheduler boxes or lines change.
+- [ ] Keep `dependency_cache` listing all sibling JS files beside the device.
 
 ---
 
@@ -66,21 +69,20 @@ Docs-only edits do not require Ableton sync.
 
 ## Manual Live smoke test
 
-The automated gate does not verify actual `jsui` behavior inside Ableton Live. Run this when a feature touches UI behavior, persistence, patch wiring, or anything that could affect device load.
+Run when a feature touches UI behavior, persistence, native timing, patch wiring, or device load.
 
 - [ ] Load the synced device in Ableton Live 12.4+.
 - [ ] Confirm the compact UI loads, resizes, and sends mode/steps/lanes/refresh/rate/swing changes.
-- [ ] Open the editor and confirm it resizes correctly.
-- [ ] Confirm source cells toggle, horizontal paint works, and vertical velocity drag works.
-- [ ] Confirm lane note/lock changes update generated preview.
-- [ ] Confirm transport playback highlights the current step.
-- [ ] Save/reload and confirm source cells, channel metadata, and global settings restore.
+- [ ] Open the editor; confirm resize, source grid edits, layer modes, and **Nat** toggle.
+- [ ] With **Nat** on (default): transport play fires MIDI; source-layer text flashes on hits; compact preview flashes on hits; first step on play from bar 1 fires once per active lane.
+- [ ] With **Nat** off: transport plays via engine scheduling; `note_hit` flashes fire from `fireStep()`.
+- [ ] Confirm `current_step` / playhead feedback in the editor while playing.
+- [ ] Confirm lane note/lock, humanize, swing, and phase offset affect output as expected.
+- [ ] Save/reload; confirm patterns, `native_timing`, channel metadata, and globals restore.
 
 ---
 
 ## Deferred risks
-
-These are not blockers for feature work, but they are useful context when a feature touches the same area.
 
 | Topic | Revisit when |
 |-------|--------------|
