@@ -143,6 +143,8 @@ function validateNativeScheduler(patcher, errors) {
 	    "native-step-reset-msg": "set -1",
 	    "native-step-reset-recv": "r ksh_native_step_reset",
 	    "native-step-input-gate": "gate",
+	    "native-mode-gate": "gate",
+	    "transportbeat": "t f b f",
 	    "native-hit-iter": "zl.iter 9",
 	    "native-hit-unpack": "unpack i i i i f i i i i",
 	    "native-hit-ui-prep": "prepend note_hit",
@@ -167,13 +169,19 @@ function validateNativeScheduler(patcher, errors) {
     ["route-scheduler-clear", 0, "stop-notes-msg", 0],
 	    ["clear-delay-msg", 0, "note-delay", 0],
 	    ["stop-notes-msg", 0, "makenote", 0],
+	    ["transportbeat", 0, "native-step-expr", 0],
+	    ["transportbeat", 1, "transportpos", 0],
+	    ["transportbeat", 2, "transportpos", 1],
 	    ["native-step-expr", 0, "native-step-input-gate", 1],
 	    ["native-transport-unpack", 2, "native-step-input-gate", 0],
-	    ["native-step-input-gate", 0, "native-step-change", 0],
+	    ["native-step-input-gate", 0, "native-mode-gate", 1],
+	    ["native-timing-gate-recv", 0, "native-mode-gate", 0],
+	    ["native-mode-gate", 0, "native-step-change", 0],
 	    ["native-step-reset-msg", 0, "native-step-change", 0],
 	    ["native-step-reset-recv", 0, "native-step-change", 0],
 	    ["selstop", 0, "native-step-reset-msg", 0],
 	    ["loadbang", 0, "native-step-reset-msg", 0],
+	    ["native-step-change", 0, "native-playback-coll", 0],
 	    ["native-hit-iter", 0, "native-hit-unpack", 0],
 	    ["native-hit-unpack", 0, "note-delay", 0],
 	    ["native-hit-unpack", 5, "native-hit-ui-pack", 0],
@@ -193,6 +201,20 @@ function validateNativeScheduler(patcher, errors) {
     const patchline = lines[i].patchline;
     if (patchline.source[0] === "engine" && patchline.destination[0] === "noteout") {
       errors.push("root: engine must not be wired directly to noteout");
+    }
+    if (patchline.source[0] === "transportbeat"
+      && patchline.destination[0] === "native-step-expr"
+      && patchline.source[1] !== 0) {
+      errors.push("root: native step expr must use transportbeat outlet 0 after transport_position updates gates and engine state");
+    }
+    if (patchline.source[0] === "native-transport-unpack" && patchline.destination[0] === "native-step-expr") {
+      errors.push("root: native step expr must be triggered after transport_position has updated gates and engine state");
+    }
+    if (patchline.source[0] === "native-step-input-gate" && patchline.destination[0] === "native-step-change") {
+      errors.push("root: native timing gate must sit before change so blocked step edges do not prime change memory");
+    }
+    if (patchline.source[0] === "native-step-change" && patchline.destination[0] === "native-mode-gate") {
+      errors.push("root: native timing gate must not sit after change");
     }
   }
 

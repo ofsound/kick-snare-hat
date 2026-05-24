@@ -1058,18 +1058,19 @@
           "id": "transportbeat",
           "maxclass": "newobj",
           "numinlets": 1,
-          "numoutlets": 2,
+          "numoutlets": 3,
           "patching_rect": [
             180,
             840,
-            42,
+            62,
             22
           ],
           "outlettype": [
+            "float",
             "bang",
             "float"
           ],
-          "text": "t b f"
+          "text": "t f b f"
         }
       },
       {
@@ -1868,12 +1869,30 @@
       },
       {
         "box": {
+          "id": "native-mode-gate",
+          "maxclass": "newobj",
+          "numinlets": 2,
+          "numoutlets": 1,
+          "patching_rect": [
+            420,
+            1080,
+            40,
+            22
+          ],
+          "outlettype": [
+            ""
+          ],
+          "text": "gate"
+        }
+      },
+      {
+        "box": {
           "id": "native-step-change",
           "maxclass": "newobj",
           "numinlets": 1,
           "numoutlets": 2,
           "patching_rect": [
-            340,
+            480,
             1080,
             50,
             22
@@ -1892,7 +1911,7 @@
           "numinlets": 2,
           "numoutlets": 1,
           "patching_rect": [
-            340,
+            480,
             1120,
             54,
             22
@@ -1910,7 +1929,7 @@
           "numinlets": 0,
           "numoutlets": 1,
           "patching_rect": [
-            420,
+            560,
             1120,
             150,
             22
@@ -1957,42 +1976,6 @@
             "int"
           ],
           "text": "r ksh_native_timing_gate"
-        }
-      },
-      {
-        "box": {
-          "id": "native-playing-gate",
-          "maxclass": "newobj",
-          "numinlets": 2,
-          "numoutlets": 1,
-          "patching_rect": [
-            420,
-            1080,
-            40,
-            22
-          ],
-          "outlettype": [
-            ""
-          ],
-          "text": "gate"
-        }
-      },
-      {
-        "box": {
-          "id": "native-mode-gate",
-          "maxclass": "newobj",
-          "numinlets": 2,
-          "numoutlets": 1,
-          "patching_rect": [
-            480,
-            1080,
-            40,
-            22
-          ],
-          "outlettype": [
-            ""
-          ],
-          "text": "gate"
         }
       },
       {
@@ -2665,7 +2648,7 @@
         "patchline": {
           "source": [
             "transportbeat",
-            1
+            0
           ],
           "destination": [
             "native-step-expr",
@@ -2740,7 +2723,19 @@
             0
           ],
           "destination": [
-            "native-step-change",
+            "native-mode-gate",
+            1
+          ]
+        }
+      },
+      {
+        "patchline": {
+          "source": [
+            "native-timing-gate-recv",
+            0
+          ],
+          "destination": [
+            "native-mode-gate",
             0
           ]
         }
@@ -2748,12 +2743,12 @@
       {
         "patchline": {
           "source": [
-            "native-step-change",
+            "native-mode-gate",
             0
           ],
           "destination": [
-            "native-playing-gate",
-            1
+            "native-step-change",
+            0
           ]
         }
       },
@@ -2796,43 +2791,7 @@
       {
         "patchline": {
           "source": [
-            "native-transport-unpack",
-            2
-          ],
-          "destination": [
-            "native-playing-gate",
-            0
-          ]
-        }
-      },
-      {
-        "patchline": {
-          "source": [
-            "native-playing-gate",
-            0
-          ],
-          "destination": [
-            "native-mode-gate",
-            1
-          ]
-        }
-      },
-      {
-        "patchline": {
-          "source": [
-            "native-timing-gate-recv",
-            0
-          ],
-          "destination": [
-            "native-mode-gate",
-            0
-          ]
-        }
-      },
-      {
-        "patchline": {
-          "source": [
-            "native-mode-gate",
+            "native-step-change",
             0
           ],
           "destination": [
@@ -3181,7 +3140,7 @@
         "patchline": {
           "source": [
             "transportbeat",
-            1
+            2
           ],
           "destination": [
             "transportpos",
@@ -3193,7 +3152,7 @@
         "patchline": {
           "source": [
             "transportbeat",
-            0
+            1
           ],
           "destination": [
             "transportpos",

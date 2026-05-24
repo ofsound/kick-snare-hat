@@ -73,7 +73,8 @@ step.
 - `phaseOffsetBeats` → expr phase inlet
 - `nativePlaybackStepCount` → expr modulo length
 
-**Step index** comes from `plugsync~` beat position:
+**Step index** comes from `plugsync~` beat position after a `trigger` has
+updated and emitted the packed `transport_position` message:
 
 ```text
 expr floor(((beat - phase) / beatsPerStep) + 0.000001) % stepCount
@@ -81,9 +82,17 @@ expr floor(((beat - phase) / beatsPerStep) + 0.000001) % stepCount
 
 **Step edges** use a `change` object:
 
-- Step integers reach `change` only while `is_playing` is 1 (`native-step-input-gate`), so stopped transport does not prime step 0.
+- `transportbeat` is `t f b f`: first it updates the packed beat, then it
+  bangs `transport_position` through the engine and native gates, then it
+  computes the native step. That prevents the first play edge from hitting a
+  stale stopped gate.
+- Step integers reach `change` only while `is_playing` is 1
+  (`native-step-input-gate`) and `ksh_native_timing_gate` is 1
+  (`native-mode-gate`), so stopped transport or a closed native gate does not
+  silently prime step 0.
 - On transport stop and device load, `set -1` resets `change` memory (`sel 0` from `live.observer is_playing`, plus `loadbang`).
-- A bang from `change` on a new step index opens `native-playing-gate` and `native-mode-gate` when `ksh_native_timing_gate` is 1.
+- A bang from `change` on a new step index looks up the current row in
+  `coll ksh_native_playback`.
 
 **Gate** (`messnamed("ksh_native_timing_gate", 0|1)`): the engine sets `1` only when `native_timing`, `device_active`, and a supported table size are all true.
 
@@ -119,12 +128,13 @@ Auditions and other one-shot notes still use the engine outlet into the shared `
 Regenerate from `scripts/build-device-patch.js`; `scripts/validate-device-patch.js` asserts native scheduler boxes and lines. Do not break:
 
 - `r ksh_native_meta` → `route meta` → `unpack f f i` → bps / phase / steps
-- `transportbeat` → step `expr` → `native-step-input-gate` → `change`
-- `transportpos` → `unpack` → `is_playing` → input gate and playing gate
+- `transportbeat` (`t f b f`) → update/bang `transportpos`, then step `expr`
+- `transportpos` → `unpack` → `is_playing` to input gate
+- `native-step-input-gate` → `native-mode-gate` → `change`
 - `native-step-reset-msg` (`set -1`) ← `sel 0` (stop) and `loadbang`
 - `r ksh_native_step_reset` → `change` for table-swap priming
 - `r ksh_native_playback_commands` → `coll ksh_native_playback`
-- `r ksh_native_timing_gate` → `native-mode-gate`
+- `r ksh_native_timing_gate` → `native-mode-gate` before `change`
 - `zl.iter 9` → `unpack i i i i f i i i i` → MIDI + `note_hit` send
 
 ---

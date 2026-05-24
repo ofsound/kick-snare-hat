@@ -100,17 +100,22 @@ function nativeTimingBoxes() {
       numoutlets: 1,
       outlettype: [""]
     }),
-    box("native-step-change", "newobj", "change", [340.0, 1080.0, 50.0, 22.0], {
-      numinlets: 1,
-      numoutlets: 2,
-      outlettype: ["bang", "int"]
-    }),
-    box("native-step-reset-msg", "message", "set -1", [340.0, 1120.0, 54.0, 22.0], {
+    box("native-mode-gate", "newobj", "gate", [420.0, 1080.0, 40.0, 22.0], {
       numinlets: 2,
       numoutlets: 1,
       outlettype: [""]
     }),
-    box("native-step-reset-recv", "newobj", "r ksh_native_step_reset", [420.0, 1120.0, 150.0, 22.0], {
+    box("native-step-change", "newobj", "change", [480.0, 1080.0, 50.0, 22.0], {
+      numinlets: 1,
+      numoutlets: 2,
+      outlettype: ["bang", "int"]
+    }),
+    box("native-step-reset-msg", "message", "set -1", [480.0, 1120.0, 54.0, 22.0], {
+      numinlets: 2,
+      numoutlets: 1,
+      outlettype: [""]
+    }),
+    box("native-step-reset-recv", "newobj", "r ksh_native_step_reset", [560.0, 1120.0, 150.0, 22.0], {
       numinlets: 0,
       numoutlets: 1,
       outlettype: [""]
@@ -124,16 +129,6 @@ function nativeTimingBoxes() {
       numinlets: 0,
       numoutlets: 1,
       outlettype: ["int"]
-    }),
-    box("native-playing-gate", "newobj", "gate", [420.0, 1080.0, 40.0, 22.0], {
-      numinlets: 2,
-      numoutlets: 1,
-      outlettype: [""]
-    }),
-    box("native-mode-gate", "newobj", "gate", [480.0, 1080.0, 40.0, 22.0], {
-      numinlets: 2,
-      numoutlets: 1,
-      outlettype: [""]
     }),
     box("native-playback-cmds", "newobj", "r ksh_native_playback_commands", [600.0, 1040.0, 190.0, 22.0], {
       numinlets: 0,
@@ -180,21 +175,19 @@ function nativeTimingLines() {
     line("native-meta-unpack", 0, "native-bps", 0),
     line("native-meta-unpack", 1, "native-phase", 0),
     line("native-meta-unpack", 2, "native-steps", 0),
-    line("transportbeat", 1, "native-step-expr", 0),
+    line("transportbeat", 0, "native-step-expr", 0),
     line("native-phase", 0, "native-step-expr", 1),
     line("native-bps", 0, "native-step-expr", 2),
     line("native-steps", 0, "native-step-expr", 3),
     line("native-step-expr", 0, "native-step-input-gate", 1),
     line("native-transport-unpack", 2, "native-step-input-gate", 0),
-    line("native-step-input-gate", 0, "native-step-change", 0),
-    line("native-step-change", 0, "native-playing-gate", 1),
+    line("native-step-input-gate", 0, "native-mode-gate", 1),
+    line("native-timing-gate-recv", 0, "native-mode-gate", 0),
+    line("native-mode-gate", 0, "native-step-change", 0),
     line("native-step-reset-msg", 0, "native-step-change", 0),
     line("native-step-reset-recv", 0, "native-step-change", 0),
     line("transportpos", 0, "native-transport-unpack", 0),
-    line("native-transport-unpack", 2, "native-playing-gate", 0),
-    line("native-playing-gate", 0, "native-mode-gate", 1),
-    line("native-timing-gate-recv", 0, "native-mode-gate", 0),
-    line("native-mode-gate", 0, "native-playback-coll", 0),
+    line("native-step-change", 0, "native-playback-coll", 0),
     line("native-playback-cmds", 0, "native-playback-coll", 0),
     line("native-playback-coll", 0, "native-hit-iter", 0),
     line("native-hit-iter", 0, "native-hit-unpack", 0),
@@ -551,10 +544,10 @@ const patch = {
         numoutlets: 9,
         outlettype: ["int", "int", "int", "float", "list", "float", "float", "int", "int"]
       }),
-      box("transportbeat", "newobj", "t b f", [180.0, 840.0, 42.0, 22.0], {
+      box("transportbeat", "newobj", "t f b f", [180.0, 840.0, 62.0, 22.0], {
         numinlets: 1,
-        numoutlets: 2,
-        outlettype: ["bang", "float"]
+        numoutlets: 3,
+        outlettype: ["float", "bang", "float"]
       }),
       box("transportpos", "newobj", "pack transport_position 0. 0", [180.0, 880.0, 170.0, 22.0], {
         numinlets: 3,
@@ -836,8 +829,8 @@ const patch = {
       line("stop-notes-msg", 0, "makenote", 0),
       line("plugsync", 0, "transportpos", 2),
       line("plugsync", 6, "transportbeat", 0),
-      line("transportbeat", 1, "transportpos", 1),
-      line("transportbeat", 0, "transportpos", 0),
+      line("transportbeat", 2, "transportpos", 1),
+      line("transportbeat", 1, "transportpos", 0),
       line("transportpos", 0, "engine", 0),
       line("loadbang", 0, "thisdevice", 0),
       line("initmsg", 0, "ui", 0),
