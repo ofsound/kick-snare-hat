@@ -785,6 +785,13 @@ function sendChannelPlaybackMode(lane) {
   send("channel_playback_mode", lane + 1, state.lanes[lane].playbackMode);
 }
 
+function resetLanePatternModes(lane) {
+  state.lanes[lane].lock = -1;
+  state.lanes[lane].playbackMode = ksh_shared.constants.DEFAULT_CHANNEL_PLAYBACK_MODE;
+  send("channel_lock", lane + 1, "random");
+  sendChannelPlaybackMode(lane);
+}
+
 function selectSource(source) {
   selectedSource = ksh_shared.clamp(source, 0, SOURCE_COUNT - 1);
   state.staticSource = selectedSource;
@@ -839,6 +846,7 @@ function clearCurrentSourcePattern() {
 
   for (lane = 0; lane < state.laneCount; lane += 1) {
     resetSourceChannelRow(selectedSource, lane);
+    resetLanePatternModes(lane);
   }
 }
 
